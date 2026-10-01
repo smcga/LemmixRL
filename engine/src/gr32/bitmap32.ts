@@ -9,6 +9,7 @@
  *  - Assign copies the pixel map plus DrawMode, CombineMode, MasterAlpha and OuterColor.
  * Display-only features (stretching with a resampler, alpha blending) are implemented simply.
  */
+import { div, fdiv } from '../base/utils.ts';
 import { blendMem, blendMemEx, clBlack32, type TColor32 } from './color.ts';
 
 export interface Rect {
@@ -233,7 +234,7 @@ export class Bitmap32 {
 
   /** TBitmap32Helper.CalcFrameRect (Base.Bitmaps): frame of a vertical strip. */
   calcFrameRect(frameCount: number, frameIndex: number): Rect {
-    const h = Math.trunc(this.height / frameCount);
+    const h = div(this.height, frameCount);
     const y = h * frameIndex;
     return { left: 0, top: y, right: this.width, bottom: y + h };
   }
@@ -352,8 +353,9 @@ export function stretchTransfer(
   dstRect = { ...dstRect };
   srcRect = { ...srcRect };
   if (srcRect.left < 0 || srcRect.right > src.width || srcRect.top < 0 || srcRect.bottom > src.height) {
-    const ratioX = (dstRect.right - dstRect.left) / (srcRect.right - srcRect.left);
-    const ratioY = (dstRect.bottom - dstRect.top) / (srcRect.bottom - srcRect.top);
+    // RatioX, RatioY: Single. An empty source rect raises (0 / 0: EInvalidOp)
+    const ratioX = Math.fround(fdiv(dstRect.right - dstRect.left, srcRect.right - srcRect.left));
+    const ratioY = Math.fround(fdiv(dstRect.bottom - dstRect.top, srcRect.bottom - srcRect.top));
     if (srcRect.left < 0) {
       dstRect.left = dstRect.left + Math.ceil(-srcRect.left * ratioX);
       srcRect.left = 0;

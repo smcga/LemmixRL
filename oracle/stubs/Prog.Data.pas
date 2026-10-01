@@ -65,8 +65,16 @@ begin
 end;
 
 class function TData.CreateCursorBitmap(const aStyleName, aFileName: string; preventCaching: Boolean = False): TBitmap;
+var
+  f: TFileStream;
 begin
-  Result := TBitmap.Create; // display only
+  Result := TBitmap.Create;
+  f := TFileStream.Create(Consts.DataPath + 'cursors/' + LowerCase(ExtractFileName(aFileName)), fmOpenRead or fmShareDenyNone);
+  try
+    Result.LoadFromStream(f);
+  finally
+    f.Free;
+  end;
 end;
 
 end.

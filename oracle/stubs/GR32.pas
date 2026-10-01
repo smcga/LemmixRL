@@ -517,8 +517,14 @@ begin
     TCustomBitmap32(Source).CopyMapTo(Self);
     TCustomBitmap32(Source).CopyPropertiesTo(Self);
   end
-  else if Source is TBitmap then
-    SetSize(TBitmap(Source).Width, TBitmap(Source).Height) // display only (cursor bitmaps)
+  else if Source is TBitmap then begin
+    // AssignFromBitmap -> AssignFromGraphicPlain: SetSize, Clear(0), draw, ResetAlpha (not a 32 bit bitmap)
+    SetSize(TBitmap(Source).Width, TBitmap(Source).Height);
+    if Length(TBitmap(Source).Pixels) = Width * Height then
+      Move(TBitmap(Source).Pixels[0], FBits^, Width * Height * SizeOf(TColor32))
+    else
+      Clear(0);
+  end
   else
     inherited;
 end;

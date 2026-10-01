@@ -197,6 +197,12 @@ function extractData(): void {
     }
   }
   copyFileSync(join(SRC, 'Data', 'Particles', 'Particles.dat'), join(dataDir, 'Particles.dat'));
+  // the replay cursor (TReplayCursor) is drawn into the game bitmap
+  const cursorDir = join(dataDir, 'cursors');
+  mkdirSync(cursorDir, { recursive: true });
+  for (const [fn, bytes] of Object.entries(unzipSync(readFileSync(join(SRC, 'Data', 'Cursors', 'Cursors.zip'))))) {
+    if (!fn.endsWith('/')) writeFileSync(join(cursorDir, (fn.split('/').pop() ?? fn).toLowerCase()), bytes);
+  }
 }
 
 export function buildOracle(verbose = true): string {
@@ -233,9 +239,13 @@ export function buildOracle(verbose = true): string {
 
   extractData();
 
-  const out = join(BIN, 'lemmix-oracle');
-  const args = ['-Mdelphi', '-O2', '-Sa-', '-vewn-h-', `-FU${join(BUILD, 'units')}`, `-Fi${BUILD_SRC}`, `-Fu${BUILD_SRC}`, `-o${out}`, join(BUILD_SRC, 'LemmixOracle.dpr')];
-  mkdirSync(join(BUILD, 'units'), { recursive: true });
+  // --debug: a build with line info, for stack traces of exceptions (ORACLE_TRACE=1)
+  const debug = process.argv.includes('--debug');
+  const out = join(BIN, debug ? 'lemmix-oracle-debug' : 'lemmix-oracle');
+  const units = join(BUILD, debug ? 'units-debug' : 'units');
+  const opt = debug ? ['-O-', '-g', '-gl'] : ['-O2'];
+  const args = ['-Mdelphi', ...opt, '-Sa-', '-vewn-h-', `-FU${units}`, `-Fi${BUILD_SRC}`, `-Fu${BUILD_SRC}`, `-o${out}`, join(BUILD_SRC, 'LemmixOracle.dpr')];
+  mkdirSync(units, { recursive: true });
   try {
     const res = execFileSync('fpc', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     if (verbose) console.log(res.split('\n').filter((l) => /Error|Fatal|Warning/.test(l)).join('\n'));

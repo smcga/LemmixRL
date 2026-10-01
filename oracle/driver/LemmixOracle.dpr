@@ -204,6 +204,15 @@ var
     Result := StrToInt(Arg(i));
   end;
 
+  // with ORACLE_TRACE set, exceptions (normally just "EXC" in the output) are described on stderr
+  procedure TraceException(E: Exception);
+  begin
+    if GetEnvironmentVariable('ORACLE_TRACE') = '' then
+      Exit;
+    Writeln(StdErr, 'EXC at step ', stepNo, ': ', E.ClassName, ': ', E.Message);
+    DumpExceptionBackTrace(StdErr);
+  end;
+
 begin
   try
     ParseArgs;
@@ -269,7 +278,10 @@ begin
           try
             game.Update;
           except
-            on E: Exception do err := 'EXC';
+            on E: Exception do begin
+              err := 'EXC';
+              TraceException(E);
+            end;
           end;
           if err <> '' then outLines.Add(err);
           Dump('update');
@@ -311,7 +323,10 @@ begin
         else
           raise Exception.Create('unknown command ' + cmd);
       except
-        on E: Exception do err := 'EXC';
+        on E: Exception do begin
+          err := 'EXC';
+          TraceException(E);
+        end;
       end;
       if err <> '' then outLines.Add(err);
       Dump(line);

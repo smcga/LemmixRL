@@ -4,9 +4,13 @@
  * cases in tools/difftest/failures (the generator may produce different scripts after a change, so a failure is
  * re-checked from its saved script).
  *
- *   npx tsx tools/difftest/recheck.ts [dir ...]     (default: all cases in regressions and failures)
+ *   npx tsx tools/difftest/recheck.ts [--update-golden] [dir ...]   (default: all cases in regressions and failures)
+ *
+ * --update-golden writes <dir>/golden.json with a hash of the oracle output, which the unit tests compare the
+ * TypeScript output with (so the regression cases are also checked where the oracle is not built).
  */
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { REPO_ROOT } from '../../engine/src/node/repoData.ts';
@@ -14,10 +18,17 @@ import { firstDifference } from './compare.ts';
 import { runOracle } from './oracle.ts';
 import { runTs } from './runner.ts';
 
+export function outputHash(lines: string[]): string {
+  return createHash('sha256').update(lines.join('\n')).digest('hex');
+}
+
+const args = process.argv.slice(2);
+const updateGolden = args.includes('--update-golden');
 const caseDirs = (parent: string) => (existsSync(parent) ? readdirSync(parent).sort().map((d) => join(parent, d)) : []);
+const named = args.filter((a) => !a.startsWith('--'));
 const dirs =
-  process.argv.length > 2
-    ? process.argv.slice(2)
+  named.length > 0
+    ? named
     : [...caseDirs(join(REPO_ROOT, 'tools', 'difftest', 'regressions')), ...caseDirs(join(REPO_ROOT, 'tools', 'difftest', 'failures'))];
 let failed = 0;
 for (const dir of dirs) {
@@ -30,6 +41,7 @@ for (const dir of dirs) {
     const or = runOracle({ ...opts, dir: orDir });
     const ts = runTs({ ...opts, dir: tsDir });
     const d = firstDifference(or, ts);
+    if (updateGolden) writeFileSync(join(dir, 'golden.json'), JSON.stringify({ lines: or.length, sha256: outputHash(or) }, null, 2) + '\n');
     if (d < 0) console.log(`ok    ${dir} (${or.length} lines)`);
     else {
       failed++;

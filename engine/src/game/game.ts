@@ -43,6 +43,7 @@ import {
   SoundEffect,
 } from '../dos/consts.ts';
 import { Bitmap32, DrawMode, inflateRect, intersectRectEx, rect, rectsIntersect, type PixelCombine, type Rect } from '../gr32/bitmap32.ts';
+import { readBmp } from '../gr32/bmp.ts';
 import {
   blendMem,
   clBlack32,
@@ -649,9 +650,9 @@ export interface GameInfo {
   gameOptions?: ReadonlySet<GameOption>;
   miscOptions?: ReadonlySet<MiscOption>;
   optionalMechanics?: ReadonlySet<OptionalMechanic>;
-  /** Bitmap of the replay cursor (Cursors/CursorHighlight.bmp with black made transparent). */
-  replayCursorBitmap?: Bitmap32;
 }
+
+export const FilenameCursorHighlight = 'CursorHighlight.bmp';
 
 /** The texts of Base.Strings (TGlobalTexts, English) that the game uses. */
 export const GameTexts = {
@@ -987,8 +988,13 @@ export class LemmingGame {
     this.levelLoadingInfo = info.levelLoadingInfo;
     this.data = info.data;
     if (info.toolbar) this.toolbar = info.toolbar;
-    this.replayCursor.bitmap = info.replayCursorBitmap ?? null;
-    if (this.replayCursor.bitmap) this.replayCursor.bitmap.drawMode = DrawMode.Blend;
+    // TReplayCursor.Create: the highlight cursor with black made transparent
+    if (!this.replayCursor.bitmap) {
+      const cursor = readBmp(this.data.createDataStream(this.style.name, FilenameCursorHighlight, DataType.Cursor).bytes);
+      cursor.replaceColor(0xff000000, 0);
+      cursor.drawMode = DrawMode.Blend;
+      this.replayCursor.bitmap = cursor;
+    }
 
     this.lastNonPrioritizedLemming = null;
 

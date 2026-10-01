@@ -9,6 +9,7 @@ export * from './game/game.ts';
 export * from './game/recorder.ts';
 export * from './game/rendering.ts';
 export * from './gr32/bitmap32.ts';
+export * from './gr32/bmp.ts';
 export * from './gr32/color.ts';
 export * from './level/base.ts';
 export * from './level/hash.ts';

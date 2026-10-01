@@ -35,14 +35,28 @@ export function yesNo(b: boolean): string {
   return b ? 'yes' : 'no';
 }
 
-/** Delphi "div" for 32-bit integers (truncates toward zero). */
+/**
+ * The exceptions of the CPU/FPU that Delphi raises where JavaScript produces NaN or Infinity: EDivByZero for an integer
+ * division by zero, EZeroDivide and EInvalidOp for floating point divisions (Delphi does not mask them).
+ */
+export class ArithmeticError extends Error {}
+
+/** Delphi "div" for 32-bit integers (truncates toward zero). Raises like EDivByZero. */
 export function div(a: number, b: number): number {
+  if (b === 0) throw new ArithmeticError('Division by zero');
   return Math.trunc(a / b);
 }
 
-/** Delphi "mod" for 32-bit integers (sign follows the dividend). */
+/** Delphi "mod" for 32-bit integers (sign follows the dividend). Raises like EDivByZero. */
 export function mod(a: number, b: number): number {
+  if (b === 0) throw new ArithmeticError('Division by zero');
   return a % b;
+}
+
+/** Delphi "/" with the default FPU exception masks: 0 / 0 raises EInvalidOp, x / 0 raises EZeroDivide. */
+export function fdiv(a: number, b: number): number {
+  if (b === 0) throw new ArithmeticError(a === 0 ? 'Invalid floating point operation' : 'Floating point division by zero');
+  return a / b;
 }
 
 /** Truncate to a signed 32-bit Integer, like Delphi Integer arithmetic with overflow checks off. */
