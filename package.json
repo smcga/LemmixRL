@@ -1,0 +1,32 @@
+{
+  "name": "lemmixrl",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Behaviour-preserving TypeScript/Phaser port of Lemmix (Delphi), verified against the original simulation.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "oracle:build": "tsx tools/oracle/build.ts",
+    "difftest": "tsx tools/difftest/run.ts",
+    "difftest:recheck": "tsx tools/difftest/recheck.ts",
+    "difftest:replay": "tsx tools/difftest/replay.ts",
+    "difftest:levels": "tsx tools/difftest/levels.ts",
+    "e2e": "tsx tools/e2e/smoke.ts"
+  },
+  "dependencies": {
+    "fflate": "^0.8.3",
+    "phaser": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "playwright": "1.56",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}

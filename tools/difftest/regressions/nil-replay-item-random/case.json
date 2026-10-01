@@ -1,0 +1,19 @@
+{
+  "style": "Orig",
+  "section": 2,
+  "level": 15,
+  "seed": 1,
+  "gameOptions": [
+    0,
+    5,
+    7,
+    8,
+    10,
+    11,
+    12,
+    14
+  ],
+  "optionalMechanics": [
+    2
+  ]
+}

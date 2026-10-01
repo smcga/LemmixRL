@@ -1,0 +1,1221 @@
+# Three replayed skill assignments in one frame: the replay cursor of the first one is never erased by
+# EraseReplayCursor, only by the low resolution message (EraseMessages) that covers it a frame later.
+start 0 0
+select umbrella
+hittest
+click 1
+slower 0
+cursor 1429 118
+select digger
+click 1
+update 4
+update 6
+stoprr
+update 1
+goto 0
+pause 1
+update 4
+unpause
+select climber
+click 0
+update 2
+update 1
+update 6
+update 37
+update 68
+hittest
+regain
+start 1 0
+update 33
+update 3
+pause 2
+update 2
+unpause
+cursor 653 137
+select basher
+click 0
+update 2
+update 3
+slower 0
+slower 0
+select umbrella
+click 1
+stoprr
+update 4
+cursor 749 16
+select digger
+click 0
+slower 0
+stoprr
+select explode
+click 0
+update 2
+pause 0
+faster 0
+stoprr
+slower 0
+unpause
+update 1
+regain
+update 4
+pause 2
+update 1
+unpause
+goto 0
+update 6
+update 3
+update 4
+update 6
+update 47
+update 10
+update 3
+update 14
+cursor 588 100
+select climber
+click 0
+cursor 600 89
+select miner
+hittest
+click 0
+update 79
+goto 0
+update 62
+update 21
+hittest
+update 67
+slower 0
+update 10
+stoprr
+cursor 662 94
+select blocker
+click 1
+update 8
+update 15
+cursor 679 86
+select basher
+click 1
+cursor 592 89
+select basher
+click 0
+cursor 684 90
+select basher
+rmb 1
+click 0
+rmb 0
+slower 0
+stoprr
+cursor 676 86
+select climber
+click 1
+cursor 671 82
+select digger
+click 0
+update 1
+cursor 635 94
+select climber
+click 0
+update 12
+update 19
+update 4
+update 10
+cursor 643 94
+select builder
+click 1
+update 1
+slower 0
+stoprr
+hittest
+update 1
+cursor 638 93
+select builder
+click 0
+update 55
+update 15
+update 42
+update 22
+update 5
+update 3
+update 19
+update 76
+update 2
+update 7
+goto 459
+update 16
+update 15
+update 17
+update 25
+update 7
+cursor 602 93
+select digger
+click 0
+update 25
+update 3
+slower 0
+update 12
+goto 667
+update 20
+stoprr
+update 7
+update 11
+update 12
+cursor 687 156
+select basher
+click 1
+cursor 680 123
+select climber
+click 1
+slower 0
+update 13
+stoprr
+update 5
+dev99
+cursor 683 152
+select digger
+click 1
+cursor 594 105
+select umbrella
+rmb 1
+click 0
+rmb 0
+update 10
+update 1
+cursor 631 118
+select climber
+click 0
+update 24
+slower 0
+stoprr
+update 5
+update 73
+cursor 583 97
+select explode
+hittest
+click 0
+update 4
+cursor 575 104
+select blocker
+hittest
+click 1
+goto 958
+update 79
+update 11
+update 3
+update 63
+cursor 666 103
+select umbrella
+click 1
+update 6
+slower 0
+cursor 1227 99
+cursor 626 122
+select miner
+click 1
+stoprr
+update 25
+hittest
+update 1
+update 13
+update 12
+cursor 670 134
+select builder
+click 1
+update 2
+cursor 622 123
+select explode
+hittest
+click 1
+cursor 597 129
+select explode
+click 1
+cursor 668 108
+select umbrella
+click 0
+update 9
+cursor 607 128
+select basher
+click 0
+update 8
+cursor 613 121
+select explode
+click 1
+update 23
+update 4
+update 22
+cursor 674 128
+select umbrella
+click 0
+update 21
+update 2
+cursor 573 86
+select blocker
+rmb 1
+click 1
+rmb 0
+faster 0
+update 12
+update 17
+update 11
+stoprr
+pause 2
+cursor 561 68
+select blocker
+click 0
+update 4
+unpause
+update 19
+cursor 578 101
+select basher
+click 1
+cursor 665 143
+select blocker
+click 0
+cursor 673 146
+select blocker
+click 1
+update 16
+update 25
+goto 1418
+cursor 597 124
+select basher
+click 1
+update 16
+update 12
+cursor 649 121
+select climber
+rmb 1
+click 0
+rmb 0
+update 1
+update 22
+update 18
+update 12
+cursor 664 127
+select miner
+click 0
+update 24
+cursor 652 127
+select builder
+click 1
+update 10
+goto 1265
+cursor 563 91
+select explode
+click 1
+update 2
+update 23
+goto 1046
+update 6
+update 4
+dev99
+update 41
+goto 1177
+hittest
+cursor 645 92
+select digger
+rmb 1
+click 1
+rmb 0
+cursor 643 86
+select umbrella
+click 1
+cursor 570 79
+select digger
+click 1
+slower 0
+faster 0
+update 1
+start 1 0
+update 4
+stoprr
+update 47
+update 64
+goto 161
+update 7
+update 17
+cursor 560 67
+select umbrella
+rmb 1
+click 0
+rmb 0
+pause 0
+stoprr
+update 3
+unpause
+update 16
+faster 0
+stoprr
+update 8
+goto 291
+faster 0
+update 20
+stoprr
+update 16
+start 1 0
+update 6
+update 26
+goto 62
+cursor 572 82
+select builder
+rmb 1
+click 1
+rmb 0
+update 8
+cursor 563 78
+select explode
+rmb 1
+click 0
+rmb 0
+update 1
+cursor 572 80
+select digger
+click 0
+cursor 574 88
+select blocker
+click 1
+update 6
+update 9
+start 1 0
+select basher
+hittest
+click 1
+update 1
+update 5
+pause 2
+unpause
+update 5
+update 2
+select basher
+rmb 1
+click 1
+update 6
+cursor 514 146
+select builder
+rmb 1
+click 0
+rmb 0
+update 5
+update 5
+update 61
+cursor 564 91
+select builder
+click 0
+cursor 562 87
+select basher
+click 1
+cursor 564 90
+select digger
+hittest
+click 0
+cursor 576 88
+select digger
+click 1
+update 22
+cursor 575 95
+select miner
+rmb 1
+click 1
+rmb 0
+update 11
+update 6
+faster 0
+update 21
+dev99
+cursor 599 100
+select digger
+click 0
+stoprr
+faster 0
+cursor 600 93
+select digger
+rmb 1
+hittest
+click 0
+cursor 572 95
+select blocker
+click 0
+update 4
+stoprr
+update 19
+update 6
+cursor 563 68
+select miner
+click 1
+cursor 631 94
+select explode
+click 0
+cursor 565 82
+select umbrella
+click 1
+update 15
+update 8
+cursor 588 102
+select miner
+rmb 1
+click 0
+update 4
+cursor 590 94
+select basher
+hittest
+click 1
+start 1 0
+update 4
+select digger
+click 0
+update 1
+faster 0
+slower 0
+stoprr
+slower 0
+update 41
+update 3
+cursor 1420 40
+select umbrella
+click 0
+stoprr
+update 2
+select explode
+click 1
+update 4
+update 1
+update 5
+save $DIR/replay.lrb
+cursor 568 92
+select builder
+click 1
+update 16
+cursor 568 83
+select basher
+rmb 1
+hittest
+click 0
+rmb 0
+cursor 564 85
+select climber
+rmb 1
+click 1
+update 5
+pause 0
+update 3
+faster 0
+unpause
+update 76
+update 23
+update 16
+update 4
+update 11
+ff 1
+cursor 596 101
+select digger
+click 0
+update 8
+update 8
+cursor 616 100
+select miner
+click 1
+goto 0
+update 2
+update 5
+update 2
+cursor 1140 129
+select climber
+click 0
+update 2
+select digger
+rmb 1
+click 1
+rmb 0
+update 1
+pause 0
+unpause
+cursor 195 24
+select miner
+rmb 1
+click 0
+rmb 0
+goto 0
+update 3
+update 1
+update 1
+update 6
+cursor 1038 58
+select blocker
+click 1
+update 5
+select explode
+rmb 1
+hittest
+click 1
+rmb 0
+goto 0
+cursor 661 50
+select explode
+click 0
+update 4
+update 63
+update 17
+update 1
+update 19
+update 18
+update 18
+update 25
+goto 276
+update 22
+dev99
+update 23
+cursor 612 111
+select explode
+click 1
+update 59
+update 4
+update 25
+cursor 693 86
+select miner
+click 1
+update 11
+cursor 730 69
+select digger
+rmb 1
+click 0
+update 8
+cursor 628 94
+select climber
+hittest
+click 0
+update 12
+update 16
+cursor 78 140
+cursor 736 71
+select digger
+click 0
+update 1
+cursor 828 90
+select umbrella
+hittest
+click 0
+slower 0
+cursor 757 76
+select umbrella
+rmb 1
+click 1
+rmb 0
+slower 0
+stoprr
+pause 2
+goto 459
+update 5
+unpause
+cursor 612 91
+select explode
+hittest
+click 1
+update 3
+update 2
+update 2
+update 10
+cursor 581 78
+select explode
+click 1
+update 15
+cursor 738 72
+select digger
+click 1
+faster 0
+pause 0
+unpause
+stoprr
+pause 0
+faster 0
+update 2
+update 4
+unpause
+cursor 968 34
+devcreate
+update 73
+update 17
+update 1
+update 4
+update 9
+update 1
+update 1
+update 14
+update 7
+cursor 739 96
+select blocker
+click 1
+update 16
+update 8
+slower 0
+update 18
+stoprr
+update 11
+cursor 560 112
+select miner
+rmb 1
+click 1
+update 22
+cursor 660 95
+select explode
+click 0
+cursor 622 128
+select umbrella
+click 0
+update 10
+update 25
+update 5
+update 15
+slower 0
+update 3
+update 1
+start 1 0
+stoprr
+cursor 802 139
+select umbrella
+click 1
+update 5
+update 6
+select digger
+click 1
+update 5
+update 3
+select miner
+click 0
+update 3
+update 1
+update 6
+select blocker
+click 1
+slower 0
+update 4
+update 1
+update 3
+stoprr
+update 3
+slower 0
+pause 1
+unpause
+stoprr
+update 6
+select explode
+click 0
+update 5
+update 3
+cursor 571 62
+select basher
+click 0
+update 6
+update 11
+update 25
+cursor 563 84
+select digger
+click 0
+cursor 745 20
+devcreate
+cursor 578 81
+select blocker
+click 1
+update 13
+start 1 0
+update 5
+update 2
+slower 0
+cursor 797 140
+select miner
+click 0
+update 6
+stoprr
+update 1
+update 3
+update 3
+update 3
+update 38
+update 15
+update 6
+update 1
+update 21
+update 4
+update 14
+update 5
+cursor 594 92
+select digger
+rmb 1
+click 1
+rmb 0
+update 22
+cursor 577 85
+select explode
+click 1
+cursor 577 83
+select explode
+click 1
+update 20
+slower 0
+update 8
+cursor 569 77
+select umbrella
+click 0
+update 14
+stoprr
+update 21
+update 20
+update 13
+pause 2
+unpause
+update 9
+hittest
+update 3
+update 18
+pause 1
+unpause
+update 19
+cursor 664 85
+select umbrella
+hittest
+click 1
+cursor 698 78
+select basher
+click 1
+update 10
+cursor 571 77
+select miner
+hittest
+click 0
+cursor 719 64
+select builder
+click 0
+pause 1
+unpause
+hittest
+update 6
+update 24
+cursor 783 97
+select explode
+rmb 1
+click 1
+rmb 0
+update 75
+update 20
+update 16
+cursor 613 100
+select basher
+click 1
+update 21
+update 64
+update 15
+cursor 841 95
+select basher
+hittest
+click 1
+cursor 742 59
+select umbrella
+click 0
+update 25
+cursor 579 93
+select miner
+click 0
+cursor 599 87
+select blocker
+rmb 1
+click 1
+rmb 0
+cursor 747 72
+select climber
+click 0
+slower 0
+update 2
+faster 0
+hittest
+update 7
+cursor 826 100
+select blocker
+click 0
+stoprr
+update 6
+update 8
+cursor 728 59
+select explode
+click 1
+update 33
+update 18
+cursor 660 91
+select digger
+rmb 1
+hittest
+click 0
+rmb 0
+update 21
+cursor 658 91
+select builder
+click 1
+slower 0
+pause 0
+cursor 650 83
+select climber
+rmb 1
+click 0
+rmb 0
+unpause
+update 21
+update 25
+stoprr
+faster 0
+faster 0
+slower 0
+update 6
+cursor 703 75
+select basher
+rmb 1
+click 0
+rmb 0
+stoprr
+cursor 670 93
+select basher
+click 1
+goto 501
+update 49
+slower 0
+update 11
+stoprr
+faster 0
+hittest
+update 8
+stoprr
+update 17
+update 2
+cursor 704 74
+select digger
+rmb 1
+click 0
+rmb 0
+update 18
+update 63
+update 21
+update 21
+pause 1
+update 5
+faster 0
+slower 0
+update 2
+unpause
+cursor 568 106
+select digger
+rmb 1
+click 0
+update 5
+cursor 661 99
+select umbrella
+click 0
+cursor 643 105
+select explode
+click 1
+update 21
+cursor 1437 83
+devcreate
+update 20
+cursor 832 88
+select basher
+click 0
+update 9
+update 4
+update 17
+cursor 556 95
+select basher
+rmb 1
+click 1
+rmb 0
+faster 0
+stoprr
+update 25
+update 22
+update 22
+update 8
+update 1
+pause 1
+unpause
+update 4
+update 34
+update 22
+update 34
+update 19
+cursor 545 87
+select digger
+click 1
+update 15
+cursor 584 94
+select umbrella
+click 1
+cursor 711 131
+select climber
+click 0
+update 3
+update 1
+cursor 568 80
+select basher
+click 0
+update 5
+update 25
+pause 2
+update 5
+faster 1
+update 3
+slower 0
+cursor 736 107
+select blocker
+rmb 1
+click 0
+rmb 0
+update 3
+update 1
+unpause
+update 9
+update 19
+cursor 550 100
+select explode
+click 1
+update 23
+cursor 743 88
+select builder
+click 0
+cursor 735 94
+select digger
+rmb 1
+click 0
+rmb 0
+update 2
+update 1
+cursor 540 103
+select miner
+hittest
+click 1
+cursor 567 92
+select miner
+click 0
+update 8
+update 62
+goto 1196
+update 8
+update 12
+cursor 734 105
+select explode
+click 0
+update 15
+update 11
+update 19
+update 7
+update 9
+cursor 742 116
+select explode
+click 0
+update 17
+update 12
+goto 1200
+update 13
+faster 0
+update 7
+stoprr
+slower 0
+pause 0
+faster 1
+unpause
+stoprr
+update 5
+slower 0
+update 12
+stoprr
+update 20
+cursor 566 90
+select miner
+click 0
+update 15
+update 67
+update 18
+update 25
+update 14
+cursor 566 107
+select digger
+click 0
+update 16
+update 16
+update 24
+update 20
+update 20
+update 28
+update 2
+cursor 579 106
+select explode
+hittest
+click 0
+pause 1
+unpause
+pause 1
+cursor 546 78
+select builder
+click 0
+unpause
+update 9
+pause 0
+update 3
+update 3
+unpause
+cursor 549 100
+select builder
+click 1
+update 11
+pause 0
+slower 0
+goto 1541
+cursor 568 112
+select builder
+click 1
+update 4
+update 2
+goto 1540
+unpause
+cursor 563 93
+select basher
+hittest
+click 1
+goto 1316
+update 15
+update 11
+update 12
+pause 2
+cursor 715 59
+select builder
+click 1
+update 4
+update 4
+unpause
+update 11
+cursor 596 85
+select basher
+click 0
+pause 0
+cursor 623 96
+select digger
+click 1
+togglepause 0
+cursor 599 92
+select digger
+hittest
+click 1
+update 24
+cursor 776 89
+select blocker
+click 0
+update 12
+cursor 675 85
+select basher
+hittest
+click 0
+goto 1245
+update 21
+cursor 541 78
+select builder
+click 1
+update 24
+cursor 703 82
+select digger
+click 1
+goto 1236
+update 1
+update 18
+cursor 535 88
+select basher
+click 1
+cursor 27 77
+devcreate
+faster 0
+stoprr
+cursor 575 98
+select builder
+click 1
+update 7
+pause 2
+unpause
+cursor 614 101
+select miner
+click 1
+update 14
+goto 1334
+slower 0
+cursor 581 105
+select basher
+hittest
+click 1
+stoprr
+update 7
+update 9
+pause 2
+slower 1
+update 4
+unpause
+update 21
+update 10
+cursor 542 84
+select climber
+click 0
+cursor 493 95
+select blocker
+click 1
+cursor 804 101
+select builder
+click 0
+update 22
+load $DIR/replay.lrb
+start 1 0
+update 1
+dev99
+update 2
+update 3
+select explode
+click 0
+select builder
+rmb 1
+click 1
+rmb 0
+update 5
+update 1
+update 2
+select umbrella
+click 0
+update 5
+update 6
+hittest
+update 3
+update 2
+update 1
+update 5
+update 3
+faster 0
+stoprr
+update 6
+cursor 1407 -1
+select blocker
+click 1
+pause 2
+stoprr
+select climber
+rmb 1
+click 0
+rmb 0
+stoprr
+update 1
+select umbrella
+click 0
+select miner
+click 0
+update 5
+select climber
+click 1
+unpause
+update 29
+pause 0
+goto 71
+unpause
+update 63
+cursor 590 93
+select basher
+hittest
+click 1
+update 30
+setresult
