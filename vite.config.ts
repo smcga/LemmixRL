@@ -28,6 +28,7 @@ function dataFiles(): Record<string, () => Uint8Array> {
     'cursors.zip': file('Cursors/Cursors.zip'),
     'assets.zip': file('Assets/Assets.zip'),
     'particles.dat': file('Particles/Particles.dat'),
+    'lemmix.ico': () => new Uint8Array(readFileSync(join(DATA, '..', 'Lemmix_Icon.ico'))),
     'orig_music.zip': zipInResource('Orig_music.RES'),
     'ohno_music.zip': zipInResource('Ohno_music.RES'),
     'h94_music.zip': zipInResource('H94_music.RES'),
@@ -43,7 +44,7 @@ function lemmixData(): Plugin {
         const m = /\/data\/([^/?]+)/.exec(req.url ?? '');
         const f = m && files[m[1]];
         if (!f) return next();
-        res.setHeader('Content-Type', 'application/octet-stream');
+        res.setHeader('Content-Type', m[1].endsWith('.ico') ? 'image/x-icon' : 'application/octet-stream');
         res.end(f());
       });
     },

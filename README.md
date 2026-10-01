@@ -11,6 +11,7 @@ TypeScript engine on hundreds of thousands of randomly generated game situations
 ```
 npm install
 npm run dev          # the game: http://localhost:5173
+npm run build        # the game as static files in dist/ (any web server can serve them)
 npm test             # unit tests and the regression cases
 npm run oracle:build # compile the original game units with Free Pascal (fpc 3.2.2)
 npm run difftest     # compare the TypeScript engine with the original on every level
@@ -78,34 +79,45 @@ some cases uses the developer commands (99 skills, lemmings created at the curso
 ```
 npm run difftest -- --seeds 3                 # every level of every style, 3 scripts each
 npm run difftest -- --level Orig:2:13         # one level (style:section:level)
-npm run difftest:recheck                      # re-run saved cases (regressions and failures)
+npm run difftest:levels                       # every level: title, hash, level code, the first 40 frames
+npm run difftest:recheck                      # re-run the saved cases (regressions and failures)
+npm run difftest:replay -- some.lrb           # play Lemmix replay files on both engines
 ```
 
 A failing case leaves the script and full dumps of both engines in `tools/difftest/failures/<case>` (with the first
-difference). `ORACLE_TRACE=1` together with a debug build of the oracle (`npx tsx tools/oracle/build.ts --debug`)
-prints the class and stack trace of every exception the original code raises.
+difference). `ORACLE_TRACE=1` together with a debug build of the oracle (`npx tsx tools/oracle/build.ts --debug`,
+used with `LEMMIX_ORACLE=oracle/bin/lemmix-oracle-debug`) prints the class and stack trace of every exception the
+original code raises, and the script command `pixels X Y W H` prints part of the rendered frame.
+
+The scripts also corrupt saved replay files before loading them (`poke` and `cut`), to compare how damaged or odd
+replay files are loaded and replayed.
 
 ### Results
 
-Every level of the five styles (292 levels) has been run with 4 different scripts: about 4.7 million compared steps,
-with 0.8 million game frames and 120,000 skill assignments. Three deviations were found and fixed; all three are
-quirks of the original that the port had not reproduced:
+RESULTS_PLACEHOLDER
 
-* `TRecorder.Truncate` sets `TList.Count`, which *grows* the list with nil items when the count is larger. This
+The deviations that were found, and fixed in the port:
+
+* `TRecorder.Truncate` sets `TList.Count`, which *grows* the list with nil items when the new count is larger. That
   happens when a replay that ends with a pause is saved during the replay (saving deletes the trailing pause record)
-  and control is regained afterwards. Saving or replaying later then raises halfway (with a partial replay file).
-* Graphics32's `StretchTransfer` divides by the size of the source rectangle when it lies partly outside the bitmap.
-  For an empty rectangle that is 0 / 0, which raises `EInvalidOp` in Delphi (the FPU exceptions are not masked)
-  where JavaScript quietly gives NaN.
-* The original reads the 4th and 5th character of a 3 character string (the skill panel with lemming counts instead
-  of percentages).
+  and control is regained afterwards. A later save or replay then raises halfway, with a partial replay file.
+* Graphics32's `StretchTransfer` divides by the size of the source rectangle when the rectangle lies partly outside
+  the bitmap. For an empty rectangle that is 0 / 0, which raises `EInvalidOp` in Delphi (the FPU exceptions are not
+  masked) where JavaScript quietly gives NaN. The ratios are `Single` values in the original, so they are rounded to
+  single precision in the port as well.
 
-These cases are kept in `tools/difftest/regressions` and run by `npm test` (against stored hashes of the oracle
-output, so the oracle is not needed for that).
+The test harness itself had one difference: its stand-in for the Windows font rendering of low resolution messages
+(which only affects the display) was not the same as the oracle's. Such cases are kept in
+`tools/difftest/regressions`, and `npm test` runs them against stored hashes of the oracle output, so they are checked
+without the oracle as well.
 
 Exceptions of the original are part of the behaviour: where the Delphi code raises (an access violation on a nil
 lemming in `ProcessSkillAssignment`, a nil replay item, a division by zero), the TypeScript code raises at the same
-point, leaving the same partial state behind.
+point, leaving the same partial state behind, and the game goes on (Lemmix shows the exception and continues).
+
+`npm run e2e` is a browser smoke test of the front-end (menu, preview, a level solved with a digger, postview, and
+the game speed). The GitHub workflow in `.github/workflows/verify.yml` runs the type check, the unit tests, the build,
+the browser test, and the differential test with an oracle built from `src/` (on pull requests and manually).
 
 ## Differences with Lemmix
 

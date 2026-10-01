@@ -217,6 +217,25 @@ export class TsScriptRunner {
           }
           break;
         }
+        case 'poke': {
+          // changes a byte of a file (damaged replay files)
+          const f = this.sub(tok[1]);
+          const b = new Uint8Array(readFileSync(f));
+          const ofs = argI(2);
+          if (ofs >= 0 && ofs < b.length) {
+            b[ofs] = argI(3) & 0xff;
+            writeFileSync(f, b);
+          }
+          break;
+        }
+        case 'cut': {
+          // truncates a file
+          const f = this.sub(tok[1]);
+          const b = new Uint8Array(readFileSync(f));
+          const size = argI(2);
+          if (size >= 0 && size < b.length) writeFileSync(f, b.subarray(0, size));
+          break;
+        }
         case 'load': {
           const e = game.recorder.loadFromBytes(new Uint8Array(readFileSync(this.sub(tok[1]))));
           if (e) this.out.push('LOADERR ' + e);

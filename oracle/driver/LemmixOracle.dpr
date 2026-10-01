@@ -30,6 +30,7 @@ program LemmixOracle;
     ff B              FastForward := B
     devcreate | dev99 DeveloperCreateLemmingAtCursorPoint | Developer99Skills
     pixels X Y W H    prints the pixels of the rendered frame (debugging)
+    poke FILE OFS V   changes a byte of a file / cut FILE SIZE truncates a file (damaged replay files)
     save FILE         Recorder.SaveToFile
     load FILE         Recorder.LoadFromFile
 -------------------------------------------------------------------------------------------------}
@@ -220,6 +221,38 @@ var
     end;
   end;
 
+  // poke FILE OFS VALUE: changes one byte of a file (to test the loading of damaged replay files)
+  procedure PokeFile(const fn: string; ofs, value: Integer);
+  var
+    f: TFileStream;
+    b: Byte;
+  begin
+    f := TFileStream.Create(fn, fmOpenReadWrite);
+    try
+      if (ofs >= 0) and (ofs < f.Size) then begin
+        b := Byte(value);
+        f.Position := ofs;
+        f.WriteBuffer(b, 1);
+      end;
+    finally
+      f.Free;
+    end;
+  end;
+
+  // cut FILE SIZE: truncates a file
+  procedure CutFile(const fn: string; size: Integer);
+  var
+    f: TFileStream;
+  begin
+    f := TFileStream.Create(fn, fmOpenReadWrite);
+    try
+      if (size >= 0) and (size < f.Size) then
+        f.Size := size;
+    finally
+      f.Free;
+    end;
+  end;
+
   // with ORACLE_TRACE set, exceptions (normally just "EXC" in the output) are described on stderr
   procedure TraceException(E: Exception);
   begin
@@ -335,6 +368,8 @@ begin
         else if cmd = 'dev99' then game.Developer99Skills
         else if cmd = 'save' then game.Recorder.SaveToFile(ArgPath(1), False)
         else if cmd = 'pixels' then PrintPixels(ArgI(1), ArgI(2), ArgI(3), ArgI(4))
+        else if cmd = 'poke' then PokeFile(ArgPath(1), ArgI(2), ArgI(3))
+        else if cmd = 'cut' then CutFile(ArgPath(1), ArgI(2))
         else if cmd = 'load' then begin
           if not game.Recorder.LoadFromFile(ArgPath(1), err) then
             outLines.Add('LOADERR ' + err);

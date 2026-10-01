@@ -9,11 +9,13 @@
  * right mouse button, with and without "regain control"), release rate changes (also while paused),
  * pausing (with the pause glitch window before frame 34), assignments while paused, hit tests, nuking,
  * rewinding and skipping (GotoIteration), replaying (Start(True)), regaining control during a replay,
- * saving and loading replay files, finishing and cheating, and the developer commands (99 skills, creating
+ * saving and loading replay files (also damaged ones), finishing and cheating, and the developer commands (99 skills, creating
  * lemmings at the cursor).
  */
 import { GameOption, LemmingAction, OptionalMechanic, SkillPanelButton } from '../../engine/src/index.ts';
 import { DEFAULT_GAME_OPTIONS } from '../../engine/src/game/game.ts';
+import { statSync } from 'node:fs';
+import { join } from 'node:path';
 import { TsScriptRunner } from './runner.ts';
 
 export function mulberry32(seed: number): () => number {
@@ -167,6 +169,52 @@ export function generateCase(g: GenerateOptions): GeneratedCase {
     return true;
   };
 
+  /** damages the saved replay file, to test loading and replaying broken or odd files */
+  const damageReplay = () => {
+    const size = statSync(join(g.dir, 'replay.lrb')).size;
+    const records = Math.max(0, Math.trunc((size - 64) / 32));
+    for (let n = int(1, 3); n > 0; n--) {
+      const q = rng();
+      let ofs: number;
+      let value: number;
+      if (q < 0.15 || records === 0) {
+        ofs = int(0, 63); // any header byte
+        value = int(0, 255);
+      } else if (q < 0.25) {
+        ofs = 3; // version
+        value = int(0, 4);
+      } else if (q < 0.3) {
+        ofs = 28; // glitch pause iterations
+        value = int(0, 40);
+      } else {
+        const rec = 64 + 32 * int(0, records - 1);
+        const field = [1, 5, 6, 7, 8, 9, 13, 17, 21, 25, 27, 29, 0][int(0, 12)];
+        ofs = rec + field;
+        switch (field) {
+          case 7: // assigned skill
+            value = int(0, 20);
+            break;
+          case 8: // selected button
+            value = int(0, 13);
+            break;
+          case 13: // lemming index
+            value = int(0, 90);
+            break;
+          case 29: // flags
+            value = int(0, 3);
+            break;
+          case 0: // 'R'
+            value = chance(0.5) ? 0x52 : int(0, 255);
+            break;
+          default:
+            value = int(0, 255);
+        }
+      }
+      r.exec(`poke $DIR/replay.lrb ${ofs} ${value}`);
+    }
+    if (chance(0.15)) r.exec(`cut $DIR/replay.lrb ${Math.max(0, size - int(1, 70))}`);
+  };
+
   const assign = () => {
     aimAtLemming();
     // mostly skills that are still available
@@ -224,6 +272,7 @@ export function generateCase(g: GenerateOptions): GeneratedCase {
       saved = true;
     } else if (p < 0.91) {
       if (saved) {
+        if (chance(0.4)) damageReplay();
         r.exec('load $DIR/replay.lrb');
         r.exec('start 1 0');
       }
