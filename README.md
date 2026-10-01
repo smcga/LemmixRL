@@ -53,6 +53,13 @@ replay (`u`), loading a replay (`l`), fast forward (`f`), sound and music (`s`, 
 In the menu F2 opens the level code screen, F3 the sound setting, F4 selects the style (Original Lemmings, Oh No More
 Lemmings, Holiday Lemmings 94, XMas Lemmings 91 and 92), F5 the options, `l` loads a replay file.
 
+## Deployment
+
+Cloudflare Pages serves the production build at <https://lemmings.steves.tools>. The Pages project is connected to
+this GitHub repository and treats `main` as its production branch, so merging a pull request into `main` triggers a
+new production deployment automatically. Cloudflare runs `npm run build` and publishes the generated `dist/`
+directory. The checked-in `wrangler.jsonc` records the Pages project name and build output directory.
+
 ## How the port is verified
 
 ### The oracle
