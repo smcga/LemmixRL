@@ -5,3 +5,10 @@ src/Lemmix.drc
 src/Lemmix.dsk
 src/Lemmix.dproj.local
 src/Lemmix.identcache
+node_modules/
+dist/
+oracle/build/
+oracle/bin/
+app/public/data/
+*.tsbuildinfo
+tools/difftest/failures/

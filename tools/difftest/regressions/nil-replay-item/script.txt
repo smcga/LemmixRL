@@ -1,0 +1,25 @@
+# A replay that ends with a StartPause record is saved during the replay (SaveToStream deletes that record), then
+# control is regained: TRecorder.Truncate(fReplayIndex) grows the list with a nil item (TList.SetCount). Saving then
+# raises halfway (partial file), loading that file fails, and replaying raises on every update at the nil item.
+start 0 0
+update 40
+cursor 300 100
+select builder
+update 10
+pause 0
+update 2
+start 1 0
+update 60
+save $DIR/a.lrb
+regain
+save $DIR/b.lrb
+load $DIR/b.lrb
+start 1 0
+update 70
+goto 20
+update 5
+regain
+update 3
+save $DIR/c.lrb
+start 0 0
+update 3
