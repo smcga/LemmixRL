@@ -27,6 +27,22 @@ npm run difftest     # compare the TypeScript engine with the original on every 
 | `oracle/`, `tools/oracle/` | The *oracle*: the original game units compiled with Free Pascal. |
 | `tools/difftest/` | The differential test of the TypeScript engine against the oracle. |
 
+The port follows the Delphi units one to one:
+
+| Lemmix (`src/`) | TypeScript |
+|---|---|
+| `Game.pas` (TLemmingGame, TLemming, TRecorder, ...) | `engine/src/game/game.ts`, `engine/src/game/recorder.ts` |
+| `Game.Rendering.pas` | `engine/src/game/rendering.ts` |
+| `Styles.Base.pas`, `Styles.Dos.pas`, `Styles.Factory.pas` | `engine/src/styles/base.ts`, `engine/src/styles/dos.ts`, `engine/src/session.ts` |
+| `Level.Base.pas`, `Level.Loader.pas`, `Level.Hash.pas` | `engine/src/level/` |
+| `Dos.Compression.pas`, `Dos.Bitmaps.pas`, `Dos.Structures.pas`, `Dos.Consts.pas`, `Meta.Structures.pas` | `engine/src/dos/`, `engine/src/meta/structures.ts` |
+| Graphics32 (the parts the game uses) | `engine/src/gr32/` |
+| `Prog.Data.pas` | `engine/src/data/datasource.ts`, `app/src/data.ts` |
+| `GameScreen.Base.pas`, `Dos.MainDat.pas` | `app/src/screens/base.ts` |
+| `GameScreen.Menu.pas`, `.LevelCode.pas`, `.Preview.pas`, `.Postview.pas` | `app/src/screens/menu.ts`, `levelcode.ts`, `preview.ts`, `postview.ts` |
+| `GameScreen.Player.pas`, `Game.SkillPanel.pas` | `app/src/screens/player.ts`, `app/src/screens/skillpanel.ts` |
+| `Game.Sound.pas`, `Prog.Voice.pas`, `Prog.Config.pas`, `Prog.App.pas` | `app/src/sound.ts` (+ `modplayer.ts`), `voice.ts`, `config.ts`, `app.ts` |
+
 ## Playing
 
 The controls are those of Lemmix: click the skill panel or use F1..F12 (release rate, skills, pause, nuke twice),
@@ -94,7 +110,13 @@ replay files are loaded and replayed.
 
 ### Results
 
-RESULTS_PLACEHOLDER
+Every level of the five styles (292 levels) has been run with 8 different generated scripts, plus 120 scripts with
+damaged replay files: 2,456 cases with together 9.4 million compared steps, 1.7 million game frames and 250,000
+skill clicks. The current code passes the last 1,288 of them (the last two complete sweeps and the damaged replays,
+4.8 million steps) without a single difference. In those sweeps every lemming action occurred (drowning in 118 of the
+876 cases of one sweep, vaporizing in 36), games ended by time up, with all lemmings accounted for and by nuking, and
+in 1,175 steps the original code raised an exception, which the port raised at the same point. All 292 levels also
+have the same title, hash, level code and first 40 frames (`npm run difftest:levels`).
 
 The deviations that were found, and fixed in the port:
 
