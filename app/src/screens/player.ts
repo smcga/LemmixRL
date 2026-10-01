@@ -713,6 +713,12 @@ export class PlayerScreen implements GameView {
     }
   }
 
+  /** after a fatal error: the game does not run anymore */
+  stop(): void {
+    this.playLock = 1;
+    this.closing = true;
+  }
+
   /** CloseScreen + BeforeCloseScreen */
   closeScreen(next: ScreenType): void {
     if (this.closing) return;

@@ -113,7 +113,9 @@ without the oracle as well.
 
 Exceptions of the original are part of the behaviour: where the Delphi code raises (an access violation on a nil
 lemming in `ProcessSkillAssignment`, a nil replay item, a division by zero), the TypeScript code raises at the same
-point, leaving the same partial state behind, and the game goes on (Lemmix shows the exception and continues).
+point, leaving the same partial state behind. (The oracle driver carries on after an exception, so the state after it
+is compared as well. Lemmix itself shows the error and terminates; the browser version shows the error and returns
+to the menu.)
 
 `npm run e2e` is a browser smoke test of the front-end (menu, preview, a level solved with a digger, postview, and
 the game speed). The GitHub workflow in `.github/workflows/verify.yml` runs the type check, the unit tests, the build,
@@ -132,6 +134,10 @@ The simulation is the same. The program around it is a browser application, so s
   instead of SAPI.
 * Replay files are downloaded (`u`) and loaded with a file dialog (`l`); there is no replay finder, level finder,
   autosave or result text file. The options are browser dialogs. User styles (custom levels) are not available yet.
+* A bug of the original that raises an exception during the game (for example: holding the right mouse button and
+  clicking on a blocker without other lemmings under the cursor, while the selected skill is available) terminates
+  Lemmix after an error message. A browser page cannot terminate itself: the game stops, the error is shown, and
+  the menu follows.
 
 ---
 

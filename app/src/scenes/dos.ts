@@ -82,7 +82,7 @@ export class DosScene extends Phaser.Scene {
       if (e.ctrlKey && e.key === 'c' && 'copy' in screen) screen.copy();
       if ('keyPress' in screen && !e.ctrlKey && !e.altKey && (e.key.length === 1 || e.key === 'Backspace')) screen.keyPress(e.key);
     });
-    listen(this, 'pointerdown', (e) => {
+    listen(this, 'mousedown', (e) => {
       if (this.closed || e.target !== this.game.canvas) return;
       if ('mouseDown' in screen) screen.mouseDown(e.button);
     });

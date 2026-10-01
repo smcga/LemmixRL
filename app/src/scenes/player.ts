@@ -8,6 +8,7 @@
 import * as Phaser from 'phaser';
 import { Bitmap32, type HighResolutionMessage, type TColor32 } from '../../../engine/src/index.ts';
 import { BitmapTexture } from '../display.ts';
+import { ScreenType } from '../screens/base.ts';
 import { PlayerScreen } from '../screens/player.ts';
 import { download, selectFile, showMessage, showText } from '../ui.ts';
 import { getApp, gotoScreen, isGameKey, keyMods, listen } from './shared.ts';
@@ -51,6 +52,7 @@ export class PlayerScene extends Phaser.Scene {
 
   create(): void {
     const app = getApp();
+    this.fatalError = false;
     this.capture = null;
     this.messageTexts.clear();
     this.scaleFactor = this.computeScale();
@@ -164,7 +166,9 @@ export class PlayerScene extends Phaser.Scene {
       this.safe(() => this.player.keyUp(e.key, keyMods(e)));
     });
     listen(this, 'blur', () => this.player.deactivate());
-    listen(this, 'pointerdown', (e) => {
+    // mouse events, not pointer events: a second button pressed while another one is held down (the right button for
+    // the non-prioritized lemming) is a pointermove for pointer events, but a mousedown for mouse events
+    listen(this, 'mousedown', (e) => {
       if (this.dialogOpen || e.target !== canvas) return;
       const { x, y } = this.virtualMouse(e);
       const area: Area = y < this.player.imgHeight ? 'img' : 'tool';
@@ -180,7 +184,7 @@ export class PlayerScene extends Phaser.Scene {
         this.safe(() => this.player.toolbar.mouseDown(bx, by, isDouble));
       }
     });
-    listen(this, 'pointermove', (e) => {
+    listen(this, 'mousemove', (e) => {
       if (this.dialogOpen) return;
       const { x, y } = this.virtualMouse(e);
       const area: Area = this.capture ?? (y < this.player.imgHeight ? 'img' : 'tool');
@@ -194,7 +198,7 @@ export class PlayerScene extends Phaser.Scene {
         this.safe(() => this.player.toolbar.mouseMove(bx, by, (e.buttons & 1) !== 0));
       }
     });
-    listen(this, 'pointerup', (e) => {
+    listen(this, 'mouseup', (e) => {
       const area = this.capture;
       if (e.buttons === 0) this.capture = null;
       if (area === 'img') this.safe(() => this.player.imgMouseUp((e.buttons & 2) !== 0));
@@ -203,7 +207,7 @@ export class PlayerScene extends Phaser.Scene {
   }
 
   /** the mouse in control coordinates of the game image, kept inside the game image and the skill panel (ClipCursor) */
-  private virtualMouse(e: PointerEvent): { x: number; y: number } {
+  private virtualMouse(e: MouseEvent): { x: number; y: number } {
     const rect = this.game.canvas.getBoundingClientRect();
     const s = this.scaleFactor;
     const x = Math.min(320 * s - 1, Math.max(0, Math.floor(e.clientX - rect.left - this.left)));
@@ -211,14 +215,34 @@ export class PlayerScene extends Phaser.Scene {
     return { x, y };
   }
 
-  /** Exceptions in event handlers end up in Application.HandleException in Lemmix: the program continues. */
+  /**
+   * TFormMain.App_Exception: an exception in the game (some bugs of the original raise one, like assigning a skill
+   * with the right mouse button held down to a blocker without other lemmings under the cursor) is fatal in Lemmix:
+   * the error is shown and the program terminates. Here the game stops, the error is shown, and the menu follows.
+   */
   private safe<T>(fn: () => T): T | undefined {
     try {
       return fn();
     } catch (e) {
-      console.error(e);
+      this.fatal(e);
       return undefined;
     }
+  }
+
+  private fatalError = false;
+
+  private fatal(e: unknown): void {
+    console.error(e);
+    if (this.fatalError) return;
+    this.fatalError = true;
+    this.player.stop();
+    const err = e as Error;
+    const cls = err instanceof TypeError ? 'EAccessViolation' : (err?.name ?? 'Exception');
+    this.dialogOpen++;
+    void showMessage(`${err?.message ?? String(e)}\nExceptionclass: ${cls}\n\n(Lemmix terminates here.)`).then(() => {
+      this.dialogOpen--;
+      gotoScreen(this, ScreenType.Menu);
+    });
   }
 
   override update(): void {
