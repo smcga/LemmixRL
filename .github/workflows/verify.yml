@@ -1,0 +1,55 @@
+# Verifies the TypeScript port: typecheck, unit tests (including the regression cases against stored oracle
+# hashes) and build; and the differential test against the original Delphi game units compiled with Free Pascal.
+name: verify
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: scripts per level for the differential test
+        default: '1'
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  difftest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: sudo apt-get update && sudo apt-get install -y fp-compiler fp-units-base fp-units-fcl
+      - run: npm ci
+      - name: build the oracle (the original Lemmix units compiled with Free Pascal)
+        run: npm run oracle:build
+      - name: every level (title, hash, level code, initial state)
+        run: npm run difftest:levels
+      - name: recheck the regression cases
+        run: npm run difftest:recheck
+      - name: differential test on every level
+        run: npm run difftest -- --seeds ${{ github.event.inputs.seeds || '1' }} --report difftest-report.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: difftest
+          path: |
+            difftest-report.json
+            tools/difftest/failures/
+            oracle/build/original-vs-compiled.diff
+            oracle/build/hoisted-inline-vars.txt
+          if-no-files-found: ignore

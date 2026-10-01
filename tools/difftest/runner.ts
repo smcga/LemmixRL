@@ -4,6 +4,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { ByteStream } from '../../engine/src/base/stream.ts';
+import { Bitmap32 } from '../../engine/src/gr32/bitmap32.ts';
 import { delphiTrim } from '../../engine/src/dos/structures.ts';
 import { DEFAULT_GAME_OPTIONS, type GameOption, type LemmingGame, type OptionalMechanic, type PauseCommandMode } from '../../engine/src/game/game.ts';
 import { repoDataProvider } from '../../engine/src/node/repoData.ts';
@@ -43,19 +44,30 @@ export class TsScriptRunner {
     this.session = createSession(data, styleDefFromName(opts.style), opts.section, opts.level, {
       gameOptions: new Set(opts.gameOptions ?? DEFAULT_GAME_OPTIONS),
       optionalMechanics: new Set(opts.optionalMechanics ?? []),
+      // the same stand-in for the (display only) font rendering as the oracle (oracle/stubs/GR32.pas, TextExtent):
+      // a low resolution message is 7 pixels per character wide and 14 high, the text itself is not drawn
+      view: {
+        bitmapToControl: (x, y) => ({ x, y }),
+        renderLowResText: (text) => new Bitmap32(text.length * 7, 14),
+      },
     });
     this.game = this.session.game;
     // like TGameScreenPlayer.Game_Finished -> CloseScreen -> BeforeCloseScreen: the result is taken immediately
     this.game.onFinish = () => this.game.setGameResult();
     this.full = opts.full ?? false;
     this.dir = opts.dir;
-    this.out.push('LEVEL ' + delphiTrim(this.session.level.info.title));
+    const info = this.session.info;
+    this.out.push(`LEVEL ${delphiTrim(this.session.level.info.title)} ${info.getLevelHash().toString(16).toUpperCase().padStart(16, '0')} ${info.getLevelCode()}`);
   }
+
+  /** called after every step (for coverage statistics) */
+  afterStep: (() => void) | null = null;
 
   private dump(what: string): void {
     this.out.push(`S ${this.stepNo} ${what}`);
     dumpGame(this.game, this.full, this.out);
     this.stepNo++;
+    this.afterStep?.();
   }
 
   private sub(s: string): string {
@@ -75,9 +87,11 @@ export class TsScriptRunner {
       if (Number.isNaN(v)) throw new Error('bad number in ' + line);
       return v;
     };
-    if (cmd === 'update') {
+    if (cmd === 'update' || cmd === 'run') {
       const n = tok.length > 1 ? argI(1) : 1;
       for (let k = 1; k <= n; k++) {
+        // run: until the game is finished
+        if (cmd === 'run' && game.isFinished) break;
         let err = '';
         try {
           game.update();
@@ -190,6 +204,16 @@ export class TsScriptRunner {
             game.saveReplay(s);
           } finally {
             writeFileSync(this.sub(tok[1]), s.bytes);
+          }
+          break;
+        }
+        case 'pixels': {
+          // the pixels of the rendered frame (debugging)
+          const [x0, y0, w, h] = [argI(1), argI(2), argI(3), argI(4)];
+          for (let y = y0; y < y0 + h; y++) {
+            let line = 'P ' + y;
+            for (let x = x0; x < x0 + w; x++) line += ' ' + (game.targetBitmap.pixelS(x, y) >>> 0).toString(16).toUpperCase().padStart(8, '0');
+            this.out.push(line);
           }
           break;
         }

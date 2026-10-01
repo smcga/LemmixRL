@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { REPO_ROOT } from '../../engine/src/node/repoData.ts';
-import { generateCase, type GeneratedCase } from './generate.ts';
+import { type Coverage, generateCase, type GeneratedCase } from './generate.ts';
 import { runOracle } from './oracle.ts';
 import { runTs } from './runner.ts';
 
@@ -19,6 +19,7 @@ export interface CaseResult {
   artifactDir?: string;
   error?: string;
   ms: number;
+  coverage?: Coverage;
 }
 
 export function caseName(c: { style: string; section: number; level: number; seed: number }): string {
@@ -70,6 +71,7 @@ export function runCase(job: { style: string; section: number; level: number; se
       assignments,
       replayBytesEqual,
       ms: 0,
+      coverage: gen.coverage,
     };
     if (!result.ok) result.artifactDir = writeArtifacts(name, gen, orDir, tsDir);
     if (d >= 0) {

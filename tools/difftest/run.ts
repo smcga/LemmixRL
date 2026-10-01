@@ -22,6 +22,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { cpus, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { repoDataProvider, REPO_ROOT } from '../../engine/src/node/repoData.ts';
+import { LemmingActionNames } from '../../engine/src/dos/consts.ts';
 import { getStyle } from '../../engine/src/session.ts';
 import type { CaseResult } from './compare.ts';
 import { oracleAvailable } from './oracle.ts';
@@ -119,6 +120,18 @@ async function main(): Promise<void> {
   console.log('');
   console.log(`cases: ${results.length}, failed: ${failed.length}`);
   console.log(`compared steps: ${steps}, game iterations: ${iterations}, skill clicks: ${clicks}, time: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  // what the cases exercised
+  const withCov = results.filter((r) => r.coverage);
+  if (withCov.length) {
+    const count = (f: (r: CaseResult) => boolean) => withCov.filter(f).length;
+    const actions = LemmingActionNames.map((name, a) => `${name} ${count((r) => (r.coverage!.actions & (1 << a)) !== 0)}`).slice(1);
+    console.log(`cases in which each lemming action occurred: ${actions.join(', ')}`);
+    const sum = (f: (r: CaseResult) => number) => withCov.reduce((a, r) => a + f(r), 0);
+    console.log(
+      `games finished by time up: ${sum((r) => r.coverage!.timeUp)}, with all lemmings accounted for: ${sum((r) => r.coverage!.allAccountedFor)}, ` +
+        `nukes: ${sum((r) => r.coverage!.nukes)}, steps where the original raised an exception: ${sum((r) => r.coverage!.exceptions)}`,
+    );
+  }
   const report = arg('report');
   if (report) writeFileSync(report, JSON.stringify({ cases: results.length, failed: failed.length, steps, iterations, clicks, results }, null, 2));
   process.exit(failed.length === 0 ? 0 : 1);

@@ -7,7 +7,8 @@ import { REPO_ROOT } from '../../engine/src/node/repoData.ts';
 import { GameOption, OptionalMechanic } from '../../engine/src/game/game.ts';
 import type { RunOptions } from './runner.ts';
 
-export const ORACLE_BIN = join(REPO_ROOT, 'oracle', 'bin', 'lemmix-oracle');
+/** LEMMIX_ORACLE=path uses another build (e.g. oracle/bin/lemmix-oracle-debug) */
+export const ORACLE_BIN = process.env.LEMMIX_ORACLE ?? join(REPO_ROOT, 'oracle', 'bin', 'lemmix-oracle');
 export const ORACLE_DATA = join(REPO_ROOT, 'oracle', 'build', 'data');
 
 export function oracleAvailable(): boolean {

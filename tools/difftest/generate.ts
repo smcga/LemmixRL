@@ -27,6 +27,19 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
+/** What a case exercised (collected on the TypeScript engine after every step). */
+export interface Coverage {
+  /** bit per LemmingAction that occurred */
+  actions: number;
+  /** the game finished because the time was up / because all lemmings were accounted for */
+  timeUp: number;
+  allAccountedFor: number;
+  nukes: number;
+  /** steps where the code raised (in both engines, if the case passes) */
+  exceptions: number;
+  maxLemmings: number;
+}
+
 export interface GeneratedCase {
   style: string;
   section: number;
@@ -36,6 +49,7 @@ export interface GeneratedCase {
   optionalMechanics: OptionalMechanic[];
   script: string[];
   tsOut: string[];
+  coverage: Coverage;
 }
 
 const SKILLS = ['climber', 'umbrella', 'explode', 'blocker', 'builder', 'basher', 'miner', 'digger'] as const;
@@ -94,6 +108,20 @@ export function generateCase(g: GenerateOptions): GeneratedCase {
     full: g.full,
   });
   const game = r.game;
+  const coverage: Coverage = { actions: 0, timeUp: 0, allAccountedFor: 0, nukes: 0, exceptions: 0, maxLemmings: 0 };
+  let wasFinished = false;
+  let wasNuked = false;
+  r.afterStep = () => {
+    for (const l of game.lemmingList) if (!l.isRemoved) coverage.actions |= 1 << l.action;
+    coverage.maxLemmings = Math.max(coverage.maxLemmings, game.lemmingList.length);
+    if (game.isFinished && !wasFinished) {
+      if (game.gameResultRec.timeIsUp) coverage.timeUp++;
+      else coverage.allAccountedFor++;
+    }
+    wasFinished = game.isFinished;
+    if (game.isNukedByUser && !wasNuked) coverage.nukes++;
+    wasNuked = game.isNukedByUser;
+  };
   const maxIteration = g.maxIteration ?? 4000;
   const maxCommands = g.maxCommands ?? 1500;
 
@@ -215,6 +243,7 @@ export function generateCase(g: GenerateOptions): GeneratedCase {
   if (!game.isFinished) r.exec('update 30');
   r.exec('setresult');
 
+  coverage.exceptions = r.out.filter((l) => l === 'EXC').length;
   return {
     style: g.style,
     section: g.section,
@@ -224,6 +253,7 @@ export function generateCase(g: GenerateOptions): GeneratedCase {
     optionalMechanics,
     script: r.script,
     tsOut: r.out,
+    coverage,
   };
 }
 

@@ -11,6 +11,7 @@ program LemmixOracle;
   Script commands (one per line, '#' comments):
     start R H         Start(R=replay, H=start with hyperspeed)
     update [N]        Update (N times, a dump after each)
+    run [N]           Update until the game is finished (at most N times)
     cursor X Y        CursorPoint := (X, Y)
     rmb B             RightMouseButtonHeldDown := B
     click B           ProcessSkillAssignment(checkRegainControl = B)
@@ -28,6 +29,7 @@ program LemmixOracle;
     finish | cheat | setresult
     ff B              FastForward := B
     devcreate | dev99 DeveloperCreateLemmingAtCursorPoint | Developer99Skills
+    pixels X Y W H    prints the pixels of the rendered frame (debugging)
     save FILE         Recorder.SaveToFile
     load FILE         Recorder.LoadFromFile
 -------------------------------------------------------------------------------------------------}
@@ -204,6 +206,20 @@ var
     Result := StrToInt(Arg(i));
   end;
 
+  // pixels X Y W H: the rendered frame (target bitmap), for debugging
+  procedure PrintPixels(x0, y0, w, h: Integer);
+  var
+    x, y: Integer;
+    s: string;
+  begin
+    for y := y0 to y0 + h - 1 do begin
+      s := 'P ' + IntToStr(y);
+      for x := x0 to x0 + w - 1 do
+        s := s + ' ' + IntToHex(img.Bitmap.PixelS[x, y], 8);
+      outLines.Add(s);
+    end;
+  end;
+
   // with ORACLE_TRACE set, exceptions (normally just "EXC" in the output) are described on stderr
   procedure TraceException(E: Exception);
   begin
@@ -263,7 +279,7 @@ begin
     tok.StrictDelimiter := True;
     script.LoadFromFile(ScriptFile);
     stepNo := 0;
-    Writeln('LEVEL ' + Trim(level.Info.Title));
+    Writeln('LEVEL ' + Trim(level.Info.Title) + ' ' + IntToHex(info.GetLevelHash, 16) + ' ' + info.GetLevelCode);
 
     for li := 0 to script.Count - 1 do begin
       line := Trim(script[li]);
@@ -271,9 +287,12 @@ begin
         Continue;
       tok.DelimitedText := line;
       cmd := tok[0];
-      if cmd = 'update' then begin
+      if (cmd = 'update') or (cmd = 'run') then begin
         if tok.Count > 1 then n := ArgI(1) else n := 1;
         for k := 1 to n do begin
+          // run: until the game is finished
+          if (cmd = 'run') and game.IsFinished then
+            Break;
           err := '';
           try
             game.Update;
@@ -315,6 +334,7 @@ begin
         else if cmd = 'devcreate' then game.DeveloperCreateLemmingAtCursorPoint
         else if cmd = 'dev99' then game.Developer99Skills
         else if cmd = 'save' then game.Recorder.SaveToFile(ArgPath(1), False)
+        else if cmd = 'pixels' then PrintPixels(ArgI(1), ArgI(2), ArgI(3), ArgI(4))
         else if cmd = 'load' then begin
           if not game.Recorder.LoadFromFile(ArgPath(1), err) then
             outLines.Add('LOADERR ' + err);
