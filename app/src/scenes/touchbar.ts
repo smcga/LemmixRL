@@ -36,6 +36,10 @@ export class TouchBar {
   private readonly buttons: TouchButton[] = [];
   private visible = true;
 
+  get size(): number {
+    return this.buttons.length;
+  }
+
   constructor(
     private readonly scene: Phaser.Scene,
     defs: TouchButtonDef[],
@@ -74,13 +78,18 @@ export class TouchBar {
     }
   }
 
-  /** Places the buttons in a column (vertical) or a row, inside the given area. */
+  /**
+   * Places the buttons in a column (vertical) or a row, inside the given area. A confirmation that was asked for is
+   * cancelled: the buttons moved (a rotation), so the second tap would not be on the button that asked.
+   */
   layout(x: number, y: number, w: number, h: number, vertical: boolean): void {
     const n = this.buttons.length;
     const gap = cssPx(8);
     const bw = vertical ? w : Math.floor((w - gap * (n - 1)) / n);
     const bh = vertical ? Math.floor((h - gap * (n - 1)) / n) : h;
     this.buttons.forEach((b, i) => {
+      b.pressed = false;
+      b.confirmUntil = 0;
       b.x = vertical ? x : x + i * (bw + gap);
       b.y = vertical ? y + i * (bh + gap) : y;
       b.w = bw;
@@ -100,6 +109,11 @@ export class TouchBar {
   setVisible(v: boolean): void {
     this.visible = v;
     for (const b of this.buttons) {
+      if (!v && b.confirmUntil) {
+        b.confirmUntil = 0;
+        b.text.setText(b.def.label);
+      }
+      b.pressed = false;
       b.g.setVisible(v);
       b.text.setVisible(v);
       b.zone.setVisible(v);

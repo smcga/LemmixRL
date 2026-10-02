@@ -62,6 +62,55 @@ export function canvasPoint(canvas: HTMLCanvasElement, clientX: number, clientY:
   return { x: (clientX - rect.left) * kx, y: (clientY - rect.top) * ky };
 }
 
+/**
+ * A double tap on one target (a button): two completed taps on the same target, the second one starting within ms
+ * of the first. A tap is completed when the finger comes up on the target it went down on, without moving away from
+ * it; a cancelled touch, a drag or a tap on another target starts over.
+ */
+export class DoubleTap<T> {
+  /** the last completed tap */
+  private last: { target: T; time: number } | null = null;
+  /** the tap going on */
+  private current: { target: T; time: number; x: number; y: number; valid: boolean } | null = null;
+
+  constructor(
+    private readonly ms: number,
+    /** how far the finger may move during a tap */
+    private readonly slop: number,
+  ) {}
+
+  down(target: T, time: number, x: number, y: number): void {
+    this.current = { target, time, x, y, valid: true };
+  }
+
+  move(target: T, x: number, y: number): void {
+    const c = this.current;
+    if (c && (target !== c.target || Math.hypot(x - c.x, y - c.y) > this.slop)) c.valid = false;
+  }
+
+  /** The finger came up: returns the target of a completed double tap (then the next tap starts over), else null. */
+  up(): T | null {
+    const c = this.current;
+    this.current = null;
+    if (!c || !c.valid) {
+      this.last = null;
+      return null;
+    }
+    const last = this.last;
+    if (last && last.target === c.target && c.time - last.time < this.ms) {
+      this.last = null;
+      return c.target;
+    }
+    this.last = { target: c.target, time: c.time };
+    return null;
+  }
+
+  cancel(): void {
+    this.current = null;
+    this.last = null;
+  }
+}
+
 let probe: HTMLDivElement | null = null;
 
 /** The safe area of the screen (notches, rounded corners, home indicator) in device pixels. */
@@ -87,54 +136,38 @@ export function isFullscreen(): boolean {
   return !!document.fullscreenElement;
 }
 
-/** Full screen on or off; on, a phone is also held sideways where the browser allows it. Needs a tap or a key. */
-export function toggleFullscreen(): void {
-  if (document.fullscreenElement) {
-    document.exitFullscreen().catch(() => {});
-    return;
-  }
-  document.documentElement
-    .requestFullscreen({ navigationUI: 'hide' })
-    .then(() => screen.orientation?.lock('landscape'))
-    .catch(() => {});
-}
+/** What the browser answered to the last requests for full screen and a sideways screen (shown by ?diag). */
+export const deviceStatus = { fullscreen: '-', orientationLock: '-' };
 
-let wakeLock: WakeLockSentinel | null = null;
-let wantAwake = false;
-let wakeListening = false;
+export function errorName(e: unknown): string {
+  return e instanceof Error ? e.name : String(e);
+}
 
 /**
- * Keeps the screen on (or lets it sleep again): a phone dims its screen when it is not touched for a while, and in
- * Lemmings one often waits for the lemmings to walk.
+ * Full screen on or off; on, a phone is also turned sideways where the browser allows it (Android, not an iPhone).
+ * Needs a tap or a key. When the browser refuses, nothing changes on the screen (the button is not lit).
  */
-export function keepScreenOn(on: boolean): void {
-  wantAwake = on;
-  if (!wakeListening) {
-    wakeListening = true;
-    // the browser releases the lock when the page is hidden
-    document.addEventListener('visibilitychange', () => void acquireWakeLock());
+export function toggleFullscreen(): void {
+  if (document.fullscreenElement) {
+    document.exitFullscreen().then(
+      () => (deviceStatus.fullscreen = 'exited'),
+      (e: unknown) => (deviceStatus.fullscreen = `exit refused: ${errorName(e)}`),
+    );
+    return;
   }
-  if (on) void acquireWakeLock();
-  else if (wakeLock) {
-    const l = wakeLock;
-    wakeLock = null;
-    l.release().catch(() => {});
-  }
-}
-
-async function acquireWakeLock(): Promise<void> {
-  if (!wantAwake || wakeLock || !('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
-  try {
-    const l = await navigator.wakeLock.request('screen');
-    if (!wantAwake || wakeLock) {
-      l.release().catch(() => {});
-      return;
-    }
-    wakeLock = l;
-    l.addEventListener('release', () => {
-      if (wakeLock === l) wakeLock = null;
-    });
-  } catch {
-    // not allowed (a battery saver, an iframe): the screen sleeps as usual
-  }
+  document.documentElement.requestFullscreen({ navigationUI: 'hide' }).then(
+    () => {
+      deviceStatus.fullscreen = 'on';
+      const orientation = screen.orientation as ScreenOrientation | undefined;
+      if (!orientation || typeof orientation.lock !== 'function') {
+        deviceStatus.orientationLock = 'unavailable';
+        return;
+      }
+      orientation.lock('landscape').then(
+        () => (deviceStatus.orientationLock = 'landscape'),
+        (e: unknown) => (deviceStatus.orientationLock = `refused: ${errorName(e)}`),
+      );
+    },
+    (e: unknown) => (deviceStatus.fullscreen = `refused: ${errorName(e)}`),
+  );
 }

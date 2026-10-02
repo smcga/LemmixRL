@@ -5,9 +5,11 @@ import { BootScene } from './scenes/boot.ts';
 import { DosScene } from './scenes/dos.ts';
 import { PlayerScene } from './scenes/player.ts';
 import { RunScene } from './scenes/run.ts';
-import { initTouchDetection, pixelRatio } from './touch.ts';
+import { initDiagnostics } from './diagnostics.ts';
+import { initTouchDetection, pixelRatio, safeAreaInsets } from './touch.ts';
 
 initTouchDetection();
+initDiagnostics();
 
 /**
  * The canvas has the resolution of the device (CSS size times devicePixelRatio), so the game is scaled by whole device
@@ -32,12 +34,19 @@ const game = new Phaser.Game({
   scene: [BootScene, DosScene, PlayerScene, RunScene],
 });
 
-/** the canvas follows the window (and the pixel ratio: browser zoom, another monitor) */
+/**
+ * The canvas follows the window (and the pixel ratio: browser zoom, another monitor). The scenes lay themselves out
+ * again on a resize, also when only the safe area changed (a phone turned the other way round: the notch moved).
+ */
+let lastInsets = JSON.stringify(safeAreaInsets());
 function fit(): void {
   const zoom = 1 / pixelRatio();
   if (game.scale.zoom !== zoom) game.scale.setZoom(zoom);
   const s = deviceSize();
+  const insets = JSON.stringify(safeAreaInsets());
   if (s.width !== game.scale.width || s.height !== game.scale.height) game.scale.resize(s.width, s.height);
+  else if (insets !== lastInsets) game.scale.refresh();
+  lastInsets = insets;
 }
 window.addEventListener('resize', fit);
 window.visualViewport?.addEventListener('resize', fit);

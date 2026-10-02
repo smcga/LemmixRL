@@ -25,6 +25,7 @@ import { saveRun } from '../run/storage.ts';
 import { speak, voice, VoiceOption } from '../voice.ts';
 import { ScreenType } from './base.ts';
 import { SkillPanel } from './skillpanel.ts';
+import { touchTapAt } from './touchgame.ts';
 
 export enum GameScroll {
   None,
@@ -63,29 +64,6 @@ class Ticker {
     this.last += this.interval;
     if (t - this.last > 250) this.last = t;
   }
-}
-
-/** a tap this close to a lemming (in game pixels, outside its hit box) still selects it */
-const TOUCH_AIM_RADIUS = 8;
-
-/** The point in the middle of the hit box of the lemming nearest to p (within radius of its box), if any. */
-export function nearestLemmingPoint(game: LemmingGame, p: { x: number; y: number }, radius: number): { x: number; y: number } | null {
-  let best: { x: number; y: number } | null = null;
-  let bestD = Infinity;
-  for (const l of game.lemmingList) {
-    if (l.isRemoved) continue;
-    // the hit box of TLemmingGame.PrioritizedHitTest: 13 x 13 pixels from the top left of the frame
-    const x0 = l.xPos + l.frameLeftDx;
-    const y0 = l.yPos + l.frameTopDy;
-    const dx = p.x < x0 ? x0 - p.x : p.x > x0 + 12 ? p.x - x0 - 12 : 0;
-    const dy = p.y < y0 ? y0 - p.y : p.y > y0 + 12 ? p.y - y0 - 12 : 0;
-    const d = Math.hypot(dx, dy);
-    if (d <= radius && d < bestD) {
-      bestD = d;
-      best = { x: x0 + 6, y: y0 + 6 };
-    }
-  }
-  return best;
 }
 
 /** Things the player needs from the hosting scene. */
@@ -363,6 +341,24 @@ export class PlayerScreen implements GameView {
 
   // touch (LemmixRL): a tap is a click with the left mouse button, a drag scrolls the level
 
+  /**
+   * Touch: the next tap selects the non-prioritized lemming where lemmings overlap (a walker rather than a worker), as
+   * a click with the right mouse button held does. The cursor shows it too. Off again after an assignment.
+   */
+  touchSelectWalker = false;
+
+  setTouchSelectWalker(on: boolean): void {
+    this.touchSelectWalker = on;
+    const game = this.game;
+    game.rightMouseButtonHeldDown = on;
+    if (game.playing && !game.hyperSpeed && game.isPaused) game.hitTest();
+  }
+
+  /** every frame while touch is used: the right mouse button of the engine is the walker selection */
+  syncTouchSelection(): void {
+    this.game.rightMouseButtonHeldDown = this.touchSelectWalker;
+  }
+
   /** a finger on the game image: the cursor follows it (no scrolling at the edges, like the mouse would) */
   touchCursor(x: number, y: number): void {
     this.mouseX = x;
@@ -371,27 +367,22 @@ export class PlayerScreen implements GameView {
     this.gameScroll = GameScroll.None;
     const game = this.game;
     if (!game.playing || game.hyperSpeed) return;
+    game.rightMouseButtonHeldDown = this.touchSelectWalker;
     this.setAdjustedGameCursorPoint(this.controlToBitmap(x, y));
     if (game.isPaused) game.hitTest();
   }
 
-  /**
-   * A tap on the game image: like a left click there. A finger is less precise than the mouse, so a tap next to a
-   * lemming (not on it) aims at the nearest lemming. The game sees an ordinary cursor point (and replays record it).
-   */
+  /** A tap on the game image: like a left click there, see touchTapAt. */
   touchTap(x: number, y: number): void {
     this.mouseX = x;
     this.mouseY = y;
     const game = this.game;
     if (!game.playing || game.hyperSpeed) return;
-    const b = this.controlToBitmap(x, y);
-    let cp = { x: b.x - 3, y: b.y + 2 };
-    if (game.prioritizedHitTest(cp, false).count === 0) cp = nearestLemmingPoint(game, cp, TOUCH_AIM_RADIUS) ?? cp;
-    if (this.alwaysRegainControlOnMouseClick) game.regainControl();
-    game.cursorPoint = cp;
-    game.rightMouseButtonHeldDown = false;
-    const handleClick = (!game.isPaused || game.gameOptions.has(GameOption.SkillAssignmentsEnabledWhenPaused)) && !game.fastForward;
-    if (handleClick) game.processSkillAssignment(!this.alwaysRegainControlOnMouseClick);
+    const assigned = touchTapAt(game, this.controlToBitmap(x, y), {
+      selectWalker: this.touchSelectWalker,
+      alwaysRegainControl: this.alwaysRegainControlOnMouseClick,
+    });
+    if (assigned && this.touchSelectWalker) this.setTouchSelectWalker(false);
   }
 
   /** a drag on the game image scrolls the level with the finger (in control pixels) */

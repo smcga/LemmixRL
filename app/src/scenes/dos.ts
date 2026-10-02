@@ -11,7 +11,7 @@ import { MenuScreen } from '../screens/menu.ts';
 import { PostviewScreen } from '../screens/postview.ts';
 import { PreviewScreen } from '../screens/preview.ts';
 import { ensureRunAssets } from '../run/ui/assets.ts';
-import { canFullscreen, canvasPoint, cssPx, isFullscreen, onTouchChange, toggleFullscreen, touch } from '../touch.ts';
+import { canFullscreen, canvasPoint, cssPx, isFullscreen, onTouchChange, safeAreaInsets, toggleFullscreen, touch } from '../touch.ts';
 import { download, selectFile, showMessage, showText } from '../ui.ts';
 import { getApp, gotoScreen, isGameKey, listen } from './shared.ts';
 import { TouchBar, type TouchButtonDef } from './touchbar.ts';
@@ -141,8 +141,12 @@ export class DosScene extends Phaser.Scene {
   }
 
   private layout(): void {
-    const w = this.scale.width;
-    const h = this.scale.height;
+    // the safe area of the screen: not under a notch, a rounded corner or the home indicator
+    const ins = safeAreaInsets();
+    const x0 = ins.left;
+    const y0 = ins.top;
+    const w = this.scale.width - ins.left - ins.right;
+    const h = this.scale.height - ins.top - ins.bottom;
     const bmp = this.screen.screen;
     // touch: the buttons get a strip at the right (landscape) or at the bottom (portrait)
     const vertical = w >= h * 1.25;
@@ -150,11 +154,11 @@ export class DosScene extends Phaser.Scene {
     const barH = touch.active && !vertical ? cssPx(56) : 0;
     const s = Math.min((w - barW) / bmp.width, (h - barH) / bmp.height);
     this.image.setScale(s);
-    this.image.setPosition(Math.floor((w - barW - bmp.width * s) / 2), Math.floor((h - barH - bmp.height * s) / 2));
+    this.image.setPosition(x0 + Math.floor((w - barW - bmp.width * s) / 2), y0 + Math.floor((h - barH - bmp.height * s) / 2));
     const gap = cssPx(8);
     const n = this.touchBarSize;
-    if (vertical) this.touchBar.layout(w - barW + gap, gap, barW - 2 * gap, Math.min(h - 2 * gap, n * cssPx(48) + (n - 1) * gap), true);
-    else this.touchBar.layout(gap, h - barH + gap, Math.min(w - 2 * gap, n * cssPx(140)), barH - 2 * gap, false);
+    if (vertical) this.touchBar.layout(x0 + w - barW + gap, y0 + gap, barW - 2 * gap, Math.min(h - 2 * gap, n * cssPx(48) + (n - 1) * gap), true);
+    else this.touchBar.layout(x0 + gap, y0 + h - barH + gap, Math.min(w - 2 * gap, n * cssPx(140)), barH - 2 * gap, false);
     this.touchBar.setVisible(touch.active);
     this.positionCodeInput();
   }
@@ -169,7 +173,7 @@ export class DosScene extends Phaser.Scene {
     input.setAttribute('autocapitalize', 'characters');
     input.setAttribute('autocorrect', 'off');
     input.style.cssText =
-      'position:fixed;left:50%;transform:translateX(-50%);width:min(80vw,360px);padding:8px 10px;font:18px monospace;' +
+      'position:fixed;transform:translateX(-50%);width:min(80vw,360px);padding:8px 10px;font:18px monospace;' +
       'text-align:center;background:#101028;color:#e0e0ff;border:1px solid #6060a0;border-radius:8px;z-index:5;';
     const screen = this.screen as LevelCodeScreen;
     input.addEventListener('keydown', (e) => {
@@ -191,9 +195,10 @@ export class DosScene extends Phaser.Scene {
     const input = this.codeInput;
     if (!input) return;
     input.style.display = touch.active ? 'block' : 'none';
-    // under the code, in CSS pixels
+    // under the code, in the middle of the screen image (CSS pixels)
     const k = this.game.canvas.getBoundingClientRect().height / this.scale.height;
     input.style.top = `${Math.round((this.image.y + 250 * this.image.scaleY) * k)}px`;
+    input.style.left = `${Math.round((this.image.x + (this.screen.screen.width * this.image.scaleX) / 2) * k)}px`;
   }
 
   override update(): void {

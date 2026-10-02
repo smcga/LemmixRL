@@ -15,7 +15,7 @@ import { ANTES, ATTEMPTS, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, 
 import { loadMeta, loadRun, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
 import { BACKGROUND, ensureRunAssets, type LemmingAnim, lemmingSprite, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
 import { Button, COLORS, containerHitArea, hoverTip, label, panel, showTip, type TipContent, Tooltip } from '../run/ui/widgets.ts';
-import { cssPx, onTouchChange, touch } from '../touch.ts';
+import { cssPx, onTouchChange, safeAreaInsets, touch } from '../touch.ts';
 import { ScreenType } from '../screens/base.ts';
 import { getApp, gotoScreen, listen } from './shared.ts';
 
@@ -140,12 +140,15 @@ export class RunScene extends Phaser.Scene {
   }
 
   private layout(): void {
-    const w = this.scale.width;
-    const h = this.scale.height;
+    // the camera shows the safe area of the screen: not under a notch, a rounded corner or the home indicator
+    const ins = safeAreaInsets();
+    const w = this.scale.width - ins.left - ins.right;
+    const h = this.scale.height - ins.top - ins.bottom;
     const f = Math.min(w / W, h / H);
     // whole pixels on a desktop screen; on a phone the screen is filled (its pixels are too small to see the difference)
     const z = f >= 1 && !touch.active ? Math.floor(f) : f;
     const cam = this.cameras.main;
+    cam.setViewport(ins.left, ins.top, w, h);
     cam.setZoom(z);
     cam.centerOn(W / 2, H / 2);
     this.updatePortraitCover();
@@ -157,13 +160,12 @@ export class RunScene extends Phaser.Scene {
   private updatePortraitCover(): void {
     for (const o of this.portraitCover) o.destroy();
     this.portraitCover = [];
-    const w = this.scale.width;
-    const h = this.scale.height;
-    if (!touch.active || w >= h) return;
+    if (!touch.active || this.scale.width >= this.scale.height) return;
     // over everything the main camera shows, in its world coordinates
-    const zoom = this.cameras.main.zoom;
-    const vw = w / zoom;
-    const vh = h / zoom;
+    const cam = this.cameras.main;
+    const zoom = cam.zoom;
+    const vw = cam.width / zoom;
+    const vh = cam.height / zoom;
     const cx = W / 2;
     const cy = H / 2;
     const u = cssPx(1) / zoom; // a CSS pixel in world units

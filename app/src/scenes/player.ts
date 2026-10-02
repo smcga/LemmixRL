@@ -12,7 +12,8 @@ import { ScreenType } from '../screens/base.ts';
 import type { LemmingCard } from '../run/state.ts';
 import { ensureRunAssets, FONT } from '../run/ui/assets.ts';
 import { PlayerScreen } from '../screens/player.ts';
-import { canvasPoint, cssPx, keepScreenOn, onTouchChange, pixelRatio, safeAreaInsets, touch } from '../touch.ts';
+import { canvasPoint, cssPx, DoubleTap, onTouchChange, pixelRatio, safeAreaInsets, touch } from '../touch.ts';
+import { keepScreenOn } from '../wakelock.ts';
 import { download, selectFile, showMessage, showText } from '../ui.ts';
 import { getApp, gotoScreen, isGameKey, keyMods, listen } from './shared.ts';
 import { TouchBar } from './touchbar.ts';
@@ -67,7 +68,8 @@ export class PlayerScene extends Phaser.Scene {
   private portraitHint!: Phaser.GameObjects.BitmapText;
   private touchTrack: { id: number; area: Area; x0: number; y0: number; lastX: number; panning: boolean } | null = null;
   private lastTouchTime = -Infinity;
-  private lastTap = { time: -Infinity, x: 0, y: 0 };
+  /** the double tap of the nuke button (only two taps on the nuke itself count) */
+  private panelTaps = new DoubleTap<SkillPanelButton>(DOUBLE_CLICK_MS, TOUCH_SLOP);
 
   constructor() {
     super('player');
@@ -142,14 +144,17 @@ export class PlayerScene extends Phaser.Scene {
     this.uiCam.ignore(this.gameImage);
 
     // LemmixRL: the buttons for touch screens (the keys of Lemmix that a phone does not have)
+    this.panelTaps = new DoubleTap<SkillPanelButton>(DOUBLE_CLICK_MS, cssPx(TOUCH_SLOP));
     ensureRunAssets(this, app);
     const p = this.player;
     this.touchBar = new TouchBar(
       this,
       [
         { label: 'PAUSE', action: () => this.safe(() => p.clickPanelButton(SkillPanelButton.Pause)), active: () => p.game.isPaused },
-        { label: 'STEP', action: () => this.safe(() => p.keyPress('n')) },
         { label: 'FAST', action: () => this.safe(() => p.keyPress('f')), active: () => p.game.fastForward },
+        // the right mouse button: the next tap picks the walker where it overlaps a worker
+        { label: 'WALKER', action: () => this.safe(() => p.setTouchSelectWalker(!p.touchSelectWalker)), active: () => p.touchSelectWalker },
+        { label: 'STEP', action: () => this.safe(() => p.keyPress('n')) },
         { label: '-1 SEC', action: () => this.safe(() => p.keyPress('!')) },
         { label: 'RESTART', action: () => this.safe(() => p.keyPress('R')), confirm: true },
         { label: 'END', action: () => this.safe(() => p.keyDown('Escape', { shift: false, ctrl: false, alt: false }, performance.now())), confirm: true },
@@ -200,6 +205,8 @@ export class PlayerScene extends Phaser.Scene {
   }
 
   private onResize(): void {
+    // a finger that is down stays where it was on the screen, but the game moved under it (a rotation)
+    this.cancelTouch();
     const s = this.computeScale();
     if (s !== this.scaleFactor) {
       this.player.rescale(s);
@@ -220,7 +227,7 @@ export class PlayerScene extends Phaser.Scene {
     if (bar?.vertical) {
       this.left = ins.left + Math.floor((areaW - (320 * s + gap + bar.w)) / 2);
       this.top = ins.top + Math.floor((areaH - 200 * s) / 2);
-      const h = Math.min(areaH - 2 * gap, cssPx(6 * 48));
+      const h = Math.min(areaH - 2 * gap, cssPx(this.touchBar.size * 48));
       this.touchBar.layout(this.left + 320 * s + gap, ins.top + Math.floor((areaH - h) / 2), bar.w, h, true);
     } else if (bar) {
       this.left = ins.left + Math.floor((areaW - 320 * s) / 2);
@@ -324,19 +331,19 @@ export class PlayerScene extends Phaser.Scene {
       this.lastTouchTime = performance.now();
       const p = this.controlPoint(e);
       const s = this.scaleFactor;
-      if (p.x < 0 || p.y < 0 || p.x >= 320 * s || p.y >= 200 * s) return; // the touch bar or the margins
+      const area: Area | null = p.x < 0 || p.y < 0 || p.x >= 320 * s || p.y >= 200 * s ? null : p.y < this.player.imgHeight ? 'img' : 'tool';
+      if (area !== 'tool') this.panelTaps.cancel();
+      if (!area) return; // the touch bar or the margins
       e.preventDefault();
-      const area: Area = p.y < this.player.imgHeight ? 'img' : 'tool';
       this.touchTrack = { id: e.pointerId, area, x0: p.x, y0: p.y, lastX: p.x, panning: false };
       if (area === 'img') this.safe(() => this.player.touchCursor(p.x, p.y));
       else {
         const { bx, by } = toolPoint(p.x, p.y);
-        const now = performance.now();
-        const last = this.lastTap;
-        const isDouble = now - last.time < DOUBLE_CLICK_MS && Math.abs(last.x - p.x) <= cssPx(24) && Math.abs(last.y - p.y) <= cssPx(24);
-        this.lastTap = isDouble ? { time: -Infinity, x: 0, y: 0 } : { time: now, x: p.x, y: p.y };
+        const button = this.player.toolbar.buttonAt(bx, by);
+        this.panelTaps.down(button, performance.now(), p.x, p.y);
         this.player.toolBarMouseMove(p.x, p.y);
-        this.safe(() => this.player.toolbar.mouseDown(bx, by, isDouble));
+        // the nuke wants a double click in Lemmix: here two completed taps on it (see the end of the touch)
+        if (button !== SkillPanelButton.Nuke) this.safe(() => this.player.toolbar.mouseDown(bx, by, false));
       }
     });
     listen(this, 'pointermove', (e) => {
@@ -354,6 +361,8 @@ export class PlayerScene extends Phaser.Scene {
         const x = this.clampX(p.x);
         const y = this.clampY(p.y);
         const { bx, by } = toolPoint(x, y);
+        // a finger that leaves its button (or slides along it) does not make a tap
+        this.panelTaps.move(x === p.x && y === p.y ? this.player.toolbar.buttonAt(bx, by) : SkillPanelButton.None, p.x, p.y);
         this.player.toolBarMouseMove(x, y);
         this.safe(() => this.player.toolbar.mouseMove(bx, by, true));
       }
@@ -363,14 +372,31 @@ export class PlayerScene extends Phaser.Scene {
       if (!t || e.pointerId !== t.id) return;
       this.touchTrack = null;
       this.lastTouchTime = performance.now();
-      if (t.area === 'tool') this.safe(() => this.player.toolbar.mouseUp());
-      else if (!t.panning && !cancel) {
+      if (t.area === 'tool') {
+        this.safe(() => this.player.toolbar.mouseUp());
+        if (cancel) this.panelTaps.cancel();
+        else if (this.panelTaps.up() === SkillPanelButton.Nuke) {
+          const { bx, by } = toolPoint(t.x0, t.y0);
+          this.safe(() => {
+            this.player.toolbar.mouseDown(bx, by, true);
+            this.player.toolbar.mouseUp();
+          });
+        }
+      } else if (!t.panning && !cancel) {
         const p = this.controlPoint(e);
         this.safe(() => this.player.touchTap(this.clampX(p.x), this.clampY(p.y)));
       }
     };
     listen(this, 'pointerup', (e) => end(e, false));
     listen(this, 'pointercancel', (e) => end(e, true));
+  }
+
+  /** ends the touch going on without a tap (a rotation, a resize): held panel buttons are released */
+  private cancelTouch(): void {
+    const t = this.touchTrack;
+    this.touchTrack = null;
+    this.panelTaps.cancel();
+    if (t?.area === 'tool') this.safe(() => this.player.toolbar.mouseUp());
   }
 
   /** a pointer position in control coordinates of the game image (not clamped) */
@@ -448,6 +474,7 @@ export class PlayerScene extends Phaser.Scene {
     if (this.cursorImage.texture.key !== tex.key) this.cursorImage.setTexture(tex.key);
     this.cursorImage.setPosition(this.left + player.mouseX - 7 * s, this.top + player.mouseY - 7 * s);
     this.cursorImage.setVisible(!touch.active || (this.touchTrack?.area === 'img' && !this.touchTrack.panning));
+    if (touch.active) player.syncTouchSelection();
     this.touchBar.update();
 
     this.updateMessages();

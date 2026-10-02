@@ -59,12 +59,19 @@ Lemmings, Holiday Lemmings 94, XMas Lemmings 91 and 92), F5 the options, `l` loa
 ### On a phone or a tablet
 
 The game can be played with a finger (an addition of LemmixRL). It switches to touch controls at the first touch and
-back to the mouse at the first click; with a mouse nothing changes. To open it on a phone, put the files of
-`npm run build` (`dist/`) on any web server, or run `npm run dev -- --host` and open the *Network* address it prints
-on a phone in the same network.
+back to the mouse at the first click; with a mouse nothing changes.
+
+To open it on a phone: the workflow `.github/workflows/pages.yml` publishes master on GitHub Pages at
+`https://<owner>.github.io/<repo>/` and every pull request at `https://<owner>.github.io/<repo>/pr-<number>/` (with a
+comment on the pull request that links to it), once GitHub Pages serves the `gh-pages` branch (Settings > Pages >
+Build and deployment > Deploy from a branch > `gh-pages`, `/ (root)`). Otherwise: put the files of `npm run build`
+(`dist/`) on any web server, or run `npm run dev -- --host` and open the *Network* address it prints on a phone in the
+same network. `?diag` at the end of the address shows what the browser reports (the build, the safe area, full
+screen, the sideways lock, the wake lock, the audio); `?diag=0` hides it again.
 
 * Hold the phone sideways: the level is drawn at the resolution of the screen, scaled by whole device pixels, with
-  the touch buttons next to it. Upright, it is smaller (the run screens ask you to turn the phone).
+  the touch buttons next to it. Upright, it is smaller (the run screens ask you to turn the phone). Every screen
+  stays out of the notch, the rounded corners and the home indicator.
 * Full screen: the FULLSCREEN button in the menu (Android browsers), or *Add to Home Screen*, which installs the game
   as a full screen app with a lemming icon (iPhone too; Android wants the page served over HTTPS for that).
 * Menu: tap a sign to do what its key does (1 Player, New Level, music, the style, the arrows of the difficulty
@@ -74,10 +81,13 @@ on a phone in the same network.
 * In a level: tap a skill in the panel, then tap a lemming. The skill is assigned when the finger comes up; while
   the finger is down the cursor shows which lemming it is on, and a tap a little next to a lemming (up to 8 pixels of
   the game) still selects the nearest one. Drag the level sideways to scroll, or tap and drag the minimap. Hold the
-  release rate buttons, tap the nuke twice. The touch buttons are the keys a phone does not have: PAUSE, STEP (the
-  next frame, while paused), FAST (fast forward), -1 SEC (rewind one second), RESTART and END (Escape), the last two
-  after a second tap. The screen stays on while a level is played. Selecting a non-prioritized lemming (the right
-  mouse button) has no touch equivalent yet.
+  release rate buttons; the nuke wants two taps on it. The touch buttons are the keys a phone does not have: PAUSE,
+  FAST (fast forward), WALKER (the right mouse button: the next tap selects the lemming that is not working where
+  lemmings overlap, a walker rather than a builder, and the cursor shows it), STEP (the next frame, while paused),
+  -1 SEC (rewind one second), RESTART and END (Escape), the last two after a second tap. Turning the phone cancels
+  what a finger was doing, and a second tap that was asked for. The screen stays on while a level is played. With
+  WALKER on, a tap on a worker with nobody else under the finger does nothing (with the right mouse button Lemmix
+  raises an exception there, see below).
 * Run screens: a tap shows what something is; a second tap on something that costs or uses something (buying,
   hiring, using a tarot, skipping, rerolling the boss) does it. A tap on a joker shows it with its Sell button. A tap
   on an empty spot closes the information.
