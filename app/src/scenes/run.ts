@@ -14,7 +14,8 @@ import { describeSkills, SKILL_NAMES, SKILL_PLURALS, SKILLS, type Skill, totalSk
 import { ANTES, ATTEMPTS, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
 import { loadMeta, loadRun, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
 import { BACKGROUND, ensureRunAssets, type LemmingAnim, lemmingSprite, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
-import { Button, COLORS, hoverTip, label, panel, Tooltip } from '../run/ui/widgets.ts';
+import { Button, COLORS, containerHitArea, hoverTip, label, panel, showTip, type TipContent, Tooltip } from '../run/ui/widgets.ts';
+import { cssPx, onTouchChange, touch } from '../touch.ts';
 import { ScreenType } from '../screens/base.ts';
 import { getApp, gotoScreen, listen } from './shared.ts';
 
@@ -123,8 +124,18 @@ export class RunScene extends Phaser.Scene {
     this.choosing = !run;
     this.layout();
     this.scale.on('resize', this.layout, this);
-    this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
+    const offTouch = onTouchChange(() => this.layout());
+    this.events.once('shutdown', () => {
+      this.scale.off('resize', this.layout, this);
+      offTouch();
+      for (const o of this.portraitCover) o.destroy();
+      this.portraitCover = [];
+    });
     listen(this, 'keydown', (e) => this.onKey(e));
+    // touch: a tap on nothing closes a tooltip
+    this.input.on('pointerdown', (_p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+      if (touch.active && over.length === 0) this.tip.hide();
+    });
     this.render();
   }
 
@@ -132,10 +143,37 @@ export class RunScene extends Phaser.Scene {
     const w = this.scale.width;
     const h = this.scale.height;
     const f = Math.min(w / W, h / H);
-    const z = f >= 1 ? Math.floor(f) : f;
+    // whole pixels on a desktop screen; on a phone the screen is filled (its pixels are too small to see the difference)
+    const z = f >= 1 && !touch.active ? Math.floor(f) : f;
     const cam = this.cameras.main;
     cam.setZoom(z);
     cam.centerOn(W / 2, H / 2);
+    this.updatePortraitCover();
+  }
+
+  /** a phone held upright: the run screens need it sideways (they are as wide as a computer screen) */
+  private portraitCover: Phaser.GameObjects.GameObject[] = [];
+
+  private updatePortraitCover(): void {
+    for (const o of this.portraitCover) o.destroy();
+    this.portraitCover = [];
+    const w = this.scale.width;
+    const h = this.scale.height;
+    if (!touch.active || w >= h) return;
+    // over everything the main camera shows, in its world coordinates
+    const zoom = this.cameras.main.zoom;
+    const vw = w / zoom;
+    const vh = h / zoom;
+    const cx = W / 2;
+    const cy = H / 2;
+    const u = cssPx(1) / zoom; // a CSS pixel in world units
+    const bg = this.add.rectangle(cx - vw / 2, cy - vh / 2, vw, vh, 0x05050c, 1).setOrigin(0, 0).setInteractive();
+    const t = label(this, cx, cy - 40 * u, 'Turn your phone sideways', { size: 22 * u, big: true, originX: 0.5, originY: 0.5, color: COLORS.gold });
+    if (t.width > vw * 0.9) t.setFontSize((t.fontSize * vw * 0.9) / t.width);
+    const t2 = label(this, cx, cy, 'the run screens need the room', { size: 16 * u, originX: 0.5, originY: 0.5, color: COLORS.dim });
+    const sp = lemmingSprite(this, cx, cy + 50 * u, 'walk', 3 * u);
+    this.portraitCover = [bg, t, t2, sp];
+    for (const o of [bg, t, t2, sp]) o.setDepth(5000);
   }
 
   private onKey(e: KeyboardEvent): void {
@@ -157,6 +195,20 @@ export class RunScene extends Phaser.Scene {
 
   private sfx(e: SoundEffect): void {
     this.app.sound.playSound(e);
+  }
+
+  /**
+   * Touch: the first tap on something that acts (buy, sell, use, hire, skip) shows what it is, the second tap acts.
+   * Returns true when the action goes ahead (always with the mouse).
+   */
+  private confirmTap(owner: object, content: TipContent, hint: string): boolean {
+    if (!touch.active) return true;
+    if (this.tip.owner === owner) {
+      this.tip.hide();
+      return true;
+    }
+    showTip(this.tip, { ...content, lines: [...content.lines, '', hint] }, owner);
+    return false;
   }
 
   /** keeps a game object for the next clear */
@@ -296,13 +348,19 @@ export class RunScene extends Phaser.Scene {
     const specials = run.specialCards();
     k(label(this, 62, 208, specials.length ? `${specials.length} special` : 'all plain', { color: COLORS.dim }));
     const colonyBtn = k(new Button(this, 24, 236, 192, 24, 'Colony', COLORS.purple, () => this.showColony(null)));
-    hoverTip(colonyBtn, this.tip, () => ({
-      title: 'Your colony',
-      color: COLORS.purple,
-      lines: [this.specialCounts(s.colony) || 'Only plain lemmings.', '', 'Click to see all your lemmings.'],
-      x: 236,
-      y: 200,
-    }));
+    // (touch: the button just opens the colony, which says all of this)
+    hoverTip(
+      colonyBtn,
+      this.tip,
+      () => ({
+        title: 'Your colony',
+        color: COLORS.purple,
+        lines: [this.specialCounts(s.colony) || 'Only plain lemmings.', '', 'Click to see all your lemmings.'],
+        x: 236,
+        y: 200,
+      }),
+      false,
+    );
     // capability
     k(label(this, 20, 280, 'Capability', { color: COLORS.dim }));
     const cap = run.capability();
@@ -330,7 +388,7 @@ export class RunScene extends Phaser.Scene {
           if (window.confirm('Give up this run?')) this.finishRun(false);
         }),
       );
-    k(label(this, 20, 502, 'Esc: menu, the run is saved', { color: 0x606080 }));
+    k(label(this, 20, 502, touch.active ? 'The run is saved as you go' : 'Esc: menu, the run is saved', { color: 0x606080 }));
   }
 
   private specialCounts(colony: LemmingCard[]): string {
@@ -365,13 +423,14 @@ export class RunScene extends Phaser.Scene {
         continue;
       }
       const d = jokerDef(j.id);
+      // (touch: one tap shows the joker and its sell button, under each other)
       this.card(x, 34, 68, 70, RARITY_COLORS[d.rarity], JOKER_ART[j.id], () => this.jokerMenu(run, j.uid, x, 34), () => ({
         title: d.name,
         color: RARITY_COLORS[d.rarity],
         lines: [d.text, '', `${d.rarity} joker, sells for $${sellPrice(j.id)}`],
         x: x,
-        y: 110,
-      }));
+        y: touch.active ? 154 : 110,
+      }), null);
     }
     const tx = MAIN_X + 412;
     k(label(this, tx, 14, `Tarots ${s.tarots.length}/${TAROT_SLOTS}`, { color: COLORS.dim }));
@@ -387,10 +446,10 @@ export class RunScene extends Phaser.Scene {
       this.card(x, 34, 68, 70, COLORS.purple, art, () => this.useTarot(run, t.uid), () => ({
         title: d.name,
         color: COLORS.purple,
-        lines: [t.skill && d.skillText ? d.skillText(SKILL_NAMES[t.skill]) : d.text, '', 'Click to use it.'],
+        lines: [t.skill && d.skillText ? d.skillText(SKILL_NAMES[t.skill]) : d.text, ...(touch.active ? [] : ['', 'Click to use it.'])],
         x: x - 120,
         y: 110,
-      }));
+      }), 'Tap again to use it.');
     }
     // the blind being played
     const setup = s.setup;
@@ -410,7 +469,9 @@ export class RunScene extends Phaser.Scene {
     color: number,
     art: Art | undefined,
     onClick: (() => void) | null,
-    tip: (() => { title: string; color: number; lines: string[]; x: number; y: number; width?: number }) | null,
+    tip: (() => TipContent) | null,
+    /** touch: what the second tap does; null: the first tap shows the tooltip and acts (the action asks itself) */
+    touchHint: string | null = 'Tap it again to go ahead.',
   ): Phaser.GameObjects.Container {
     const c = this.k(this.add.container(x, y));
     const g = panel(this, 0, 0, w, h, COLORS.dark, color, 6);
@@ -426,19 +487,38 @@ export class RunScene extends Phaser.Scene {
       else c.add(label(this, w / 2, h / 2, art.text, { size: 32, big: true, color: art.color, originX: 0.5, originY: 0.5 }));
     }
     c.setSize(w, h);
-    c.setInteractive(new Phaser.Geom.Rectangle(0, 0, w, h), Phaser.Geom.Rectangle.Contains);
+    c.setInteractive(containerHitArea(w, h), Phaser.Geom.Rectangle.Contains);
     c.on('pointerover', () => {
+      if (touch.active) return;
       this.tweens.add({ targets: c, y: y - 4, duration: 80 });
-      if (tip) {
-        const t = tip();
-        this.tip.show(t.x, t.y, t.title, t.color, t.lines, t.width);
-      }
+      if (tip) showTip(this.tip, tip());
     });
     c.on('pointerout', () => {
+      if (touch.active) return;
       this.tweens.add({ targets: c, y, duration: 80 });
       this.tip.hide();
     });
-    if (onClick) c.on('pointerup', onClick);
+    c.on('pointerup', () => {
+      if (!touch.active) {
+        onClick?.();
+        return;
+      }
+      if (!tip) {
+        onClick?.();
+        return;
+      }
+      if (!onClick) {
+        if (this.tip.owner === c) this.tip.hide();
+        else showTip(this.tip, tip(), c);
+        return;
+      }
+      if (touchHint === null) {
+        onClick();
+        showTip(this.tip, tip(), c);
+        return;
+      }
+      if (this.confirmTap(c, tip(), touchHint)) onClick();
+    });
     return c;
   }
 
@@ -452,7 +532,10 @@ export class RunScene extends Phaser.Scene {
     };
     // a click anywhere else closes it
     const away = o(this.add.zone(0, 0, W, H).setOrigin(0, 0).setDepth(499).setInteractive()) as Phaser.GameObjects.Zone;
-    away.on('pointerdown', () => this.closeOverlay());
+    away.on('pointerdown', () => {
+      this.closeOverlay();
+      this.tip.hide();
+    });
     o(panel(this, x - 6, y + 74, 140, 40, COLORS.dark, COLORS.border, 6).setDepth(500));
     o(
       new Button(this, x, y + 80, 128, 28, `Sell $${sellPrice(j.id)}`, COLORS.orange, () => {
@@ -529,18 +612,20 @@ export class RunScene extends Phaser.Scene {
       k(label(this, cx + 17, cy + 16, String(u), { color: uc }));
       icon.setInteractive();
       const canHire = current && run.canHire(sk);
-      hoverTip(icon, this.tip, () => ({
+      const skillTip = (): TipContent => ({
         title: SKILL_PLURALS[sk],
         color: COLORS.teal,
         lines: [
           `The level has ${p.allocation[sk]}${p.aboveMax[sk] ? ` (+${p.aboveMax[sk]} from jokers)` : ''}, you bring ${u}.`,
-          ...(canHire ? [`Click: hire one for this level ($${HIRE_PRICE}).`] : []),
+          ...(canHire && !touch.active ? [`Click: hire one for this level ($${HIRE_PRICE}).`] : []),
         ],
         x: cx - 100,
         y: cy + 40,
-      }));
+      });
+      hoverTip(icon, this.tip, skillTip, !canHire);
       if (canHire)
         icon.on('pointerup', () => {
+          if (!this.confirmTap(icon, skillTip(), `Tap again to hire one for this level ($${HIRE_PRICE}).`)) return;
           if (run.hire(sk)) {
             this.sfx(SoundEffect.AssignSkill);
             this.save();
@@ -556,8 +641,16 @@ export class RunScene extends Phaser.Scene {
     k(label(this, x + w - 12, y + 336, `$${p.reward}`, { big: true, color: COLORS.gold, originX: 1 }));
     if (b.kind === 'boss' && b.status !== 'defeated' && !run.state.bossRerolled) {
       const can = run.canRerollBoss();
-      const rr = k(
+      const rerollTip = (): TipContent => ({
+        title: "Director's Cut",
+        color: COLORS.red,
+        lines: ['Another level for the Boss Blind, from the same band.', 'Once per ante, before the boss is played.'],
+        x: x - 80,
+        y: y + 64,
+      });
+      const rr: Button = k(
         new Button(this, x + w - 86, y + 102, 74, 18, `Reroll $${run.bossRerollPrice()}`, COLORS.red, () => {
+          if (!this.confirmTap(rr, rerollTip(), `Tap again to reroll the boss ($${run.bossRerollPrice()}).`)) return;
           if (run.rerollBoss()) {
             this.sfx(SoundEffect.SkillButtonSelect);
             this.save();
@@ -565,27 +658,26 @@ export class RunScene extends Phaser.Scene {
           }
         }, { enabled: can }),
       );
-      hoverTip(rr, this.tip, () => ({
-        title: "Director's Cut",
-        color: COLORS.red,
-        lines: ['Another level for the Boss Blind, from the same band.', 'Once per ante, before the boss is played.'],
-        x: x - 80,
-        y: y + 64,
-      }));
+      hoverTip(rr, this.tip, rerollTip, !can); // (touch: an enabled button shows the tooltip itself, see confirmTap)
     }
     if (current) {
       const playW = b.kind === 'boss' ? w - 24 : 100;
       k(new Button(this, x + 12, y + 362, playW, 30, 'Play', COLORS.red, () => this.play(run), { big: true }));
       if (b.kind !== 'boss' && b.tag) {
         const tag = tagDef(b.tag);
-        const skip = k(new Button(this, x + 120, y + 362, 96, 30, 'Skip', COLORS.orange, () => this.skip(run), { big: true, enabled: run.canSkip() }));
-        hoverTip(skip, this.tip, () => ({
+        const skipTip = (): TipContent => ({
           title: `Skip for: ${tag.name}`,
           color: COLORS.orange,
           lines: [tag.text, '', 'No reward and no shop for this blind.'],
           x: x - 40,
           y: y + 250,
-        }));
+        });
+        const skip: Button = k(
+          new Button(this, x + 120, y + 362, 96, 30, 'Skip', COLORS.orange, () => {
+            if (this.confirmTap(skip, skipTip(), 'Tap Skip again to skip.')) this.skip(run);
+          }, { big: true, enabled: run.canSkip() }),
+        );
+        hoverTip(skip, this.tip, skipTip, !run.canSkip());
       }
     } else {
       const text = b.status === 'upcoming' ? (b.tag ? `Skip reward:\n${tagDef(b.tag).name}` : 'Upcoming') : b.status === 'skipped' ? 'Skipped' : 'Defeated';
@@ -760,7 +852,7 @@ export class RunScene extends Phaser.Scene {
     k(panel(this, x, y, 704, 404, COLORS.panel, COLORS.red, 12));
     k(label(this, x + 24, y + 12, 'Shop', { size: 32, big: true, color: COLORS.red }));
     k(lemmingSprite(this, x + 178, y + 30, 'build', 2));
-    k(label(this, x + 204, y + 22, 'Recruits, training, jokers and tarots. Click to buy.', { color: COLORS.dim }));
+    k(label(this, x + 204, y + 22, `Recruits, training, jokers and tarots. ${touch.active ? 'Tap twice' : 'Click'} to buy.`, { color: COLORS.dim }));
 
     const step = shop.offers.length > 4 ? 94 : 116;
     const cw = shop.offers.length > 4 ? 86 : 100;
@@ -769,13 +861,16 @@ export class RunScene extends Phaser.Scene {
       const cy = y + 70;
       const info = this.offerInfo(run, o);
       const can = run.canBuy(o);
-      const card = this.card(cx, cy, cw, 132, info.color, info.art, o.sold ? null : () => this.buy(run, o), () => ({
+      // touch: the tooltip says why an offer cannot be bought, so tapping it only shows the tooltip
+      const buy = o.sold || (!can && touch.active) ? null : () => this.buy(run, o);
+      const tail = o.sold ? 'Sold.' : !can ? this.whyNot(run, o) : touch.active ? null : `Click to buy for $${o.price}.`;
+      const card = this.card(cx, cy, cw, 132, info.color, info.art, buy, () => ({
         title: info.title,
         color: info.color,
-        lines: [...info.lines, '', o.sold ? 'Sold.' : can ? `Click to buy for $${o.price}.` : this.whyNot(run, o)],
+        lines: tail ? [...info.lines, '', tail] : info.lines,
         x: cx,
         y: cy + 180,
-      }));
+      }), `Tap again to buy it for $${o.price}.`);
       if (o.sold) card.setAlpha(0.3);
       k(label(this, cx + cw / 2, cy + 140, o.sold ? 'sold' : `$${o.price}`, { color: o.sold ? COLORS.dim : can ? COLORS.gold : COLORS.red, originX: 0.5 }));
       k(label(this, cx + cw / 2, cy + 160, info.short, { color: COLORS.text, originX: 0.5, maxWidth: cw + 8, align: 1 }));
@@ -947,10 +1042,15 @@ export class RunScene extends Phaser.Scene {
       sp.setTint(EDITION_TINTS[c.edition]);
       o(label(this, cx + 26, cy + 6, cardTitle(c), { color: COLORS.text, maxWidth: 160 }));
       const zone = o(this.add.zone(cx, cy, 192, 28).setOrigin(0, 0).setInteractive());
-      zone.on('pointerover', () =>
-        this.tip.show(cx, cy + 30, cardTitle(c), EDITION_TINTS[c.edition] === 0xffffff ? COLORS.text : EDITION_TINTS[c.edition], this.cardLines(c, squad.has(c.id)), 320),
-      );
-      zone.on('pointerout', () => this.tip.hide());
+      const cellTip = (): TipContent => ({
+        title: cardTitle(c),
+        color: EDITION_TINTS[c.edition] === 0xffffff ? COLORS.text : EDITION_TINTS[c.edition],
+        lines: this.cardLines(c, squad.has(c.id)),
+        x: cx,
+        y: cy + 30,
+        width: 320,
+      });
+      hoverTip(zone, this.tip, cellTip, !tarot);
       if (tarot)
         zone.on('pointerup', () => {
           if (selected.has(c.id)) selected.delete(c.id);

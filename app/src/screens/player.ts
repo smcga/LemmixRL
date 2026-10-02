@@ -65,6 +65,29 @@ class Ticker {
   }
 }
 
+/** a tap this close to a lemming (in game pixels, outside its hit box) still selects it */
+const TOUCH_AIM_RADIUS = 8;
+
+/** The point in the middle of the hit box of the lemming nearest to p (within radius of its box), if any. */
+export function nearestLemmingPoint(game: LemmingGame, p: { x: number; y: number }, radius: number): { x: number; y: number } | null {
+  let best: { x: number; y: number } | null = null;
+  let bestD = Infinity;
+  for (const l of game.lemmingList) {
+    if (l.isRemoved) continue;
+    // the hit box of TLemmingGame.PrioritizedHitTest: 13 x 13 pixels from the top left of the frame
+    const x0 = l.xPos + l.frameLeftDx;
+    const y0 = l.yPos + l.frameTopDy;
+    const dx = p.x < x0 ? x0 - p.x : p.x > x0 + 12 ? p.x - x0 - 12 : 0;
+    const dy = p.y < y0 ? y0 - p.y : p.y > y0 + 12 ? p.y - y0 - 12 : 0;
+    const d = Math.hypot(dx, dy);
+    if (d <= radius && d < bestD) {
+      bestD = d;
+      best = { x: x0 + 6, y: y0 + 6 };
+    }
+  }
+  return best;
+}
+
 /** Things the player needs from the hosting scene. */
 export interface PlayerHost {
   /** let the user pick a replay file */
@@ -336,6 +359,51 @@ export class PlayerScreen implements GameView {
     if (this.draggingMap) this.draggingMap = false;
     this.mouseScroll = false;
     this.game.rightMouseButtonHeldDown = rightDown;
+  }
+
+  // touch (LemmixRL): a tap is a click with the left mouse button, a drag scrolls the level
+
+  /** a finger on the game image: the cursor follows it (no scrolling at the edges, like the mouse would) */
+  touchCursor(x: number, y: number): void {
+    this.mouseX = x;
+    this.mouseY = y;
+    this.mouseScroll = false;
+    this.gameScroll = GameScroll.None;
+    const game = this.game;
+    if (!game.playing || game.hyperSpeed) return;
+    this.setAdjustedGameCursorPoint(this.controlToBitmap(x, y));
+    if (game.isPaused) game.hitTest();
+  }
+
+  /**
+   * A tap on the game image: like a left click there. A finger is less precise than the mouse, so a tap next to a
+   * lemming (not on it) aims at the nearest lemming. The game sees an ordinary cursor point (and replays record it).
+   */
+  touchTap(x: number, y: number): void {
+    this.mouseX = x;
+    this.mouseY = y;
+    const game = this.game;
+    if (!game.playing || game.hyperSpeed) return;
+    const b = this.controlToBitmap(x, y);
+    let cp = { x: b.x - 3, y: b.y + 2 };
+    if (game.prioritizedHitTest(cp, false).count === 0) cp = nearestLemmingPoint(game, cp, TOUCH_AIM_RADIUS) ?? cp;
+    if (this.alwaysRegainControlOnMouseClick) game.regainControl();
+    game.cursorPoint = cp;
+    game.rightMouseButtonHeldDown = false;
+    const handleClick = (!game.isPaused || game.gameOptions.has(GameOption.SkillAssignmentsEnabledWhenPaused)) && !game.fastForward;
+    if (handleClick) game.processSkillAssignment(!this.alwaysRegainControlOnMouseClick);
+  }
+
+  /** a drag on the game image scrolls the level with the finger (in control pixels) */
+  panBy(dx: number): void {
+    const sca = this.displayScale;
+    this.offsetHorz = Math.max(this.minScroll * sca, Math.min(this.maxScroll * sca, this.offsetHorz + dx));
+  }
+
+  /** a button of the skill panel, as if clicked (the touch buttons) */
+  clickPanelButton(button: SkillPanelButton): void {
+    this.toolBarMouseDown(button, false);
+    this.game.btnStopChangingReleaseRate();
   }
 
   // skill panel
