@@ -47,10 +47,17 @@ export function createSession(data: DataProvider, def: StyleDef, sectionIndex: n
   return createSessionFromInfo(data, info, options);
 }
 
-export function createSessionFromInfo(data: DataProvider, info: LevelLoadingInformation, options: SessionOptions = {}): Session {
+/** beforePrepare can change the loaded level before the game is prepared (the roguelike layer changes the counts). */
+export function createSessionFromInfo(
+  data: DataProvider,
+  info: LevelLoadingInformation,
+  options: SessionOptions = {},
+  beforePrepare?: (level: Level) => void,
+): Session {
   const style = info.style;
   const level = new Level();
   info.loadLevel(level);
+  beforePrepare?.(level);
   const graphicSet = new GraphicSet(style);
   graphicSet.load(data, level.info.graphicSet, level.info.graphicSetEx);
   const renderer = new Renderer();

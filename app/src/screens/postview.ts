@@ -80,10 +80,11 @@ export class PostviewScreen extends DosScreenBase {
 
     this.playedLevelInfo = app.currentLevelInfo;
     const r = app.gameResult!;
-    const nextInfo = app.currentLevelInfo!.next;
-    const congrats = !nextInfo && r.success;
+    // LemmixRL: in a run there is no next level or access code, the run goes on
+    const nextInfo = app.inRun ? null : app.currentLevelInfo!.next;
+    const congrats = !nextInfo && r.success && !app.inRun;
     // next level earned
-    if (r.success) app.currentLevelInfo = nextInfo;
+    if (r.success && !app.inRun) app.currentLevelInfo = nextInfo;
 
     if (congrats) addLine(congratsString(app.styleDef));
     else {
@@ -115,7 +116,7 @@ export class PostviewScreen extends DosScreenBase {
     // force bottomtext to a fixed position
     addLineFeed(18 - result.split(CR).length + 1);
 
-    if (congrats) addLine(SPostviewScreen_PressMouseToContinue);
+    if (congrats || app.inRun) addLine(SPostviewScreen_PressMouseToContinue);
     else {
       addLine(r.success ? SPostviewScreen_PressLeftMouseForNextLevel : SPostviewScreen_PressLeftMouseToRetryLevel);
       addLine(SPostviewScreen_PressRightMouseForMenu);
@@ -124,13 +125,15 @@ export class PostviewScreen extends DosScreenBase {
   }
 
   keyDown(key: string): void {
-    if (key === 'Escape') this.close(ScreenType.Menu);
+    if (this.app.inRun && (key === 'Escape' || key === 'Enter')) this.close(ScreenType.Run);
+    else if (key === 'Escape') this.close(ScreenType.Menu);
     else if (key === 'Enter') this.close(ScreenType.Preview);
   }
 
   keyPress(ch: string): void {
     switch (ch) {
       case 'r':
+        if (this.app.inRun) return; // a replay would be another attempt
         this.app.currentLevelInfo = this.playedLevelInfo;
         this.app.replayCurrent = true;
         this.close(ScreenType.Play);
@@ -150,7 +153,8 @@ export class PostviewScreen extends DosScreenBase {
   }
 
   mouseDown(button: number): void {
-    if (button === 0) this.close(ScreenType.Preview);
+    if (this.app.inRun) this.close(ScreenType.Run);
+    else if (button === 0) this.close(ScreenType.Preview);
     else if (button === 2) this.close(ScreenType.Menu);
   }
 }

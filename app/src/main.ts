@@ -4,8 +4,9 @@ import * as Phaser from 'phaser';
 import { BootScene } from './scenes/boot.ts';
 import { DosScene } from './scenes/dos.ts';
 import { PlayerScene } from './scenes/player.ts';
+import { RunScene } from './scenes/run.ts';
 
-new Phaser.Game({
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
   backgroundColor: '#000000',
@@ -14,5 +15,8 @@ new Phaser.Game({
   disableContextMenu: true,
   audio: { noAudio: true },
   banner: false,
-  scene: [BootScene, DosScene, PlayerScene],
+  scene: [BootScene, DosScene, PlayerScene, RunScene],
 });
+
+// for debugging and browser tests
+if (import.meta.env.DEV) (globalThis as Record<string, unknown>).phaserGame = game;

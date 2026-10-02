@@ -22,6 +22,8 @@ import {
 } from '../../engine/src/index.ts';
 import { Config } from './config.ts';
 import type { LemmixData } from './data.ts';
+import { LevelCatalog } from './run/catalog.ts';
+import type { RunSession } from './run/session.ts';
 import type { WebSoundManager } from './sound.ts';
 
 export class LemmixApp {
@@ -39,6 +41,12 @@ export class LemmixApp {
   /** App.ReplayCurrent: replay the last game (postview 'r') */
   replayCurrent = false;
   readonly cursors = new Map<string, Bitmap32>();
+  /** the roguelike run (LemmixRL) */
+  run: RunSession | null = null;
+  /** the screens play the levels of the run (preview, game, postview) */
+  inRun = false;
+  private catalog: LevelCatalog | null = null;
+  private beforeRun: { style: string; level: LevelLoadingInformation | null } | null = null;
 
   constructor(
     readonly data: LemmixData,
@@ -49,6 +57,31 @@ export class LemmixApp {
       const bytes = data.cursors.get(name + '.bmp');
       if (bytes) this.cursors.set(name, readBmp(bytes));
     }
+  }
+
+  /** the levels of runs: the original Lemmings */
+  runCatalog(): LevelCatalog {
+    this.catalog ??= new LevelCatalog(getStyle(this.data.provider, StyleDef.Orig));
+    return this.catalog;
+  }
+
+  /** Runs are played with the original Lemmings style; the style and level of normal play come back afterwards. */
+  enterRunMode(): void {
+    if (this.inRun) return;
+    this.beforeRun = { style: this.style.name, level: this.currentLevelInfo };
+    if (this.style.def !== StyleDef.Orig) this.setStyle('Orig');
+    this.inRun = true;
+  }
+
+  leaveRunMode(): void {
+    if (!this.inRun) return;
+    this.inRun = false;
+    const b = this.beforeRun;
+    this.beforeRun = null;
+    if (!b) return;
+    if (b.style !== this.style.name) this.setStyle(b.style);
+    this.currentLevelInfo = b.level && b.level.style === this.style ? b.level : this.currentLevelInfo;
+    this.config.styleName = this.style.name;
   }
 
   get styleDef(): StyleDef {

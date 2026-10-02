@@ -26,6 +26,8 @@ export enum ScreenType {
   Play,
   Postview,
   LevelCode,
+  /** the screens of a roguelike run (LemmixRL) */
+  Run,
 }
 
 /** TMainDatExtractor */

@@ -21,6 +21,7 @@ import {
   type TColor32,
 } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
+import { saveRun } from '../run/storage.ts';
 import { speak, voice, VoiceOption } from '../voice.ts';
 import { ScreenType } from './base.ts';
 import { SkillPanel } from './skillpanel.ts';
@@ -149,6 +150,8 @@ export class PlayerScreen implements GameView {
       optionalMechanics: cfg.optionalMechanics,
     });
     this.alwaysRegainControlOnMouseClick = cfg.gameOptions.has(GameOption.AlwaysRegainControlOnMouseClick);
+    // LemmixRL: the lemmings of the run's squad get the abilities of their cards (the game is shared: always set)
+    this.game.onLemmingReleased = app.inRun && app.run ? app.run.releaseHook(this.game) : null;
 
     // init timers
     this.scrollTimer.reset(0);
@@ -549,8 +552,8 @@ export class PlayerScreen implements GameView {
       case '!': // rewind one second
         game.gotoIteration(game.currentIteration - SECOND);
         break;
-      case '5': // cheat
-        if (this.app.config.gameOptions.has(GameOption.CheatKeyToSolveLevel)) game.cheat();
+      case '5': // cheat (never in a run)
+        if (this.app.config.gameOptions.has(GameOption.CheatKeyToSolveLevel) && !this.app.inRun) game.cheat();
         break;
       case '+':
       case '=':
@@ -726,6 +729,12 @@ export class PlayerScreen implements GameView {
     this.playLock = 1;
     this.game.setGameResult();
     this.app.gameResult = { ...this.game.gameResultRec };
+    // LemmixRL: the attempt of a blind is over
+    const run = this.app.inRun ? this.app.run : null;
+    if (run && next === ScreenType.Postview && run.state.phase === 'playing') {
+      run.finishAttempt(this.game);
+      saveRun(run.state);
+    }
     this.close(next);
   }
 }

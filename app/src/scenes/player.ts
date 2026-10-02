@@ -9,11 +9,25 @@ import * as Phaser from 'phaser';
 import { Bitmap32, type HighResolutionMessage, type TColor32 } from '../../../engine/src/index.ts';
 import { BitmapTexture } from '../display.ts';
 import { ScreenType } from '../screens/base.ts';
+import type { LemmingCard } from '../run/state.ts';
 import { PlayerScreen } from '../screens/player.ts';
 import { download, selectFile, showMessage, showText } from '../ui.ts';
 import { getApp, gotoScreen, isGameKey, keyMods, listen } from './shared.ts';
 
 const DOUBLE_CLICK_MS = 500;
+
+/** the colour of a run card's mark: its edition, else insurance, else its abilities (the Lemmix colours) */
+function markerColor(c: LemmingCard): number | null {
+  if (c.edition === 'gold') return 0xf5c542;
+  if (c.edition === 'lucky') return 0x50e050;
+  if (c.edition === 'mentor') return 0x60c0ff;
+  if (c.edition === 'champion') return 0xc070ff;
+  if (c.insured) return 0xffffff;
+  if (c.climber && c.floater) return 0xff4500;
+  if (c.climber) return 0x00ff00;
+  if (c.floater) return 0x6495ed;
+  return null;
+}
 
 type Area = 'img' | 'tool';
 
@@ -39,6 +53,8 @@ export class PlayerScene extends Phaser.Scene {
   private lastArea: Area = 'img';
   private lastToolDown = { button: -1, time: -Infinity, x: 0, y: 0 };
   private dialogOpen = 0;
+  /** LemmixRL: the marks above the special lemmings of a run's squad */
+  private markers: Phaser.GameObjects.Rectangle[] = [];
 
   constructor() {
     super('player');
@@ -55,6 +71,7 @@ export class PlayerScene extends Phaser.Scene {
     this.fatalError = false;
     this.capture = null;
     this.messageTexts.clear();
+    this.markers = [];
     this.scaleFactor = this.computeScale();
     const dialog = async <T>(p: () => Promise<T>): Promise<T> => {
       this.dialogOpen++;
@@ -241,7 +258,10 @@ export class PlayerScene extends Phaser.Scene {
     this.dialogOpen++;
     void showMessage(`${err?.message ?? String(e)}\nExceptionclass: ${cls}\n\n(Lemmix terminates here.)`).then(() => {
       this.dialogOpen--;
-      gotoScreen(this, ScreenType.Menu);
+      // in a run the attempt does not count, the run goes on
+      const app = getApp();
+      if (app.inRun) app.run?.abandonAttempt();
+      gotoScreen(this, app.inRun ? ScreenType.Run : ScreenType.Menu);
     });
   }
 
@@ -268,6 +288,34 @@ export class PlayerScene extends Phaser.Scene {
     this.cursorImage.setPosition(this.left + player.mouseX - 7 * s, this.top + player.mouseY - 7 * s);
 
     this.updateMessages();
+    this.updateMarkers(pos);
+  }
+
+  /** LemmixRL: a small mark above every special lemming of the squad, in the colour of its card */
+  private updateMarkers(pos: number): void {
+    const app = getApp();
+    const run = app.inRun ? app.run : null;
+    let n = 0;
+    if (run) {
+      const list = this.player.game.lemmingList;
+      for (let i = 0; i < list.length; i++) {
+        const l = list[i];
+        if (l.isRemoved) continue;
+        const card = run.cardAt(i);
+        const color = card ? markerColor(card) : null;
+        if (color === null) continue;
+        let m = this.markers[n];
+        if (!m) {
+          m = this.add.rectangle(0, 0, 3, 3, color).setStrokeStyle(1, 0x000000).setOrigin(0.5, 0.5);
+          this.textCam.ignore(m);
+          this.uiCam.ignore(m);
+          this.markers.push(m);
+        }
+        m.setPosition(l.xPos - pos + 0.5, l.yPos - 13).setFillStyle(color).setVisible(true);
+        n++;
+      }
+    }
+    for (let i = n; i < this.markers.length; i++) this.markers[i].setVisible(false);
   }
 
   /** THighResolutionLayer.Paint */
