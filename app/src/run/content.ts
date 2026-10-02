@@ -8,15 +8,16 @@ import type { SkillCounts } from './skills.ts';
 /* ---------------------------------------------------------------------------------------------- lemming cards */
 
 /** what a lemming card is worth outside the level (one per card) */
-export type Edition = 'plain' | 'gold' | 'lucky' | 'mentor';
+export type Edition = 'plain' | 'gold' | 'lucky' | 'mentor' | 'champion';
 
-export const EDITION_NAMES: Record<Edition, string> = { plain: 'Lemming', gold: 'Gold', lucky: 'Lucky', mentor: 'Mentor' };
+export const EDITION_NAMES: Record<Edition, string> = { plain: 'Lemming', gold: 'Gold', lucky: 'Lucky', mentor: 'Mentor', champion: 'Champion' };
 
 export const EDITION_TEXTS: Record<Edition, string> = {
   plain: 'An ordinary lemming.',
   gold: 'Earns $2 when it reaches the exit.',
   lucky: 'When it reaches the exit: 1 in 3 chance of $4, 1 in 5 chance of a Tarot.',
   mentor: 'When it reaches the exit: +1 capacity of the skill you used most in that level.',
+  champion: 'When it reaches the exit, the rescue bonus of the level is multiplied (x2 for one champion, x3 for two, ...).',
 };
 
 /** how a lemming was lost (or not) in a level */
@@ -182,6 +183,7 @@ export const TAROTS: readonly TarotDef[] = [
   { id: 'midas', name: 'The Midas', price: 3, text: '1 selected lemming becomes Gold.', select: 1 },
   { id: 'clover', name: 'The Four-Leaf', price: 3, text: 'Up to 2 selected lemmings become Lucky.', select: 2 },
   { id: 'mentor', name: 'The Mentor', price: 3, text: '1 selected lemming becomes a Mentor.', select: 1 },
+  { id: 'laurel', name: 'The Laurel', price: 3, text: '1 selected lemming becomes a Champion.', select: 1 },
   { id: 'policy', name: 'The Policy', price: 3, text: 'Up to 2 selected lemmings become Insured.', select: 2 },
   {
     id: 'manual',

@@ -41,6 +41,7 @@ import {
   HIRE_PRICE,
   JOKER_SLOTS,
   type LemmingCard,
+  BOSS_REROLL_PRICE,
   MAX_INTEREST,
   type PayoutLine,
   RUN_VERSION,
@@ -223,6 +224,7 @@ export class RunSession {
       return { kind, levelId: level.id, tag: kind === 'boss' ? null : tagRng.pick(TAGS).id, status: 'upcoming' };
     });
     s.blinds[0].status = 'current';
+    s.bossRerolled = false;
   }
 
   /** an unused level from the preferred part of the band, else from the band, else the nearest unused level */
@@ -256,6 +258,35 @@ export class RunSession {
     const s = this.state;
     const i = s.blinds.findIndex((b) => b.status === 'upcoming');
     if (i >= 0) s.blinds[i].status = 'current';
+  }
+
+  /** Director's Cut: the boss of the ante can be rerolled once, before it is played. */
+  bossRerollPrice(): number {
+    return BOSS_REROLL_PRICE;
+  }
+
+  canRerollBoss(): boolean {
+    const s = this.state;
+    const boss = s.blinds[2];
+    if (s.phase !== 'blinds' || !boss || boss.status === 'defeated' || s.bossRerolled || s.money < BOSS_REROLL_PRICE) return false;
+    // not once the boss is being played
+    return !(s.setup && s.setup.blind === 2 && s.setup.attempts > 0);
+  }
+
+  rerollBoss(): boolean {
+    if (!this.canRerollBoss()) return false;
+    const s = this.state;
+    s.money -= BOSS_REROLL_PRICE;
+    s.bossRerolled = true;
+    const [lo, hi] = ANTE_BANDS[Math.min(s.ante, ANTES) - 1];
+    const band = this.catalog.levels.filter((l) => l.order >= lo && l.order <= hi);
+    const third = band.length / 3;
+    const part = band.slice(Math.floor(third * 2));
+    const level = this.pickLevel(this.random.stream('boss'), part, band);
+    s.usedLevels.push(level.id);
+    s.blinds[2].levelId = level.id;
+    if (s.setup && s.setup.blind === 2) s.setup = null;
+    return true;
   }
 
   /** Hire a temporary skill for the current blind (up to the level's maximum). */
@@ -459,7 +490,9 @@ export class RunSession {
     if (unused > 0) lines.push({ label: `Unused attempts (${unused})`, amount: unused });
     if (out.hand > out.required) {
       const bonus = Math.floor((4 * (out.rescued - out.required)) / (out.hand - out.required) + 1e-9);
-      if (bonus > 0) lines.push({ label: `Rescue bonus (${percentOf(out.rescued, out.hand)}%)`, amount: bonus });
+      // champions that reached the exit multiply it
+      const champions = out.fates.filter((f, i) => f === 'saved' && this.cardAt(i)?.edition === 'champion').length;
+      if (bonus > 0) lines.push({ label: `Rescue bonus (${percentOf(out.rescued, out.hand)}%)${champions ? ` x${champions + 1}` : ''}`, amount: bonus * (champions + 1) });
     }
     const perfect = out.rescued === out.hand;
     if (perfect) lines.push({ label: 'Perfect rescue', amount: 2 });
@@ -705,8 +738,9 @@ export class RunSession {
         break;
       case 'midas':
       case 'clover':
-      case 'mentor': {
-        const e: Edition = t.id === 'midas' ? 'gold' : t.id === 'clover' ? 'lucky' : 'mentor';
+      case 'mentor':
+      case 'laurel': {
+        const e: Edition = t.id === 'midas' ? 'gold' : t.id === 'clover' ? 'lucky' : t.id === 'mentor' ? 'mentor' : 'champion';
         for (const c of cards) c.edition = e;
         notes.push(`${names(cards)}: ${EDITION_NAMES[e]}.`);
         break;
@@ -848,7 +882,7 @@ function names(cards: LemmingCard[]): string {
 }
 
 function randomSpecial(c: LemmingCard, rng: Rng): void {
-  switch (rng.int(5)) {
+  switch (rng.int(6)) {
     case 0:
       c.edition = 'gold';
       break;
@@ -860,6 +894,9 @@ function randomSpecial(c: LemmingCard, rng: Rng): void {
       break;
     case 3:
       c.climber = c.floater = true;
+      break;
+    case 4:
+      c.edition = 'champion';
       break;
     default:
       c.insured = true;

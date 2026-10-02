@@ -63,10 +63,11 @@ const TAROT_ART: Record<string, Art> = {
   conscription: { anim: 'walkLeft', tint: 0xff9090 },
   vat: { anim: 'walk', tint: 0xd0a0ff },
   hermit: { text: 'x2', color: COLORS.gold },
+  laurel: { anim: 'exit', tint: 0xd090ff },
   recruiter: { anim: 'walk' },
 };
 
-const EDITION_TINTS: Record<string, number> = { plain: 0xffffff, gold: COLORS.gold, lucky: 0x7dff7d, mentor: 0x9fd0ff };
+const EDITION_TINTS: Record<string, number> = { plain: 0xffffff, gold: COLORS.gold, lucky: 0x7dff7d, mentor: 0x9fd0ff, champion: 0xd090ff };
 
 const FATE_ANIMS: Partial<Record<Fate, LemmingAnim>> = {
   saved: 'exit',
@@ -333,7 +334,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private specialCounts(colony: LemmingCard[]): string {
-    const n = { gold: 0, lucky: 0, mentor: 0, climber: 0, floater: 0, insured: 0 };
+    const n = { gold: 0, lucky: 0, mentor: 0, champion: 0, climber: 0, floater: 0, insured: 0 };
     for (const c of colony) {
       if (c.edition !== 'plain') n[c.edition]++;
       if (c.climber) n.climber++;
@@ -344,6 +345,7 @@ export class RunScene extends Phaser.Scene {
     if (n.gold) parts.push(`${n.gold} Gold`);
     if (n.lucky) parts.push(`${n.lucky} Lucky`);
     if (n.mentor) parts.push(`${n.mentor} Mentor`);
+    if (n.champion) parts.push(`${n.champion} Champion`);
     if (n.climber) parts.push(`${n.climber} Climber${n.climber > 1 ? 's' : ''}`);
     if (n.floater) parts.push(`${n.floater} Floater${n.floater > 1 ? 's' : ''}`);
     if (n.insured) parts.push(`${n.insured} Insured`);
@@ -552,6 +554,25 @@ export class RunScene extends Phaser.Scene {
     // reward and actions
     k(label(this, x + 12, y + 340, 'Reward', { color: COLORS.dim }));
     k(label(this, x + w - 12, y + 336, `$${p.reward}`, { big: true, color: COLORS.gold, originX: 1 }));
+    if (b.kind === 'boss' && b.status !== 'defeated' && !run.state.bossRerolled) {
+      const can = run.canRerollBoss();
+      const rr = k(
+        new Button(this, x + w - 86, y + 102, 74, 18, `Reroll $${run.bossRerollPrice()}`, COLORS.red, () => {
+          if (run.rerollBoss()) {
+            this.sfx(SoundEffect.SkillButtonSelect);
+            this.save();
+            this.render();
+          }
+        }, { enabled: can }),
+      );
+      hoverTip(rr, this.tip, () => ({
+        title: "Director's Cut",
+        color: COLORS.red,
+        lines: ['Another level for the Boss Blind, from the same band.', 'Once per ante, before the boss is played.'],
+        x: x - 80,
+        y: y + 64,
+      }));
+    }
     if (current) {
       const playW = b.kind === 'boss' ? w - 24 : 100;
       k(new Button(this, x + 12, y + 362, playW, 30, 'Play', COLORS.red, () => this.play(run), { big: true }));

@@ -13,6 +13,7 @@ export const START_COLONY = 80;
 export const MAX_INTEREST = 5;
 export const BLIND_REWARDS = { small: 3, big: 4, boss: 5 } as const;
 export const HIRE_PRICE = 1;
+export const BOSS_REROLL_PRICE = 6;
 
 export function startCapacity(): SkillCounts {
   return { ...zeroSkills(), climber: 4, floater: 4, bomber: 4, blocker: 4, builder: 8, basher: 4, miner: 4, digger: 4 };
@@ -154,6 +155,8 @@ export interface RunState {
   /** tags waiting for their moment (golden, investment, supply, coupon) */
   pendingTags: string[];
   blinds: BlindState[];
+  /** the boss of this ante was rerolled */
+  bossRerolled?: boolean;
   usedLevels: string[];
   setup: BlindSetup | null;
   outcome: AttemptOutcome | null;

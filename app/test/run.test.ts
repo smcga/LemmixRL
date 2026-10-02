@@ -182,6 +182,30 @@ describe('roguelike run', () => {
     expect(cash.total).toBe(20);
   });
 
+  it('champions multiply the rescue bonus', () => {
+    const run = runOn('Orig-1-02');
+    const setup = run.ensureSetup();
+    for (const id of setup.hand) run.card(id)!.floater = true;
+    run.card(setup.hand[0])!.edition = 'champion';
+    run.card(setup.hand[1])!.edition = 'champion';
+    playIdle(run);
+    const cash = run.accept();
+    expect(cash.lines).toContainEqual({ label: 'Rescue bonus (100%) x3', amount: 12 });
+  });
+
+  it('the boss can be rerolled once per ante, to another level of the band', () => {
+    const run = RunSession.newRun(catalog, 'BOSS');
+    run.state.money = 20;
+    const before = run.state.blinds[2].levelId;
+    expect(run.rerollBoss()).toBe(true);
+    const after = run.state.blinds[2].levelId;
+    expect(after).not.toBe(before);
+    const [lo, hi] = ANTE_BANDS[0];
+    expect(catalog.get(after).order >= lo && catalog.get(after).order <= hi).toBe(true);
+    expect(run.state.money).toBe(14);
+    expect(run.rerollBoss()).toBe(false);
+  });
+
   it('skipping a blind gives its tag', () => {
     const run = RunSession.newRun(catalog, 'SKIP');
     run.state.blinds[0].tag = 'recruits';

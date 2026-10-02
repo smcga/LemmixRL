@@ -21,6 +21,7 @@ function markerColor(c: LemmingCard): number | null {
   if (c.edition === 'gold') return 0xf5c542;
   if (c.edition === 'lucky') return 0x50e050;
   if (c.edition === 'mentor') return 0x60c0ff;
+  if (c.edition === 'champion') return 0xc070ff;
   if (c.insured) return 0xffffff;
   if (c.climber && c.floater) return 0xff4500;
   if (c.climber) return 0x00ff00;
