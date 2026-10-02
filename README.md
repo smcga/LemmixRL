@@ -1,7 +1,9 @@
 # LemmixRL
 
-A faithful copy of Lemmings, with roguelike elements to come. The first step, in this repository: **Lemmix, the
-Delphi Lemmings clone by Eric Langedijk (in `src/`), ported to TypeScript and Phaser, with the same game behaviour.**
+A faithful copy of Lemmings, with a roguelike run around it. The base: **Lemmix, the Delphi Lemmings clone by Eric
+Langedijk (in `src/`), ported to TypeScript and Phaser, with the same game behaviour.** Around it: a run in the spirit
+of Balatro, where the original levels are the blinds and your lemmings are the deck (see [The roguelike
+run](#the-roguelike-run)).
 
 The port is a behaviour-preserving engine port, not a rewrite by feature. Every unit, class, method and quirk of the
 original simulation has its counterpart in TypeScript (with the same names), and the port is checked step by step
@@ -24,6 +26,7 @@ npm run difftest     # compare the TypeScript engine with the original on every 
 | `src/` | The original Lemmix 3.0.0 source code (Delphi 10.3) and data. Unchanged: it is the reference. |
 | `engine/` | The TypeScript port of the simulation, without any browser dependency: the DOS data files (`dos/`, `level/`, `styles/`), the Graphics32 subset the game uses (`gr32/`), the renderer, `TLemmingGame` (`game/game.ts`) and the replay recorder (`game/recorder.ts`, .lrb files are compatible with Lemmix). |
 | `app/` | The Phaser front-end: the Lemmix screens ported (`screens/`: menu, level code, preview, game, skill panel, postview), shown by Phaser scenes (`scenes/`), with Web Audio sound effects, a ProTracker player for the music and Web Speech for the voice. |
+| `app/src/run/`, `app/src/scenes/run.ts` | The roguelike run: its rules (`session.ts`), content (`content.ts`), levels (`catalog.ts`), seeded randomness and saving, and its screens. |
 | `oracle/`, `tools/oracle/` | The *oracle*: the original game units compiled with Free Pascal. |
 | `tools/difftest/` | The differential test of the TypeScript engine against the oracle. |
 
@@ -52,6 +55,50 @@ move the mouse against the left or right side (or use the arrow keys, Alt+drag, 
 replay (`u`), loading a replay (`l`), fast forward (`f`), sound and music (`s`, `m`, `+`, `-`) and more.
 In the menu F2 opens the level code screen, F3 the sound setting, F4 selects the style (Original Lemmings, Oh No More
 Lemmings, Holiday Lemmings 94, XMas Lemmings 91 and 92), F5 the options, `l` loads a replay file.
+
+## The roguelike run
+
+Press F6 in the menu. A run wraps the original game; it does not replace it. Once a blind starts, it is the original
+level: the same terrain, objects, traps, physics, release rate, timer and rescue requirement, played with the original
+preview, game and result screens. The run decides only *what you bring*: how many lemmings and how many of each
+skill.
+
+| Balatro | Lemmings |
+|---|---|
+| Ante (8) | Three original levels from a band of the 120 levels of the original game, moving from Fun to Mayhem |
+| Small, Big, Boss blind | An easier, a medium and a harder level of the ante's band (no level twice in a run) |
+| Deck | Your colony: 80 lemmings at the start |
+| Hand | The squad of a level: min(colony, level lemmings), drawn at random; the same squad for every attempt |
+| Hand levels | Skill capability: a level gets **min(your capability, the level's allocation)** of every skill |
+| Destroyed cards | Lemmings that die in an accepted result leave the colony for good; survivors and rescued lemmings stay |
+| Card editions | Gold ($2 when it exits), Lucky (chance of $4 or a tarot), Mentor (+1 capability when it exits), Insured (comes back once), permanent Climbers and Floaters |
+| Jokers (5) | Passive gadgets: protection against kinds of deaths, money for performance, capability, and a few rule breakers (+1 Builder above the level maximum, +1 minute, starting climbers or floaters) |
+| Tarots (2) | Consumables that change selected lemmings (floaters, climbers, gold, lucky, mentor, insured, clones, retraining into capability) |
+| Skip | The small and big blind can be skipped for a tag (recruits, floaters, a doubled boss payout, a free shop, ...) |
+| Hands left | Three attempts per blind are paid ($1 each unused); you can always retry, nothing counts until you accept |
+
+The blind screen shows all three levels of the ante up front: the level, its numbers, a thumbnail, and per skill the
+original allocation and what you would bring (green: the full allocation, yellow: part of it, red: none). The
+allocation works like Balatro's score requirement: it tells you whether your colony looks ready, and invites you to
+find another way. Clicking a skill hires one more for this level ($1). Your best result on a level (over all runs) is
+shown as well.
+
+Accepting a successful result pays: the blind ($3, $4, $5), unused attempts, a rescue bonus that grows from the
+requirement to 100% (not the number of lemmings, so big levels are not worth more), a perfect rescue bonus, gold
+lemmings, jokers and interest ($1 per $5, up to $5). The shop sells training (capability), recruitment drives,
+jokers and tarots, and always 5 recruits for $3.
+
+In a level, special lemmings of the squad carry a small mark in the colour of their card. Pressing Escape ends a
+level as in Lemmix: the lemmings that are still out survive (no need to nuke your blockers). The run is saved after
+every step (in the browser), the seed decides every random choice.
+
+The only change to the engine for the run is opt-in: a callback for every released lemming and a method that makes
+a lemming a permanent climber or floater (`onLemmingReleased`, `grantPermanentAbilities` in `engine/src/game/game.ts`).
+Without them the game is the original, which the differential test keeps checking.
+
+What a "normal" solution of a level needs is not in the level files: the allocation is an upper bound, and many
+levels give 20 of everything. The run shows the original allocation and your own best result; a table of known
+solutions (verified replays) would be the next step.
 
 ## How the port is verified
 
@@ -140,7 +187,8 @@ is compared as well. Lemmix itself shows the error and terminates; the browser v
 to the menu.)
 
 `npm run e2e` is a browser smoke test of the front-end (menu, preview, a level solved with a digger, postview, and
-the game speed). The GitHub workflow in `.github/workflows/verify.yml` runs the type check, the unit tests, the build,
+the game speed) and of a roguelike run (a blind played and accepted, the cash out, the shop, a skip, and continuing
+the saved run after a reload). The GitHub workflow in `.github/workflows/verify.yml` runs the type check, the unit tests, the build,
 the browser test, and the differential test with an oracle built from `src/` (on pull requests and manually).
 
 ## Differences with Lemmix

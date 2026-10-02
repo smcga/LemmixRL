@@ -167,7 +167,12 @@ export class MenuScreen extends DosScreenBase {
       this.drawBitmapElement(e);
 
     // program text
-    this.drawPurpleTextCentered(this.screen, formatSimple(SProgramTexts[app.styleDef], [app.style.name]) + CR + CR + FULL_PROGRAM_NAME, YPos_ProgramText);
+    // LemmixRL: the entry of the roguelike run takes the empty line
+    this.drawPurpleTextCentered(
+      this.screen,
+      formatSimple(SProgramTexts[app.styleDef], [app.style.name]) + CR + FULL_PROGRAM_NAME + CR + 'Press F6 for a Roguelike Run',
+      YPos_ProgramText,
+    );
 
     // credits animation
     this.drawWorkerLemmings(0);
@@ -189,6 +194,9 @@ export class MenuScreen extends DosScreenBase {
         break;
       case 'F2':
         this.close(ScreenType.LevelCode);
+        break;
+      case 'F6': // LemmixRL
+        this.close(ScreenType.Run);
         break;
       case 'F3':
         this.nextSoundSetting();
@@ -391,6 +399,7 @@ const MENU_HELP = [
   ['F3', 'Select sound setting'],
   ['F4', 'Select style'],
   ['F5', 'Configuration'],
+  ['F6', 'Roguelike run'],
   ['Up', 'Next section'],
   ['Down', 'Previous section'],
   ['Space', 'Pause or unpause the credits'],

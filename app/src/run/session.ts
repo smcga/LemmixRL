@@ -188,7 +188,7 @@ export class RunSession {
   preview(index: number): BlindPreview {
     const blind = this.state.blinds[index];
     const level = this.level(blind.levelId);
-    const setup = this.state.setup && this.state.setup.blind === index ? this.state.setup : null;
+    const setup = this.state.setup && this.state.setup.blind === index ? this.refreshSetup(this.state.setup) : null;
     const aboveMax = setup ? setup.aboveMax : this.fixedAboveMax();
     const hires = setup ? setup.hires : zeroSkills();
     const squad = Math.min(this.state.colony.length, level.lemmings);
@@ -199,7 +199,7 @@ export class RunSession {
       reward: BLIND_REWARDS[blind.kind],
       squad,
       required: level.rescue,
-      minutes: level.time + this.jokerSum((d) => d.extraMinutes),
+      minutes: setup ? setup.minutes : level.time + this.jokerSum((d) => d.extraMinutes),
       allocation: level.skills,
       usable: setup ? setup.usable : this.usableSkills(level, aboveMax, hires),
       aboveMax,
@@ -242,7 +242,9 @@ export class RunSession {
   skipBlind(): string[] {
     const s = this.state;
     const blind = this.currentBlind;
-    if (!blind || blind.kind === 'boss' || s.phase !== 'blinds' || s.setup) return [];
+    if (!blind || blind.kind === 'boss' || s.phase !== 'blinds') return [];
+    if (s.setup && (s.setup.blind !== this.currentBlindIndex || s.setup.attempts > 0)) return [];
+    s.setup = null;
     blind.status = 'skipped';
     s.stats.skipped++;
     const notes = blind.tag ? this.applyTag(blind.tag) : [];
@@ -257,6 +259,13 @@ export class RunSession {
   }
 
   /** Hire a temporary skill for the current blind (up to the level's maximum). */
+  /** can the current blind still be skipped (before its first attempt) */
+  canSkip(): boolean {
+    const s = this.state;
+    const blind = this.currentBlind;
+    return !!blind && blind.kind !== 'boss' && s.phase === 'blinds' && (!s.setup || s.setup.attempts === 0);
+  }
+
   canHire(skill: Skill): boolean {
     const s = this.state;
     const i = this.currentBlindIndex;
@@ -270,20 +279,33 @@ export class RunSession {
     const setup = this.ensureSetup();
     this.state.money -= HIRE_PRICE;
     setup.hires[skill]++;
-    setup.usable = this.usableSkills(this.level(setup.levelId), setup.aboveMax, setup.hires);
+    this.refreshSetup(setup);
     return true;
+  }
+
+  /** The counts of a setup follow the jokers you have now (they can be bought and sold before the blind is played). */
+  refreshSetup(setup: BlindSetup): BlindSetup {
+    const level = this.level(setup.levelId);
+    const aboveMax = this.fixedAboveMax();
+    if (this.hasJoker('smuggler')) {
+      setup.smuggled ??= this.random.stream('smuggler').pick(SKILLS);
+      aboveMax[setup.smuggled]++;
+    }
+    setup.aboveMax = aboveMax;
+    setup.usable = this.usableSkills(level, aboveMax, setup.hires);
+    setup.minutes = level.time + this.jokerSum((d) => d.extraMinutes);
+    setup.startClimbers = this.jokerSum((d) => d.startClimbers);
+    setup.startFloaters = this.jokerSum((d) => d.startFloaters);
+    return setup;
   }
 
   /** The setup of the current blind: the squad is drawn when the blind is first played (or a skill is hired). */
   ensureSetup(): BlindSetup {
     const s = this.state;
     const index = this.currentBlindIndex;
-    if (s.setup && s.setup.blind === index) return s.setup;
+    if (s.setup && s.setup.blind === index) return this.refreshSetup(s.setup);
     const blind = s.blinds[index];
     const level = this.level(blind.levelId);
-    const aboveMax = this.fixedAboveMax();
-    if (this.hasJoker('smuggler')) aboveMax[this.random.stream('smuggler').pick(SKILLS)]++;
-    const hires = zeroSkills();
     const ids = this.random.stream('hand').shuffle(s.colony.map((c) => c.id));
     const squad = ids.slice(0, Math.min(ids.length, level.lemmings));
     s.setup = {
@@ -291,15 +313,15 @@ export class RunSession {
       levelId: level.id,
       hand: squad,
       rescue: level.rescue,
-      minutes: level.time + this.jokerSum((d) => d.extraMinutes),
-      usable: this.usableSkills(level, aboveMax, hires),
-      hires,
-      aboveMax,
-      startClimbers: this.jokerSum((d) => d.startClimbers),
-      startFloaters: this.jokerSum((d) => d.startFloaters),
+      minutes: level.time,
+      usable: zeroSkills(),
+      hires: zeroSkills(),
+      aboveMax: zeroSkills(),
+      startClimbers: 0,
+      startFloaters: 0,
       attempts: 0,
     };
-    return s.setup;
+    return this.refreshSetup(s.setup);
   }
 
   /** Play the current blind (also a retry). */
@@ -736,7 +758,7 @@ export class RunSession {
     }
     s.tarots.splice(i, 1);
     // a changed squad card keeps its place; a removed one is gone from the colony (the setup refers to ids)
-    if (s.setup && t.id !== 'manual') s.setup.usable = this.usableSkills(this.level(s.setup.levelId), s.setup.aboveMax, s.setup.hires);
+    if (s.setup) this.refreshSetup(s.setup);
     return notes;
   }
 

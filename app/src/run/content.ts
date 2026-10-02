@@ -3,7 +3,7 @@
  * skipping a blind). None of them changes how a level plays, except the few rule breakers that say so: they add a
  * skill above the level's maximum, time on the clock, or start lemmings with an ability.
  */
-import type { Skill, SkillCounts } from './skills.ts';
+import type { SkillCounts } from './skills.ts';
 
 /* ---------------------------------------------------------------------------------------------- lemming cards */
 
@@ -172,8 +172,8 @@ export interface TarotDef {
   text: string;
   /** how many lemmings the player selects (0: none) */
   select: number;
-  /** the tarot's text with its skill */
-  skillText?: (skill: Skill) => string;
+  /** the tarot's text with the name of its skill */
+  skillText?: (skillName: string) => string;
 }
 
 export const TAROTS: readonly TarotDef[] = [

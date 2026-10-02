@@ -89,6 +89,8 @@ export interface BlindSetup {
   hires: SkillCounts;
   /** skills above the level maximum (jokers) */
   aboveMax: SkillCounts;
+  /** the skill the Smuggler brings to this blind */
+  smuggled?: Skill;
   startClimbers: number;
   startFloaters: number;
   /** finished attempts */
