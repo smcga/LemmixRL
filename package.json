@@ -15,7 +15,7 @@
     "difftest:recheck": "tsx tools/difftest/recheck.ts",
     "difftest:replay": "tsx tools/difftest/replay.ts",
     "difftest:levels": "tsx tools/difftest/levels.ts",
-    "e2e": "tsx tools/e2e/smoke.ts && tsx tools/e2e/run.ts"
+    "e2e": "tsx tools/e2e/smoke.ts && tsx tools/e2e/run.ts && tsx tools/e2e/touch.ts"
   },
   "dependencies": {
     "fflate": "^0.8.3",

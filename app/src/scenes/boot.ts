@@ -6,6 +6,7 @@ import { loadLemmixData } from '../data.ts';
 import { ScreenType } from '../screens/base.ts';
 import { WebSoundManager } from '../sound.ts';
 import { voice } from '../voice.ts';
+import { cssPx, safeAreaInsets } from '../touch.ts';
 import { gotoScreen, setApp } from './shared.ts';
 
 export class BootScene extends Phaser.Scene {
@@ -14,15 +15,19 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    const text = this.add.text(16, 16, 'Loading Lemmix data...', { fontFamily: 'monospace', fontSize: '16px', color: '#a0a0ff' });
+    const ins = safeAreaInsets();
+    const text = this.add.text(ins.left + cssPx(16), ins.top + cssPx(16), 'Loading Lemmix data...', {
+      fontFamily: 'monospace',
+      fontSize: `${cssPx(16)}px`,
+      color: '#a0a0ff',
+    });
     void (async () => {
       try {
         const data = await loadLemmixData((done, total) => text.setText(`Loading Lemmix data... ${done}/${total}`));
         const sound = await WebSoundManager.create(data.sounds);
-        // browsers only start audio after a user gesture
+        // browsers only start audio after a user gesture (for a finger that is the end of a touch, not the start)
         const unlock = () => sound.resume();
-        window.addEventListener('pointerdown', unlock);
-        window.addEventListener('keydown', unlock);
+        for (const type of ['pointerdown', 'pointerup', 'touchend', 'keydown']) window.addEventListener(type, unlock);
         const app = new LemmixApp(data, sound);
         voice.enabled = app.config.miscOptions.has(MiscOption.Voice);
         setApp(app);

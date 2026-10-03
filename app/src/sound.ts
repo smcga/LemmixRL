@@ -41,9 +41,13 @@ export class WebSoundManager implements GameSoundManager {
     return mgr;
   }
 
-  /** Browsers only start audio after a user gesture. */
+  /**
+   * Browsers only start audio after a user gesture. Safari also stops it after an interruption (a call, another app):
+   * its state is then "interrupted", and the next gesture starts it again.
+   */
   resume(): void {
-    if (this.context.state === 'suspended') void this.context.resume();
+    const state: string = this.context.state;
+    if (state === 'suspended' || state === 'interrupted') this.context.resume().catch(() => {});
   }
 
   setMusicArchive(archive: Archive | null): void {

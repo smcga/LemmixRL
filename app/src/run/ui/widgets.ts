@@ -1,5 +1,6 @@
 /** A small UI toolkit for the run screens: labels in the DOS font, panels, buttons, cards and tooltips. */
 import * as Phaser from 'phaser';
+import { touch } from '../../touch.ts';
 import { FONT, FONT_BIG, FONT_PURPLE } from './assets.ts';
 
 export const COLORS = {
@@ -67,6 +68,14 @@ export interface ButtonOptions {
   sub?: string;
 }
 
+/**
+ * The hit area of a container whose children are drawn from (0, 0) to (w, h). Phaser tests a container's hit area
+ * around its middle (its origin is fixed at 0.5), so the rectangle is moved by half the size to cover what is drawn.
+ */
+export function containerHitArea(w: number, h: number): Phaser.Geom.Rectangle {
+  return new Phaser.Geom.Rectangle(w / 2, h / 2, w, h);
+}
+
 /** A Balatro-ish button: a coloured slab with a darker edge that goes down when it is pressed. */
 export class Button extends Phaser.GameObjects.Container {
   private readonly g: Phaser.GameObjects.Graphics;
@@ -98,7 +107,7 @@ export class Button extends Phaser.GameObjects.Container {
       this.add(this.subText);
     }
     this.setSize(bw, bh);
-    this.setInteractive(new Phaser.Geom.Rectangle(0, 0, bw, bh), Phaser.Geom.Rectangle.Contains);
+    this.setInteractive(containerHitArea(bw, bh), Phaser.Geom.Rectangle.Contains);
     this.on('pointerover', () => {
       this.hover = true;
       this.redraw();
@@ -157,11 +166,14 @@ export class Button extends Phaser.GameObjects.Container {
 /** A tooltip: a title and some lines, shown next to a game object while the pointer is over it. */
 export class Tooltip {
   private container: Phaser.GameObjects.Container | null = null;
+  /** what the tooltip is about (a tap on the same thing again hides it) */
+  owner: object | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
-  show(x: number, y: number, title: string, titleColor: number, lines: string[], width = 300): void {
+  show(x: number, y: number, title: string, titleColor: number, lines: string[], width = 300, owner: object | null = null): void {
     this.hide();
+    this.owner = owner;
     const s = this.scene;
     const c = s.add.container(0, 0).setDepth(1000);
     const t = label(s, 12, 10, title, { color: titleColor });
@@ -179,18 +191,31 @@ export class Tooltip {
   hide(): void {
     this.container?.destroy();
     this.container = null;
+    this.owner = null;
   }
 }
 
-/** Adds hover behaviour (a tooltip and a little lift) to an interactive object. */
-export function hoverTip(
-  obj: Phaser.GameObjects.GameObject & { x: number; y: number },
-  tip: Tooltip,
-  content: () => { title: string; color: number; lines: string[]; x: number; y: number; width?: number },
-): void {
+export type TipContent = { title: string; color: number; lines: string[]; x: number; y: number; width?: number };
+
+export function showTip(tip: Tooltip, c: TipContent, owner: object | null = null): void {
+  tip.show(c.x, c.y, c.title, c.color, c.lines, c.width, owner);
+}
+
+/**
+ * A tooltip while the mouse is over an object. With touch there is no hovering: a tap shows the tooltip (and a second
+ * tap hides it) unless touchTap is false (the object does something when it is tapped, and shows the tip itself).
+ */
+export function hoverTip(obj: Phaser.GameObjects.GameObject & { x: number; y: number }, tip: Tooltip, content: () => TipContent, touchTap = true): void {
   obj.on('pointerover', () => {
-    const c = content();
-    tip.show(c.x, c.y, c.title, c.color, c.lines, c.width);
+    if (!touch.active) showTip(tip, content());
   });
-  obj.on('pointerout', () => tip.hide());
+  obj.on('pointerout', () => {
+    if (!touch.active) tip.hide();
+  });
+  if (touchTap)
+    obj.on('pointerup', () => {
+      if (!touch.active) return;
+      if (tip.owner === obj) tip.hide();
+      else showTip(tip, content(), obj);
+    });
 }

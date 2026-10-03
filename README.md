@@ -56,9 +56,46 @@ replay (`u`), loading a replay (`l`), fast forward (`f`), sound and music (`s`, 
 In the menu F2 opens the level code screen, F3 the sound setting, F4 selects the style (Original Lemmings, Oh No More
 Lemmings, Holiday Lemmings 94, XMas Lemmings 91 and 92), F5 the options, `l` loads a replay file.
 
+### On a phone or a tablet
+
+The game can be played with a finger (an addition of LemmixRL). It switches to touch controls at the first touch and
+back to the mouse at the first click; with a mouse nothing changes.
+
+To open it on a phone: the workflow `.github/workflows/pages.yml` publishes master on GitHub Pages at
+`https://<owner>.github.io/<repo>/` and every pull request at `https://<owner>.github.io/<repo>/pr-<number>/` (with a
+comment on the pull request that links to it), once GitHub Pages serves the `gh-pages` branch (Settings > Pages >
+Build and deployment > Deploy from a branch > `gh-pages`, `/ (root)`). Otherwise: put the files of `npm run build`
+(`dist/`) on any web server, or run `npm run dev -- --host` and open the *Network* address it prints on a phone in the
+same network. `?diag` at the end of the address shows what the browser reports (the build, the safe area, full
+screen, the sideways lock, the wake lock, the audio); `?diag=0` hides it again.
+
+* Hold the phone sideways: the level is drawn at the resolution of the screen, scaled by whole device pixels, with
+  the touch buttons next to it. Upright, it is smaller (the run screens ask you to turn the phone). Every screen
+  stays out of the notch, the rounded corners and the home indicator.
+* Full screen: the FULLSCREEN button in the menu (Android browsers), or *Add to Home Screen*, which installs the game
+  as a full screen app with a lemming icon (iPhone too; Android wants the page served over HTTPS for that).
+* Menu: tap a sign to do what its key does (1 Player, New Level, music, the style, the arrows of the difficulty
+  sign) and *Tap here for a Roguelike Run* for the run. OPTIONS and STYLE are buttons next to the menu. The level
+  code screen gets a text box for the phone's keyboard.
+* Preview and result screens: a tap is a click; BACK and MENU do what Escape and the right mouse button do.
+* In a level: tap a skill in the panel, then tap a lemming. The skill is assigned when the finger comes up; while
+  the finger is down the cursor shows which lemming it is on, and a tap a little next to a lemming (up to 8 pixels of
+  the game) still selects the nearest one. Drag the level sideways to scroll, or tap and drag the minimap. Hold the
+  release rate buttons; the nuke wants two taps on it. The touch buttons are the keys a phone does not have: PAUSE,
+  FAST (fast forward), WALKER (the right mouse button: the next tap selects the lemming that is not working where
+  lemmings overlap, a walker rather than a builder, and the cursor shows it), STEP (the next frame, while paused),
+  -1 SEC (rewind one second), RESTART and END (Escape), the last two after a second tap. Turning the phone cancels
+  what a finger was doing, and a second tap that was asked for. The screen stays on while a level is played. With
+  WALKER on, a tap on a worker with nobody else under the finger does nothing (with the right mouse button Lemmix
+  raises an exception there, see below).
+* Run screens: a tap shows what something is; a second tap on something that costs or uses something (buying,
+  hiring, using a tarot, skipping, rerolling the boss) does it. A tap on a joker shows it with its Sell button. A tap
+  on an empty spot closes the information.
+
 ## The roguelike run
 
-Press F6 in the menu. A run wraps the original game; it does not replace it. Once a blind starts, it is the original
+Press F6 in the menu (on a touch screen: tap *Tap here for a Roguelike Run*). A run wraps the original game; it does
+not replace it. Once a blind starts, it is the original
 level: the same terrain, objects, traps, physics, release rate, timer and rescue requirement, played with the original
 preview, game and result screens. The run decides only *what you bring*: how many lemmings and how many of each
 skill.
@@ -81,7 +118,7 @@ skill.
 The blind screen shows all three levels of the ante up front: the level, its numbers, a thumbnail, and per skill the
 original allocation and what you would bring (green: the full allocation, yellow: part of it, red: none). The
 allocation works like Balatro's score requirement: it tells you whether your colony looks ready, and invites you to
-find another way. Clicking a skill hires one more for this level ($1). Your best result on a level (over all runs) is
+find another way. Clicking a skill (with a finger: tapping it twice) hires one more for this level ($1). Your best result on a level (over all runs) is
 shown as well.
 
 Accepting a successful result pays: the blind ($3, $4, $5), unused attempts, a rescue bonus that grows from the
@@ -205,6 +242,10 @@ The simulation is the same. The program around it is a browser application, so s
   instead of SAPI.
 * Replay files are downloaded (`u`) and loaded with a file dialog (`l`); there is no replay finder, level finder,
   autosave or result text file. The options are browser dialogs. User styles (custom levels) are not available yet.
+* Touch screens are an addition (see [On a phone or a tablet](#on-a-phone-or-a-tablet)); with a mouse the screens
+  work as in Lemmix. The canvas has the resolution of the screen (device pixels), so the level is scaled by whole
+  pixels of the screen, as Lemmix scales by whole pixels of its window (the zoom factor option counts pixels as the
+  browser shows them).
 * A bug of the original that raises an exception during the game (for example: holding the right mouse button and
   clicking on a blocker without other lemmings under the cursor, while the selected skill is available) terminates
   Lemmix after an error message. A browser page cannot terminate itself: the game stops, the error is shown, and
