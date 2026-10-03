@@ -285,35 +285,51 @@ export function lemmingSprite(scene: Phaser.Scene, x: number, y: number, anim: L
 const thumbnails = new Map<string, HTMLCanvasElement>();
 
 /** The level's terrain and objects, cropped to what is there and averaged down to w x h (like the preview). */
+/** The level as it starts (terrain and objects), and the columns it uses (the rest of the 1584 pixels is empty). */
+function renderLevelWorld(app: LemmixApp, level: RunLevel): { world: Bitmap32; x0: number; x1: number; start: number } {
+  const lvl = new Level();
+  level.info.loadLevel(lvl);
+  const gs = new GraphicSet(app.style);
+  gs.load(app.data.provider, lvl.info.graphicSet, lvl.info.graphicSetEx);
+  const renderer = new Renderer();
+  renderer.prepare(lvl, gs);
+  const world = new Bitmap32();
+  world.setSize(GAME_BMPWIDTH, GAME_BMPHEIGHT);
+  world.clear(0);
+  renderer.renderWorld(world, true);
+  let x0 = world.width;
+  let x1 = -1;
+  for (let x = 0; x < world.width; x++)
+    for (let y = 0; y < world.height; y++)
+      if ((world.bits[y * world.width + x] & 0xffffff) !== 0) {
+        if (x < x0) x0 = x;
+        x1 = x;
+        break;
+      }
+  if (x1 < x0) {
+    x0 = 0;
+    x1 = world.width - 1;
+  }
+  return { world, x0, x1, start: lvl.info.screenPosition };
+}
+
+/** a canvas of a bitmap with black (not transparent) where nothing is */
+function opaqueCanvas(bmp: Bitmap32): HTMLCanvasElement {
+  const canvas = bitmapToCanvas(bmp, (c) => c);
+  const ctx = canvas.getContext('2d')!;
+  ctx.globalCompositeOperation = 'destination-over';
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+/** A small picture of a level (w x h, its used columns averaged). */
 export function levelThumbnail(scene: Phaser.Scene, app: LemmixApp, level: RunLevel, w: number, h: number): string {
   const key = `rl-thumb-${level.id}-${w}x${h}`;
   if (scene.textures.exists(key)) return key;
   let canvas = thumbnails.get(key);
   if (!canvas) {
-    const lvl = new Level();
-    level.info.loadLevel(lvl);
-    const gs = new GraphicSet(app.style);
-    gs.load(app.data.provider, lvl.info.graphicSet, lvl.info.graphicSetEx);
-    const renderer = new Renderer();
-    renderer.prepare(lvl, gs);
-    const world = new Bitmap32();
-    world.setSize(GAME_BMPWIDTH, GAME_BMPHEIGHT);
-    world.clear(0);
-    renderer.renderWorld(world, true);
-    // crop to the used columns
-    let x0 = world.width;
-    let x1 = -1;
-    for (let x = 0; x < world.width; x++)
-      for (let y = 0; y < world.height; y++)
-        if ((world.bits[y * world.width + x] & 0xffffff) !== 0) {
-          if (x < x0) x0 = x;
-          x1 = x;
-          break;
-        }
-    if (x1 < x0) {
-      x0 = 0;
-      x1 = world.width - 1;
-    }
+    const { world, x0, x1 } = renderLevelWorld(app, level);
     const sw = x1 - x0 + 1;
     const out = new Bitmap32(w, h);
     for (let ty = 0; ty < h; ty++) {
@@ -339,14 +355,26 @@ export function levelThumbnail(scene: Phaser.Scene, app: LemmixApp, level: RunLe
         out.bits[ty * w + tx] = (0xff000000 | (Math.min(255, r * k) << 16) | (Math.min(255, g * k) << 8) | Math.min(255, b * k)) >>> 0;
       }
     }
-    canvas = bitmapToCanvas(out, (c) => c);
-    // keep black opaque
-    const ctx = canvas.getContext('2d')!;
-    ctx.globalCompositeOperation = 'destination-over';
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, w, h);
+    canvas = opaqueCanvas(out);
     thumbnails.set(key, canvas);
   }
   scene.textures.addCanvas(key, canvas);
   return key;
+}
+
+/**
+ * The whole level at full size, as it starts (terrain and objects), cropped to the columns it uses: a texture to show
+ * in the level preview. x0 is the first column it shows, start the column the game starts at (the left of the
+ * screen). Remove it with scene.textures.remove(key) when done.
+ */
+export function levelImage(scene: Phaser.Scene, app: LemmixApp, level: RunLevel): { key: string; width: number; height: number; x0: number; start: number } {
+  const { world, x0, x1, start } = renderLevelWorld(app, level);
+  const key = `rl-level-${level.id}`;
+  const width = x1 - x0 + 1;
+  if (!scene.textures.exists(key)) {
+    const bmp = new Bitmap32(width, world.height);
+    for (let y = 0; y < world.height; y++) bmp.bits.set(world.bits.subarray(y * world.width + x0, y * world.width + x1 + 1), y * width);
+    scene.textures.addCanvas(key, opaqueCanvas(bmp));
+  }
+  return { key, width, height: world.height, x0, start };
 }

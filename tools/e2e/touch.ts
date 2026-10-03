@@ -166,6 +166,22 @@ try {
   p = v(480, 436);
   await tap(p.x, p.y, 600);
   if (!(await ev<boolean>('!!globalThis.lemmix.run'))) fail('no new run');
+  // the preview of the boss level opens and closes with taps
+  p = v(644 + 308 - 74 + 32, 124 + 2 * 137 + 43 + 10);
+  await tap(p.x, p.y, 500);
+  if ((await ev<number>(`globalThis.phaserGame.scene.getScene('run').overlay.length`)) === 0) fail('a tap on Preview did not open the level');
+  p = v(828 + 46, 26 + 14);
+  await tap(p.x, p.y);
+  if ((await ev<number>(`globalThis.phaserGame.scene.getScene('run').overlay.length`)) !== 0) fail('a tap on Close did not close the level preview');
+  // the abilities: the 20th point of three bars, then Done
+  const row = (i: number) => 124 + 104 + i * 29 + 13;
+  for (const i of [7, 4, 5]) {
+    p = v(244 + 134 + 19 * 8 + 4, row(i));
+    await tap(p.x, p.y, 200);
+  }
+  p = v(244 + 392 - 166 + 75, 124 + 362 + 15);
+  await tap(p.x, p.y, 400);
+  if ((await ev<string>('globalThis.lemmix.run.state.phase')) !== 'blinds') fail('the abilities were not assigned by taps');
   // Skip: the first tap shows what the tag gives, the second skips
   p = v(244 + 120 + 48, 124 + 362 + 15);
   await tap(p.x, p.y);
@@ -203,7 +219,7 @@ try {
 
   if (errors.length) fail('errors in the page:\n' + errors.join('\n'));
   console.log(
-    'e2e ok: touch on a phone: menu signs, skill and lemming taps (walker selection), dragging, touch buttons, the nuke, a rotation, result menu, run screens, safe areas',
+    'e2e ok: touch on a phone: menu signs, skill and lemming taps (walker selection), dragging, touch buttons, the nuke, a rotation, result menu, run screens (level preview, abilities, skip), safe areas',
   );
 } finally {
   await browser.close();

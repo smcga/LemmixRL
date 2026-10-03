@@ -1,6 +1,6 @@
 /** The saved state of a roguelike run. Everything the run needs to continue is in here (it is stored as JSON). */
 import type { Edition, Fate } from './content.ts';
-import { type Skill, type SkillCounts, zeroSkills } from './skills.ts';
+import type { Skill, SkillCounts } from './skills.ts';
 
 export const RUN_VERSION = 1;
 export const ANTES = 8;
@@ -14,9 +14,29 @@ export const MAX_INTEREST = 5;
 export const BLIND_REWARDS = { small: 3, big: 4, boss: 5 } as const;
 export const HIRE_PRICE = 1;
 export const BOSS_REROLL_PRICE = 6;
+/** the ability points a run starts with, spread by the player over the eight skills */
+export const START_ABILITY_POINTS = 60;
+/** the most points the player can assign to one skill */
+export const ABILITY_CAP = 20;
+/** after every boss blind: points that can be moved to other skills */
+export const BOSS_REASSIGN_POINTS = 10;
 
-export function startCapacity(): SkillCounts {
-  return { ...zeroSkills(), climber: 4, floater: 4, bomber: 4, blocker: 4, builder: 8, basher: 4, miner: 4, digger: 4 };
+/**
+ * The ability assignment: at the start of a run the player spreads the start points over the skills; after every boss
+ * blind (and with some tarots) they move some points to other skills, and place new ones.
+ */
+export interface AssignState {
+  reason: 'start' | 'boss' | 'tarot';
+  /** the abilities when the assignment began: what is taken away from them counts as moved */
+  before: SkillCounts;
+  /** new points to place */
+  newPoints: number;
+  /** how many points may be moved (taken away from the skills they were in) */
+  reassign: number;
+  /** the phase after the assignment */
+  next: RunPhase;
+  /** where the points come from, for the screen */
+  sources: string[];
 }
 
 /** A lemming of the colony: a card of the deck. */
@@ -126,7 +146,7 @@ export interface Cashout {
   notes: string[];
 }
 
-export type RunPhase = 'blinds' | 'playing' | 'result' | 'cashout' | 'shop' | 'over';
+export type RunPhase = 'assign' | 'blinds' | 'playing' | 'result' | 'cashout' | 'shop' | 'over';
 
 export interface RunStats {
   blindsWon: number;
@@ -149,7 +169,10 @@ export interface RunState {
   money: number;
   colony: LemmingCard[];
   nextUid: number;
+  /** the abilities: how many of each skill the colony can bring to a level (the jokers add theirs) */
   capacity: SkillCounts;
+  /** the ability assignment going on (phase 'assign'); runs saved before it existed do not have it */
+  assign?: AssignState | null;
   jokers: JokerInstance[];
   tarots: TarotInstance[];
   /** tags waiting for their moment (golden, investment, supply, coupon) */

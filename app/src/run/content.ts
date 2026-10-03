@@ -16,7 +16,7 @@ export const EDITION_TEXTS: Record<Edition, string> = {
   plain: 'An ordinary lemming.',
   gold: 'Earns $2 when it reaches the exit.',
   lucky: 'When it reaches the exit: 1 in 3 chance of $4, 1 in 5 chance of a Tarot.',
-  mentor: 'When it reaches the exit: +1 capacity of the skill you used most in that level.',
+  mentor: 'When it reaches the exit: +1 ability in the skill you used most in that level.',
   champion: 'When it reaches the exit, the rescue bonus of the level is multiplied (x2 for one champion, x3 for two, ...).',
 };
 
@@ -86,8 +86,12 @@ export interface JokerDef {
   rarity: Rarity;
   price: number;
   text: string;
-  /** permanent extra skill capacity */
+  /** extra abilities (while you have the joker) */
   capacity?: Partial<SkillCounts>;
+  /** new ability points to assign after every boss blind */
+  pointsAfterBoss?: number;
+  /** more ability points that can be moved after every boss blind */
+  reassignAfterBoss?: number;
   /** raises the level's maximum of these skills (the rule breakers) */
   aboveMax?: Partial<SkillCounts>;
   /** one random skill above the level's maximum per blind */
@@ -151,11 +155,13 @@ export const JOKERS: readonly JokerDef[] = [
     payout: (c) => (c.skillsUsed * 2 <= c.skillsAvailable ? 4 : 0),
   },
   { id: 'headcount', name: 'Head Count', rarity: 'common', price: 5, text: '+$1 for every 20 lemmings in the colony.', payout: (c) => Math.floor(c.colonySize / 20) },
-  // capacity
-  { id: 'guild', name: "Builders' Guild", rarity: 'common', price: 4, text: '+2 Builder capacity.', capacity: { builder: 2 } },
-  { id: 'demolition', name: 'Demolition Crew', rarity: 'common', price: 5, text: '+1 Basher, Miner and Digger capacity.', capacity: { basher: 1, miner: 1, digger: 1 } },
-  { id: 'climbclub', name: 'Climbing Club', rarity: 'common', price: 4, text: '+2 Climber and Floater capacity.', capacity: { climber: 2, floater: 2 } },
-  { id: 'bombsquad', name: 'Bomb Squad', rarity: 'common', price: 4, text: '+2 Bomber and Blocker capacity.', capacity: { bomber: 2, blocker: 2 } },
+  // abilities
+  { id: 'guild', name: "Builders' Guild", rarity: 'common', price: 4, text: '+2 Builder ability.', capacity: { builder: 2 } },
+  { id: 'demolition', name: 'Demolition Crew', rarity: 'common', price: 5, text: '+1 Basher, Miner and Digger ability.', capacity: { basher: 1, miner: 1, digger: 1 } },
+  { id: 'climbclub', name: 'Climbing Club', rarity: 'common', price: 4, text: '+2 Climber and Floater ability.', capacity: { climber: 2, floater: 2 } },
+  { id: 'bombsquad', name: 'Bomb Squad', rarity: 'common', price: 4, text: '+2 Bomber and Blocker ability.', capacity: { bomber: 2, blocker: 2 } },
+  { id: 'trainer', name: 'Personal Trainer', rarity: 'uncommon', price: 6, text: '+5 ability points to assign after every Boss Blind.', pointsAfterBoss: 5 },
+  { id: 'advisor', name: 'Careers Advisor', rarity: 'common', price: 4, text: 'After every Boss Blind, 5 more ability points can be moved.', reassignAfterBoss: 5 },
 ];
 
 export function jokerDef(id: string): JokerDef {
@@ -189,14 +195,16 @@ export const TAROTS: readonly TarotDef[] = [
     id: 'manual',
     name: 'Retraining Manual',
     price: 3,
-    text: 'Up to 3 selected lemmings leave the colony; +2 capacity per lemming.',
+    text: 'Up to 3 selected lemmings leave the colony; +2 ability per lemming.',
     select: 3,
-    skillText: (s) => `Up to 3 selected lemmings leave the colony; +2 ${s} capacity per lemming.`,
+    skillText: (s) => `Up to 3 selected lemmings leave the colony; +2 ${s} ability per lemming.`,
   },
   { id: 'conscription', name: 'Conscription', price: 3, text: '5 random plain lemmings leave; 3 random special lemmings join.', select: 0 },
   { id: 'vat', name: 'The Cloning Vat', price: 3, text: '1 selected lemming is duplicated.', select: 1 },
   { id: 'hermit', name: 'The Hermit', price: 3, text: 'Doubles your money (max +$20).', select: 0 },
   { id: 'recruiter', name: 'The Recruiter', price: 3, text: '5 plain lemmings join the colony.', select: 0 },
+  { id: 'bootcamp', name: 'Boot Camp', price: 3, text: '+5 ability points: assign them now.', select: 0 },
+  { id: 'rethink', name: 'The Rethink', price: 3, text: 'Move up to 10 ability points to other skills now.', select: 0 },
 ];
 
 export function tarotDef(id: string): TarotDef {
@@ -221,7 +229,7 @@ export const TAGS: readonly TagDef[] = [
   { id: 'clone', name: 'Clone Tag', text: 'A random special lemming is duplicated (or a plain one).' },
   { id: 'investment', name: 'Investment Tag', text: '+$10 after the next Boss Blind.' },
   { id: 'coupon', name: 'Coupon Tag', text: 'The offers in the next shop are free.' },
-  { id: 'training', name: 'Training Tag', text: '+3 capacity of a random skill.' },
+  { id: 'training', name: 'Training Tag', text: '+3 ability in a random skill.' },
   { id: 'economy', name: 'Economy Tag', text: 'Doubles your money (max +$15).' },
 ];
 

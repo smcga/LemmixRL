@@ -106,14 +106,24 @@ skill.
 | Small, Big, Boss blind | An easier, a medium and a harder level of the ante's band (no level twice in a run) |
 | Deck | Your colony: 80 lemmings at the start |
 | Hand | The squad of a level: min(colony, level lemmings), drawn at random; the same squad for every attempt |
-| Hand levels | Skill capability: a level gets **min(your capability, the level's allocation)** of every skill |
+| Hand levels | Abilities: 60 points you spread over the eight skills at the start (at most 20 in one); a level gets **min(your ability, the level's allocation)** of every skill |
 | Destroyed cards | Lemmings that die in an accepted result leave the colony for good; survivors and rescued lemmings stay |
-| Card editions | Gold ($2 when it exits), Lucky (chance of $4 or a tarot), Mentor (+1 capability when it exits), Champion (multiplies the rescue bonus when it exits), Insured (comes back once), permanent Climbers and Floaters |
-| Jokers (5) | Passive gadgets: protection against kinds of deaths, money for performance, capability, and a few rule breakers (+1 Builder above the level maximum, +1 minute, starting climbers or floaters) |
-| Tarots (2) | Consumables that change selected lemmings (floaters, climbers, gold, lucky, mentor, champion, insured, clones, retraining into capability) |
+| Card editions | Gold ($2 when it exits), Lucky (chance of $4 or a tarot), Mentor (+1 ability when it exits), Champion (multiplies the rescue bonus when it exits), Insured (comes back once), permanent Climbers and Floaters |
+| Jokers (5) | Passive gadgets: protection against kinds of deaths, money for performance, abilities (also more points to place or move after every boss), and a few rule breakers (+1 Builder above the level maximum, +1 minute, starting climbers or floaters) |
+| Tarots (2) | Consumables that change selected lemmings (floaters, climbers, gold, lucky, mentor, champion, insured, clones, retraining into abilities) or the abilities (5 new points, moving 10) |
 | Skip | The small and big blind can be skipped for a tag (recruits, floaters, a doubled boss payout, a free shop, ...) |
 | Director's Cut | The boss of an ante can be rerolled once ($6), for a level your colony cannot do |
 | Hands left | Three attempts per blind are paid ($1 each unused); you can always retry, nothing counts until you accept |
+
+A run starts with the ability assignment: 60 points to spread over the skills, at most 20 in one, with the three
+levels of the first ante in view (their allocation, and below it what your team would bring, as you assign).
+*Preview* shows a level as it starts at twice its size, with a strip of the whole level: drag it (or the strip, or
+use the arrow keys and the mouse wheel) to look for the traps, the gaps and the exits before you choose. The pictures
+of the levels on the blind screen open the same preview. After
+every boss blind, before the shop, the next ante's levels are drawn and the assignment comes back: up to 10 points can
+be moved to other skills. The Personal Trainer adds 5 new points there and the Careers Advisor 5 more to move; the
+Boot Camp (5 new points) and The Rethink (move 10) tarots open the assignment whenever you use them. Training, drives
+and mentors add abilities on top of the assignment (also above 20).
 
 The blind screen shows all three levels of the ante up front: the level, its numbers, a thumbnail, and per skill the
 original allocation and what you would bring (green: the full allocation, yellow: part of it, red: none). The
@@ -123,7 +133,7 @@ shown as well.
 
 Accepting a successful result pays: the blind ($3, $4, $5), unused attempts, a rescue bonus that grows from the
 requirement to 100% (not the number of lemmings, so big levels are not worth more), a perfect rescue bonus, gold
-lemmings, jokers and interest ($1 per $5, up to $5). The shop sells training (capability), recruitment drives,
+lemmings, jokers and interest ($1 per $5, up to $5). The shop sells training (abilities), recruitment drives,
 jokers and tarots, and always 5 recruits for $3.
 
 In a level, special lemmings of the squad carry a small mark in the colour of their card. Pressing Escape ends a
