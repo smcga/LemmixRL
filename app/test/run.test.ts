@@ -3,8 +3,8 @@ import { Bitmap32, createSessionFromInfo, getStyle, StyleDef } from '../../engin
 import { repoDataProvider } from '../../engine/src/node/repoData.ts';
 import { LevelCatalog } from '../src/run/catalog.ts';
 import { ANTE_BANDS, RunSession } from '../src/run/session.ts';
-import { zeroSkills } from '../src/run/skills.ts';
-import { ANTES, ATTEMPTS, type RunState, START_COLONY } from '../src/run/state.ts';
+import { SKILLS, type SkillCounts, totalSkills, zeroSkills } from '../src/run/skills.ts';
+import { ABILITY_CAP, ANTES, ATTEMPTS, BOSS_REASSIGN_POINTS, type RunState, START_ABILITY_POINTS, START_COLONY } from '../src/run/state.ts';
 
 const data = repoDataProvider();
 const catalog = new LevelCatalog(getStyle(data, StyleDef.Orig));
@@ -25,15 +25,26 @@ function playIdle(run: RunSession) {
   return { game, outcome: run.finishAttempt(game) };
 }
 
+/** the abilities the tests start with (60 points) */
+const SPREAD: SkillCounts = { climber: 6, floater: 6, bomber: 6, blocker: 6, builder: 12, basher: 8, miner: 8, digger: 8 };
+
+/** a new run with its start points assigned (SPREAD) */
+function started(seed = 'TEST'): RunSession {
+  const run = RunSession.newRun(catalog, seed);
+  for (const sk of SKILLS) run.setAbility(sk, SPREAD[sk]);
+  expect(run.finishAssignment()).toBe(true);
+  return run;
+}
+
 /** a run whose current blind is the given level */
 function runOn(levelId: string, seed = 'TEST'): RunSession {
-  const run = RunSession.newRun(catalog, seed);
+  const run = started(seed);
   run.state.blinds[0].levelId = levelId;
   return run;
 }
 
-/** pretends the current blind was won with every lemming saved (no engine) */
-function winCurrentBlind(run: RunSession): void {
+/** pretends the current blind was won with every lemming saved (no engine); after a boss the abilities stay as they are */
+function winCurrentBlind(run: RunSession, keepAbilities = true): void {
   const setup = run.startBlind();
   run.state.outcome = {
     success: true,
@@ -52,6 +63,7 @@ function winCurrentBlind(run: RunSession): void {
   run.state.phase = 'result';
   run.accept();
   run.cashOut();
+  if (keepAbilities && run.assignment()) expect(run.finishAssignment()).toBe(true);
 }
 
 describe('roguelike run', () => {
@@ -194,7 +206,7 @@ describe('roguelike run', () => {
   });
 
   it('the boss can be rerolled once per ante, to another level of the band', () => {
-    const run = RunSession.newRun(catalog, 'BOSS');
+    const run = started('BOSS');
     run.state.money = 20;
     const before = run.state.blinds[2].levelId;
     expect(run.rerollBoss()).toBe(true);
@@ -207,7 +219,7 @@ describe('roguelike run', () => {
   });
 
   it('skipping a blind gives its tag', () => {
-    const run = RunSession.newRun(catalog, 'SKIP');
+    const run = started('SKIP');
     run.state.blinds[0].tag = 'recruits';
     run.skipBlind();
     expect(run.state.colony.length).toBe(START_COLONY + 8);
@@ -243,7 +255,7 @@ describe('roguelike run', () => {
   });
 
   it('tarots change the selected lemmings', () => {
-    const run = RunSession.newRun(catalog, 'TAROT');
+    const run = started('TAROT');
     const [a, b] = run.state.colony;
     run.state.tarots.push({ uid: 7000, id: 'umbrella' }, { uid: 7001, id: 'manual', skill: 'basher' });
     expect(run.useTarot(7000, [a.id, b.id])).not.toBeNull();
@@ -253,6 +265,131 @@ describe('roguelike run', () => {
     expect(run.state.capacity.basher).toBe(bashers + 2);
     expect(run.card(a.id)).toBeUndefined();
     expect(run.state.tarots.length).toBe(0);
+  });
+
+  it('starts with the ability assignment: 60 points, at most 20 in a skill, all placed before the first blind', () => {
+    const run = RunSession.newRun(catalog, 'ASSIGN');
+    expect(run.state.phase).toBe('assign');
+    expect(run.state.capacity).toEqual(zeroSkills());
+    expect(run.assignment()).toEqual({ moved: 0, added: 0, left: START_ABILITY_POINTS });
+    // the levels of the first ante are known, and what the team would bring follows the assignment
+    expect(run.state.blinds.length).toBe(3);
+    expect(run.preview(0).usable).toEqual(zeroSkills());
+    run.setAbility('digger', 25);
+    expect(run.state.capacity.digger).toBe(ABILITY_CAP);
+    const p = run.preview(0);
+    expect(p.usable.digger).toBe(Math.min(ABILITY_CAP, p.allocation.digger));
+    expect(run.assignment()!.left).toBe(START_ABILITY_POINTS - ABILITY_CAP);
+    // nothing else can happen before every point is placed
+    expect(run.skipBlind()).toEqual([]);
+    expect(run.canFinishAssignment()).toBe(false);
+    expect(run.finishAssignment()).toBe(false);
+    run.setAbility('builder', 20);
+    run.setAbility('basher', 15);
+    run.setAbility('miner', 9); // only 5 left
+    expect(run.state.capacity.miner).toBe(5);
+    run.setAbility('basher', 0); // freely changed: these are new points
+    expect(run.assignment()).toEqual({ moved: 0, added: 45, left: 15 });
+    run.resetAssignment();
+    expect(totalSkills(run.state.capacity)).toBe(0);
+    for (const sk of ['digger', 'builder', 'basher'] as const) run.setAbility(sk, 20);
+    expect(run.finishAssignment()).toBe(true);
+    expect(run.state.phase).toBe('blinds');
+    expect(run.state.assign).toBeNull();
+  });
+
+  it('after every boss blind, up to 10 points move to other skills, with the next ante in view, before the shop', () => {
+    const run = started('REASSIGN');
+    for (let k = 0; k < 2; k++) {
+      winCurrentBlind(run);
+      run.nextRound();
+    }
+    winCurrentBlind(run, false); // the boss
+    expect(run.state.phase).toBe('assign');
+    expect(run.state.assign).toMatchObject({ reason: 'boss', newPoints: 0, reassign: BOSS_REASSIGN_POINTS, next: 'shop' });
+    expect(run.state.ante).toBe(2);
+    expect(run.state.blinds.map((b) => b.status)).toEqual(['current', 'upcoming', 'upcoming']);
+    const [lo, hi] = ANTE_BANDS[1];
+    for (const b of run.state.blinds) expect(catalog.get(b.levelId).order >= lo && catalog.get(b.levelId).order <= hi).toBe(true);
+    // keeping everything is fine
+    expect(run.canFinishAssignment()).toBe(true);
+    // at most 10 points move; moved points must be placed again
+    run.setAbility('builder', 0);
+    expect(run.state.capacity.builder).toBe(SPREAD.builder - 10);
+    run.setAbility('digger', 0); // no points left to move
+    expect(run.state.capacity.digger).toBe(SPREAD.digger);
+    expect(run.assignment()).toEqual({ moved: 10, added: 0, left: 10 });
+    expect(run.canFinishAssignment()).toBe(false);
+    run.setAbility('digger', SPREAD.digger + 4);
+    run.setAbility('builder', SPREAD.builder - 6); // 4 of the 10 go back: only 6 moved now
+    expect(run.assignment()).toEqual({ moved: 6, added: 4, left: 2 });
+    run.setAbility('miner', 100);
+    expect(run.state.capacity.miner).toBe(SPREAD.miner + 2);
+    expect(run.finishAssignment()).toBe(true);
+    expect(run.state.phase).toBe('shop');
+    expect(run.state.shop).not.toBeNull();
+    run.nextRound();
+    expect([run.state.phase, run.state.ante, run.currentBlindIndex]).toEqual(['blinds', 2, 0]);
+  });
+
+  it('the cap only stops points from being added: a skill above it (training) keeps its points', () => {
+    const run = started('CAP');
+    run.state.capacity.digger = 23;
+    run.state.jokers.push({ uid: 990, id: 'trainer' }, { uid: 991, id: 'advisor' });
+    run.state.blinds[0].status = 'defeated';
+    run.state.blinds[1].status = 'defeated';
+    run.state.blinds[2].status = 'current';
+    winCurrentBlind(run, false); // the boss
+    // Personal Trainer: 5 new points; Careers Advisor: 5 more to move
+    expect(run.state.assign).toMatchObject({ newPoints: 5, reassign: BOSS_REASSIGN_POINTS + 5 });
+    expect(run.state.assign!.sources).toEqual(['Personal Trainer: +5 points', 'Careers Advisor: 5 more to move']);
+    expect(run.canFinishAssignment()).toBe(false); // the 5 new points
+    run.setAbility('digger', 30);
+    expect(run.state.capacity.digger).toBe(23);
+    run.setAbility('digger', 21);
+    run.setAbility('digger', 23); // back up to what it had
+    expect(run.state.capacity.digger).toBe(23);
+    run.setAbility('climber', 30);
+    expect(run.state.capacity.climber).toBe(SPREAD.climber + 5);
+    expect(run.finishAssignment()).toBe(true);
+  });
+
+  it('Boot Camp and The Rethink assign right away, then the run goes on where they were used', () => {
+    const run = runOn('Orig-1-02', 'TAROTS');
+    winCurrentBlind(run); // the shop
+    const offers = JSON.stringify(run.state.shop!.offers);
+    run.state.tarots.push({ uid: 8000, id: 'bootcamp' }, { uid: 8001, id: 'rethink' });
+    expect(run.useTarot(8000)).not.toBeNull();
+    expect(run.state.assign).toMatchObject({ reason: 'tarot', newPoints: 5, reassign: 0, next: 'shop' });
+    expect(run.useTarot(8001)).toBeNull(); // not during an assignment
+    run.setAbility('climber', 0); // nothing may move
+    expect(run.state.capacity.climber).toBe(SPREAD.climber);
+    run.setAbility('climber', SPREAD.climber + 5);
+    expect(run.finishAssignment()).toBe(true);
+    expect(run.state.phase).toBe('shop');
+    expect(JSON.stringify(run.state.shop!.offers)).toBe(offers); // the same shop
+    run.nextRound();
+    // The Rethink on the blind screen: what the level gets follows at once
+    const setup = run.ensureSetup();
+    expect(run.useTarot(8001)).not.toBeNull();
+    run.setAbility('climber', 0);
+    expect(run.state.capacity.climber).toBe(SPREAD.climber + 5 - 10);
+    run.setAbility('digger', SPREAD.digger + 10);
+    expect(setup.usable.digger).toBe(Math.min(SPREAD.digger + 10, catalog.get(setup.levelId).skills.digger));
+    expect(run.finishAssignment()).toBe(true);
+    expect(run.state.phase).toBe('blinds');
+  });
+
+  it('a run saved before the assignment existed goes on (shop after a boss: the next ante is drawn when leaving it)', () => {
+    const run = started('OLD');
+    const old = JSON.parse(JSON.stringify(run.state)) as RunState;
+    delete old.assign;
+    for (const b of old.blinds) b.status = 'defeated';
+    old.phase = 'shop';
+    old.shop = { offers: [], rerolls: 0, recruitPrice: 3 };
+    const copy = new RunSession(catalog, old);
+    copy.nextRound();
+    expect([copy.state.phase, copy.state.ante, copy.currentBlindIndex]).toEqual(['blinds', 2, 0]);
   });
 
   it('a saved run continues exactly like the original', () => {

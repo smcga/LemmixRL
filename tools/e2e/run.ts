@@ -46,6 +46,21 @@ try {
   let s = await state();
   if (s.ante !== 1 || s.colony.length !== 80 || s.money !== 4) fail('unexpected new run ' + JSON.stringify({ ante: s.ante, money: s.money }));
 
+  // the abilities: 60 points, at most 20 in a skill (the 20th point of the bars of diggers, builders and bashers)
+  if (s.phase !== 'assign') fail('a new run does not start with the ability assignment');
+  const row = (i: number) => 124 + 104 + i * 29 + 13;
+  const point = (n: number) => 244 + 134 + (n - 1) * 8 + 4;
+  const done = () => click(244 + 392 - 166 + 75, 124 + 362 + 15);
+  await click(point(20), row(7), 200); // diggers
+  await click(point(20), row(4), 200); // builders
+  await done(); // 20 points are not placed yet
+  if ((await state()).phase !== 'assign') fail('the assignment ended with points left');
+  await click(point(20), row(5), 200); // bashers
+  s = await state();
+  if (s.capacity.digger !== 20 || s.capacity.builder !== 20 || s.capacity.basher !== 20) fail('unexpected abilities ' + JSON.stringify(s.capacity));
+  await done();
+  if ((await state()).phase !== 'blinds') fail('the assignment did not end');
+
   // the small blind becomes "Just dig!"
   await ev(`(() => { const s = globalThis.lemmix.run.state; s.blinds[0].levelId = 'Orig-1-01'; s.setup = null; globalThis.phaserGame.scene.getScene('run').render(); })()`);
   await click(244 + 62, 124 + 377, 800); // play
@@ -58,7 +73,7 @@ try {
     null,
     { timeout: 30000 },
   );
-  if ((await ev<number>('globalThis.lemmix.game.currDiggerCount')) !== 4) fail('the level does not have min(capability, allocation) = 4 diggers');
+  if ((await ev<number>('globalThis.lemmix.game.currDiggerCount')) !== 10) fail('the level does not have min(abilities, allocation) = 10 diggers');
   await page.keyboard.press('F10');
   const l = await ev<{ x: number; y: number; scroll: number }>(
     `(() => { const g = globalThis.lemmix.game; const lem = g.lemmingList.find((x) => !x.isRemoved && x.action === 1); return { x: lem.xPos, y: lem.yPos, scroll: g.level.info.screenPosition }; })()`,
@@ -102,7 +117,7 @@ try {
   if (t.money !== s.money || t.colony.length !== s.colony.length || t.blinds[2].status !== 'current') fail('the saved run did not continue');
   await page.screenshot({ path: `${REPO_ROOT}/tools/e2e/run.png` });
   if (errors.length) fail('errors in the page:\n' + errors.join('\n'));
-  console.log('e2e ok: a run: blind played and accepted, cash out, shop, skip, continued after a reload');
+  console.log('e2e ok: a run: abilities assigned, blind played and accepted, cash out, shop, skip, continued after a reload');
 } finally {
   await browser.close();
   await server.close();

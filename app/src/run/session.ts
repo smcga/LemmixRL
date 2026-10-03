@@ -2,8 +2,10 @@
  * A roguelike run: Balatro's loop around unchanged Lemmings levels.
  *
  *   ante (8)  = three blinds: small, big and boss, levels from the ante's band of the original 120 levels
+ *   abilities = how many of each skill the colony can bring: 60 points spread by the player at the start (at most
+ *               20 in a skill), some of them moved to other skills after every boss blind
  *   blind     = a level, played with the original rules; the run only decides the counts it starts with:
- *               lemmings = min(colony size, level lemmings), skills = min(capability, level allocation)
+ *               lemmings = min(colony size, level lemmings), skills = min(abilities, level allocation)
  *   accepting = the result of an attempt becomes canonical: dead lemmings leave the colony, survivors stay
  *   cash out  = blind reward + rescue bonus + card and joker money + interest, then the shop
  */
@@ -29,9 +31,12 @@ import {
 import { type Rng, RunRandom } from './rng.ts';
 import { SKILL_ACTIONS, SKILL_NAMES, SKILLS, type Skill, type SkillCounts, setSkills, totalSkills, zeroSkills } from './skills.ts';
 import {
+  ABILITY_CAP,
   ANTES,
+  type AssignState,
   ATTEMPTS,
   type AttemptOutcome,
+  BOSS_REASSIGN_POINTS,
   BLIND_NAMES,
   BLIND_REWARDS,
   type BlindKind,
@@ -45,11 +50,12 @@ import {
   MAX_INTEREST,
   type PayoutLine,
   RUN_VERSION,
+  type RunPhase,
   type RunState,
   type ShopOffer,
+  START_ABILITY_POINTS,
   START_COLONY,
   START_MONEY,
-  startCapacity,
   TAROT_SLOTS,
 } from './state.ts';
 
@@ -102,12 +108,13 @@ export class RunSession {
       seed,
       counters: {},
       ante: 1,
-      phase: 'blinds',
+      phase: 'assign',
       won: false,
       money: START_MONEY,
       colony: [],
       nextUid: 1,
-      capacity: startCapacity(),
+      capacity: zeroSkills(),
+      assign: null,
       jokers: [],
       tarots: [],
       pendingTags: [],
@@ -123,6 +130,8 @@ export class RunSession {
     const names = run.random.stream('names');
     for (let i = 0; i < START_COLONY; i++) state.colony.push(run.newCard(names));
     run.newAnte();
+    // the first decision of the run: the abilities, with the levels of the first ante in view
+    run.beginAssignment('start', START_ABILITY_POINTS, 0, 'blinds', []);
     return run;
   }
 
@@ -140,7 +149,7 @@ export class RunSession {
     return this.catalog.get(id);
   }
 
-  /** capacity of the colony plus the capacity jokers */
+  /** the abilities of the colony plus those of the jokers */
   capability(): SkillCounts {
     const c = { ...this.state.capacity };
     for (const j of this.state.jokers) {
@@ -515,7 +524,7 @@ export class RunSession {
         }
       } else if (card.edition === 'mentor') {
         s.capacity[mentorSkill]++;
-        notes.push(`Mentor ${card.name} trained a ${SKILL_NAMES[mentorSkill]} (+1 capacity).`);
+        notes.push(`Mentor ${card.name} trained a ${SKILL_NAMES[mentorSkill]} (+1 ability).`);
       }
     }
     if (gold > 0) lines.push({ label: `Gold lemmings (${gold})`, amount: 2 * gold });
@@ -580,23 +589,125 @@ export class RunSession {
       s.won = true;
       return;
     }
+    if (wasBoss) {
+      // the next ante is drawn now: its levels are in view while the abilities are assigned again, before the shop
+      s.ante++;
+      this.newAnte();
+      const sources: string[] = [];
+      let points = 0;
+      let reassign = BOSS_REASSIGN_POINTS;
+      for (const j of s.jokers) {
+        const d = jokerDef(j.id);
+        if (d.pointsAfterBoss) {
+          points += d.pointsAfterBoss;
+          sources.push(`${d.name}: +${d.pointsAfterBoss} points`);
+        }
+        if (d.reassignAfterBoss) {
+          reassign += d.reassignAfterBoss;
+          sources.push(`${d.name}: ${d.reassignAfterBoss} more to move`);
+        }
+      }
+      this.beginAssignment('boss', points, reassign, 'shop', sources);
+      return;
+    }
     this.openShop();
   }
 
-  /** Leave the shop: the next blind, or the next ante after the boss. */
+  /** Leave the shop: the next blind, or the first blind of the next ante (drawn after the boss). */
   nextRound(): void {
     const s = this.state;
     if (s.phase !== 'shop') return;
     s.shop = null;
-    if (s.blinds.every((b) => b.status === 'defeated' || b.status === 'skipped')) {
-      s.ante++;
-      this.newAnte();
-    } else this.advanceBlind();
+    if (this.currentBlindIndex < 0) {
+      // (a run saved in the shop after a boss before the ante was drawn at the cash out)
+      if (s.blinds.every((b) => b.status === 'defeated' || b.status === 'skipped')) {
+        s.ante++;
+        this.newAnte();
+      } else this.advanceBlind();
+    }
     s.phase = 'blinds';
     if (s.colony.length === 0) {
       s.phase = 'over';
       s.won = false;
     }
+  }
+
+  /* -------------------------------------------------------------------------------------------- ability assignment */
+
+  /** Starts an ability assignment; when it is done the run goes on with the phase `next`. */
+  private beginAssignment(reason: AssignState['reason'], newPoints: number, reassign: number, next: RunPhase, sources: string[]): void {
+    const s = this.state;
+    s.assign = { reason, before: { ...s.capacity }, newPoints, reassign, next, sources };
+    s.phase = 'assign';
+  }
+
+  /** The assignment going on: points moved (taken from the skills they were in), added, and still to place. */
+  assignment(): { moved: number; added: number; left: number } | null {
+    const s = this.state;
+    const a = s.assign;
+    if (!a || s.phase !== 'assign') return null;
+    let moved = 0;
+    let added = 0;
+    for (const sk of SKILLS) {
+      const d = s.capacity[sk] - a.before[sk];
+      if (d > 0) added += d;
+      else moved -= d;
+    }
+    return { moved, added, left: a.newPoints + moved - added };
+  }
+
+  /**
+   * The values a skill can have in the assignment going on: down as far as the points that may still be moved allow,
+   * up as far as the points to place and the cap (ABILITY_CAP, or more when the skill already had more) allow.
+   */
+  abilityRange(skill: Skill): { min: number; max: number } {
+    const s = this.state;
+    const a = s.assign;
+    const st = this.assignment();
+    const cur = s.capacity[skill];
+    if (!a || !st) return { min: cur, max: cur };
+    const movedElsewhere = st.moved - Math.max(0, a.before[skill] - cur);
+    const min = Math.max(0, a.before[skill] - (a.reassign - movedElsewhere));
+    const max = Math.min(Math.max(ABILITY_CAP, a.before[skill]), cur + st.left);
+    return { min: Math.min(min, cur), max: Math.max(max, cur) };
+  }
+
+  /** Sets a skill's ability in the assignment going on (kept within abilityRange). Returns whether it changed. */
+  setAbility(skill: Skill, value: number): boolean {
+    const s = this.state;
+    if (s.phase !== 'assign') return false;
+    const { min, max } = this.abilityRange(skill);
+    const v = Math.max(min, Math.min(max, Math.round(value)));
+    if (v === s.capacity[skill]) return false;
+    s.capacity[skill] = v;
+    if (s.setup) this.refreshSetup(s.setup);
+    return true;
+  }
+
+  /** Back to the abilities the assignment began with. */
+  resetAssignment(): void {
+    const s = this.state;
+    if (s.phase !== 'assign' || !s.assign) return;
+    s.capacity = { ...s.assign.before };
+    if (s.setup) this.refreshSetup(s.setup);
+  }
+
+  /** Every point is placed (or no skill can take another one). */
+  canFinishAssignment(): boolean {
+    const st = this.assignment();
+    if (!st) return false;
+    return st.left === 0 || SKILLS.every((sk) => this.abilityRange(sk).max <= this.state.capacity[sk]);
+  }
+
+  finishAssignment(): boolean {
+    const s = this.state;
+    if (!this.canFinishAssignment()) return false;
+    const next = s.assign!.next;
+    s.assign = null;
+    // after a boss: the shop of the new ante; after a tarot: back where it was used (the same shop)
+    if (next === 'shop' && !s.shop) this.openShop();
+    else s.phase = next;
+    return true;
   }
 
   /* -------------------------------------------------------------------------------------------- the shop */
@@ -717,7 +828,7 @@ export class RunSession {
   useTarot(uid: number, selected: number[] = []): string[] | null {
     const s = this.state;
     const i = s.tarots.findIndex((t) => t.uid === uid);
-    if (i < 0 || s.phase === 'playing' || s.phase === 'result') return null;
+    if (i < 0 || s.phase === 'playing' || s.phase === 'result' || s.phase === 'assign' || s.phase === 'over') return null;
     const t = s.tarots[i];
     const d = tarotDef(t.id);
     const cards = [...new Set(selected)].map((id) => this.card(id)).filter((c): c is LemmingCard => !!c);
@@ -754,7 +865,7 @@ export class RunSession {
         const ids = new Set(cards.map((c) => c.id));
         s.colony = s.colony.filter((c) => !ids.has(c.id));
         s.capacity[skill] += 2 * cards.length;
-        notes.push(`${names(cards)} retrained: +${2 * cards.length} ${SKILL_NAMES[skill]} capacity.`);
+        notes.push(`${names(cards)} retrained: +${2 * cards.length} ${SKILL_NAMES[skill]} ability.`);
         break;
       }
       case 'conscription': {
@@ -788,6 +899,14 @@ export class RunSession {
       case 'recruiter':
         this.recruit(5);
         notes.push('5 lemmings joined the colony.');
+        break;
+      case 'bootcamp':
+        this.beginAssignment('tarot', 5, 0, s.phase, [`${d.name}: +5 points`]);
+        notes.push('Assign your 5 new ability points.');
+        break;
+      case 'rethink':
+        this.beginAssignment('tarot', 0, 10, s.phase, [`${d.name}: move up to 10 points`]);
+        notes.push('Move up to 10 ability points to other skills.');
         break;
     }
     s.tarots.splice(i, 1);
@@ -826,7 +945,7 @@ export class RunSession {
       case 'training': {
         const skill = rng.pick(SKILLS);
         s.capacity[skill] += 3;
-        return [`${d.name}: +3 ${SKILL_NAMES[skill]} capacity.`];
+        return [`${d.name}: +3 ${SKILL_NAMES[skill]} ability.`];
       }
       case 'economy': {
         const gain = Math.min(s.money, 15);
