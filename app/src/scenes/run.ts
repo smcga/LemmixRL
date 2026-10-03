@@ -13,7 +13,7 @@ import { type BlindPreview, cardTitle, isSpecial, RunSession, sellPrice } from '
 import { describeSkills, SKILL_NAMES, SKILL_PLURALS, SKILLS, type Skill, totalSkills } from '../run/skills.ts';
 import { ABILITY_CAP, ANTES, ATTEMPTS, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
 import { loadMeta, loadRun, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
-import { BACKGROUND, ensureRunAssets, type LemmingAnim, lemmingSprite, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
+import { BACKGROUND, ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
 import { Button, COLORS, containerHitArea, hoverTip, label, panel, showTip, type TipContent, Tooltip } from '../run/ui/widgets.ts';
 import { cssPx, onTouchChange, safeAreaInsets, touch } from '../touch.ts';
 import { ScreenType } from '../screens/base.ts';
@@ -93,6 +93,18 @@ const FATE_ANIMS: Partial<Record<Fate, LemmingAnim>> = {
   fell: 'fall',
 };
 
+/** What the team lacks for a level: the skills it brings fewer of than the level has, the biggest gap named. */
+function shortSummary(p: BlindPreview): { text: string; color: number } {
+  const short: { gap: number; text: string }[] = [];
+  for (const sk of SKILLS) {
+    const gap = p.allocation[sk] + p.aboveMax[sk] - p.usable[sk];
+    if (gap > 0) short.push({ gap, text: `${gap} ${gap === 1 ? SKILL_NAMES[sk] : SKILL_PLURALS[sk]}` });
+  }
+  short.sort((a, b) => b.gap - a.gap);
+  if (short.length === 0) return { text: 'You bring every skill it has', color: COLORS.green };
+  return { text: short.length === 1 ? `Short of ${short[0].text}` : `Short in ${short.length} skills, most: ${short[0].text}`, color: COLORS.orange };
+}
+
 /** The level band names of an ante, for the sidebar. */
 function bandName(run: RunSession): string {
   const levels = run.state.blinds.map((b) => run.level(b.levelId));
@@ -114,6 +126,11 @@ export class RunScene extends Phaser.Scene {
   private choosing = false;
   /** a render is due on the next frame */
   private renderQueued = false;
+  /** what closing the overlay also undoes (the texture of a level preview) */
+  private overlayCleanup: (() => void)[] = [];
+  /** the level preview: its first column in the window, and scrolling it (keys) */
+  private previewSx = 0;
+  private previewPan: ((d: number) => void) | null = null;
 
   constructor() {
     super('run');
@@ -194,7 +211,7 @@ export class RunScene extends Phaser.Scene {
     if (e.key === 'Escape') {
       if (this.overlay.length) this.closeOverlay();
       else this.toMenu();
-    }
+    } else if (this.previewPan && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) this.previewPan(e.key === 'ArrowLeft' ? -48 : 48);
   }
 
   private toMenu(): void {
@@ -670,10 +687,10 @@ export class RunScene extends Phaser.Scene {
     // the levels of the ante, with what the team brings as it is now
     const lx = x + w + 8;
     const lw = MAIN_X + 712 - lx;
-    s.blinds.forEach((_, i) => this.renderAssignBlind(run.preview(i), lx, y + i * 137, lw, 130));
+    s.blinds.forEach((_, i) => this.renderAssignBlind(run, run.preview(i), lx, y + i * 137, lw, 130));
   }
 
-  private renderAssignBlind(p: BlindPreview, x: number, y: number, w: number, h: number): void {
+  private renderAssignBlind(run: RunSession, p: BlindPreview, x: number, y: number, w: number, h: number): void {
     const k = this.k.bind(this);
     const b = p.blind;
     const l = p.level;
@@ -683,40 +700,115 @@ export class RunScene extends Phaser.Scene {
     k(label(this, x + 10, y + 8, BLIND_NAMES[b.kind], { color: done ? COLORS.dim : color }));
     k(label(this, x + w - 10, y + 8, levelName(l), { purple: true, originX: 1 }));
     k(label(this, x + 10, y + 27, l.title, { color: COLORS.text, maxWidth: w - 20 }));
-    k(label(this, x + 10, y + 46, `Rescue ${p.required} of ${p.squad}  ·  ${minutes(p.minutes)}  ·  Rate ${l.releaseRate}`, { color: COLORS.dim }));
-    const short: { gap: number; text: string }[] = [];
+    k(label(this, x + 10, y + 46, `Rescue ${p.required}/${p.squad} · ${minutes(p.minutes)} · Rate ${l.releaseRate}`, { color: COLORS.dim }));
+    this.skillCells(k, p, x + 10, y + 68, x - 120);
+    const summary = done ? { text: b.status === 'skipped' ? 'Skipped' : 'Defeated', color: COLORS.dim } : shortSummary(p);
+    k(label(this, x + 10, y + 108, summary.text, { color: summary.color }));
+    if (done) k(this.add.rectangle(x, y, w, h, 0x000000, 0.4).setOrigin(0, 0));
+    else k(new Button(this, x + w - 74, y + 43, 64, 20, 'Preview', COLORS.blue, () => this.showLevelPreview(run, p.index)));
+  }
+
+  /** the skills of a level (its allocation, and below what the team brings), 36 pixels per skill */
+  private skillCells(add: <T extends Phaser.GameObjects.GameObject>(o: T) => T, p: BlindPreview, x: number, y: number, tipX: number): void {
     SKILLS.forEach((sk, i) => {
-      const cx = x + 10 + i * 36;
-      const cy = y + 68;
+      const cx = x + i * 36;
       const alloc = p.allocation[sk] + p.aboveMax[sk];
       const u = p.usable[sk];
-      const icon = k(this.add.image(cx, cy + 4, SKILL_ICONS, sk).setOrigin(0, 0));
+      const icon = add(this.add.image(cx, y + 4, SKILL_ICONS, sk).setOrigin(0, 0));
       if (alloc === 0) icon.setAlpha(0.3);
-      k(label(this, cx + 16, cy, String(p.allocation[sk]) + (p.aboveMax[sk] ? `+${p.aboveMax[sk]}` : ''), { color: alloc ? COLORS.text : COLORS.dim }));
-      k(label(this, cx + 16, cy + 16, String(u), { color: alloc === 0 ? COLORS.dim : u >= alloc ? COLORS.green : u === 0 ? COLORS.red : COLORS.gold }));
-      if (u < alloc) short.push({ gap: alloc - u, text: `${alloc - u} ${alloc - u === 1 ? SKILL_NAMES[sk] : SKILL_PLURALS[sk]}` });
+      add(label(this, cx + 16, y, String(p.allocation[sk]) + (p.aboveMax[sk] ? `+${p.aboveMax[sk]}` : ''), { color: alloc ? COLORS.text : COLORS.dim }));
+      add(label(this, cx + 16, y + 16, String(u), { color: alloc === 0 ? COLORS.dim : u >= alloc ? COLORS.green : u === 0 ? COLORS.red : COLORS.gold }));
       icon.setInteractive();
       hoverTip(icon, this.tip, () => ({
         title: SKILL_PLURALS[sk],
         color: COLORS.teal,
         lines: [`The level has ${p.allocation[sk]}${p.aboveMax[sk] ? ` (+${p.aboveMax[sk]} from jokers)` : ''}, you would bring ${u}.`],
-        x: x - 120,
-        y: cy + 36,
+        x: tipX,
+        y: y + 36,
       }));
     });
-    // the skills the team brings fewer of than the level has, the biggest gap first
-    short.sort((p1, p2) => p2.gap - p1.gap);
-    const status = done
-      ? b.status === 'skipped'
-        ? 'Skipped'
-        : 'Defeated'
-      : short.length === 0
-        ? 'You bring every skill it has'
-        : short.length === 1
-          ? `Short of ${short[0].text}`
-          : `Short in ${short.length} skills, most: ${short[0].text}`;
-    k(label(this, x + 10, y + 108, status, { color: done ? COLORS.dim : short.length ? COLORS.orange : COLORS.green }));
-    if (done) k(this.add.rectangle(x, y, w, h, 0x000000, 0.4).setOrigin(0, 0));
+  }
+
+  /**
+   * A level of the ante as it starts, at twice its size: drag it (or the strip of the whole level below it; or the
+   * arrow keys and the mouse wheel) to look around. With its numbers and skills, and what the team would bring.
+   */
+  private showLevelPreview(run: RunSession, index: number): void {
+    this.closeOverlay();
+    this.tip.hide();
+    const o = <T extends Phaser.GameObjects.GameObject>(g: T): T => {
+      this.overlay.push(g);
+      (g as unknown as Phaser.GameObjects.Components.Depth).setDepth?.(600);
+      return g;
+    };
+    const p = run.preview(index);
+    const l = p.level;
+    const color = BLIND_COLORS[p.blind.kind];
+    o(this.add.rectangle(0, 0, W, H, 0x000000, 0.7).setOrigin(0, 0).setInteractive());
+    o(panel(this, 20, 16, 920, 508, COLORS.panel, color, 12));
+    const kind = o(label(this, 40, 30, BLIND_NAMES[p.blind.kind], { color }));
+    const name = o(label(this, kind.x + kind.width + 12, 30, levelName(l), { purple: true }));
+    o(label(this, name.x + name.width + 12, 30, l.title, { color: COLORS.text, maxWidth: 800 - name.x - name.width }));
+    o(new Button(this, 828, 26, 92, 28, 'Close', COLORS.gray, () => this.closeOverlay()));
+    const lemmings = p.squad < l.lemmings ? `${l.lemmings} (you have ${p.squad})` : String(l.lemmings);
+    o(label(this, 40, 56, `Lemmings ${lemmings} · Rescue ${p.required} · Release rate ${l.releaseRate} · Time ${minutes(p.minutes)}`, { color: COLORS.dim }));
+    const meta = loadMeta().levels[l.id];
+    if (meta?.fewest) o(label(this, 920, 56, `Your best: ${meta.best}%, ${totalSkills(meta.fewest)} skills`, { color: COLORS.teal, originX: 1 }));
+
+    // the level, twice its size, in a window
+    const img = levelImage(this, this.app, l);
+    this.overlayCleanup.push(() => this.textures.remove(img.key));
+    const S = 2;
+    const vx = 36;
+    const vy = 80;
+    const vw = 888;
+    const vh = img.height * S;
+    const viewW = Math.min(img.width, vw / S); // level pixels in the window
+    const inset = Math.max(0, (vw - img.width * S) / 2); // a narrow level is centred
+    o(this.add.rectangle(vx - 2, vy - 2, vw + 4, vh + 4, 0x000000).setOrigin(0, 0).setStrokeStyle(2, COLORS.border));
+    const pic = o(this.add.image(vx + inset, vy, img.key).setOrigin(0, 0).setScale(S));
+    // the strip of the whole level, with the window on it
+    const mh = 60;
+    const ms = mh / img.height;
+    const mw = Math.round(img.width * ms);
+    const mx = Math.round(W / 2 - mw / 2);
+    const my = vy + vh + 10;
+    o(this.add.image(mx, my, levelThumbnail(this, this.app, l, mw, mh)).setOrigin(0, 0));
+    const frame = o(this.add.graphics());
+    const maxSx = Math.max(0, img.width - viewW);
+    const pan = (v: number) => {
+      const sx = Math.max(0, Math.min(maxSx, Math.round(v)));
+      this.previewSx = sx;
+      pic.setCrop(sx, 0, viewW, img.height);
+      pic.x = vx + inset - sx * S;
+      frame.clear();
+      frame.lineStyle(2, COLORS.gold, 1);
+      frame.strokeRect(mx + sx * ms, my, viewW * ms, mh);
+    };
+    // where the level starts (its screen position in the original)
+    pan(img.start - img.x0);
+    this.previewPan = (d) => pan(this.previewSx + d);
+    const view = o(this.add.zone(vx, vy, vw, vh).setOrigin(0, 0).setInteractive());
+    let drag: { x: number; sx: number } | null = null;
+    view.on('pointerdown', (ptr: Phaser.Input.Pointer) => (drag = { x: ptr.worldX, sx: this.previewSx }));
+    view.on('pointermove', (ptr: Phaser.Input.Pointer) => {
+      if (drag && ptr.isDown) pan(drag.sx - (ptr.worldX - drag.x) / S);
+    });
+    view.on('pointerup', () => (drag = null));
+    view.on('wheel', (_ptr: Phaser.Input.Pointer, dx: number, dy: number) => pan(this.previewSx + (dx + dy) / S));
+    const strip = o(this.add.zone(mx, my, mw, mh).setOrigin(0, 0).setInteractive());
+    const jump = (ptr: Phaser.Input.Pointer) => pan((ptr.worldX - mx) / ms - viewW / 2);
+    strip.on('pointerdown', jump);
+    strip.on('pointermove', (ptr: Phaser.Input.Pointer) => {
+      if (ptr.isDown) jump(ptr);
+    });
+
+    // the skills
+    const sy = my + mh + 10;
+    o(label(this, 40, sy + 8, 'Skills: level / yours', { color: COLORS.dim }));
+    this.skillCells(o, p, 200, sy, 200);
+    const summary = shortSummary(p);
+    o(label(this, 504, sy + 8, summary.text, { color: summary.color }));
   }
 
   /** a change of the assignment: the screen follows on the next frame (a finger may still be dragging the bar) */
@@ -752,8 +844,14 @@ export class RunScene extends Phaser.Scene {
     k(label(this, x + w / 2, y + 40, levelName(l), { purple: true, originX: 0.5 }));
     k(label(this, x + w / 2, y + 60, l.title, { color: COLORS.text, originX: 0.5, maxWidth: w - 20, align: 1 }));
     const thumb = levelThumbnail(this, this.app, l, 212, 40);
-    k(this.add.image(x + 8, y + 98, thumb).setOrigin(0, 0));
+    const pic = k(this.add.image(x + 8, y + 98, thumb).setOrigin(0, 0));
     if (!current) k(this.add.rectangle(x + 8, y + 98, 212, 40, 0x000000, 0.35).setOrigin(0, 0));
+    // the picture opens the level preview
+    const hint = label(this, x + 216, y + 135, 'Preview', { color: COLORS.text, originX: 1, originY: 1 });
+    k(this.add.rectangle(hint.x - hint.width - 4, hint.y - hint.height - 1, hint.width + 6, hint.height + 2, 0x000000, 0.65).setOrigin(0, 0));
+    k(hint).setDepth(1);
+    pic.setInteractive({ useHandCursor: true });
+    pic.on('pointerup', () => this.showLevelPreview(run, p.index));
 
     // the numbers of the level
     const row = (yy: number, name: string, value: string, c: number = COLORS.text) => {
@@ -1181,6 +1279,9 @@ export class RunScene extends Phaser.Scene {
   private closeOverlay(): void {
     for (const o of this.overlay) o.destroy();
     this.overlay = [];
+    for (const f of this.overlayCleanup) f();
+    this.overlayCleanup = [];
+    this.previewPan = null;
   }
 
   /** The colony: every special lemming, and the plain ones. With a tarot: select lemmings for it. */

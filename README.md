@@ -116,7 +116,10 @@ skill.
 | Hands left | Three attempts per blind are paid ($1 each unused); you can always retry, nothing counts until you accept |
 
 A run starts with the ability assignment: 60 points to spread over the skills, at most 20 in one, with the three
-levels of the first ante in view (their allocation, and below it what your team would bring, as you assign). After
+levels of the first ante in view (their allocation, and below it what your team would bring, as you assign).
+*Preview* shows a level as it starts at twice its size, with a strip of the whole level: drag it (or the strip, or
+use the arrow keys and the mouse wheel) to look for the traps, the gaps and the exits before you choose. The pictures
+of the levels on the blind screen open the same preview. After
 every boss blind, before the shop, the next ante's levels are drawn and the assignment comes back: up to 10 points can
 be moved to other skills. The Personal Trainer adds 5 new points there and the Careers Advisor 5 more to move; the
 Boot Camp (5 new points) and The Rethink (move 10) tarots open the assignment whenever you use them. Training, drives

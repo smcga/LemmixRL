@@ -58,6 +58,21 @@ try {
   await click(point(20), row(5), 200); // bashers
   s = await state();
   if (s.capacity.digger !== 20 || s.capacity.builder !== 20 || s.capacity.basher !== 20) fail('unexpected abilities ' + JSON.stringify(s.capacity));
+  // the preview of a level of the ante (the big blind, a wide level here): it opens, scrolls and closes
+  await ev(`(() => { globalThis.lemmix.run.state.blinds[1].levelId = 'Orig-1-08'; globalThis.phaserGame.scene.getScene('run').render(); })()`);
+  await page.waitForTimeout(200);
+  const scene = `globalThis.phaserGame.scene.getScene('run')`;
+  await click(644 + 308 - 74 + 32, 124 + 137 + 43 + 10);
+  if ((await ev<number>(`${scene}.overlay.length`)) === 0) fail('Preview did not open the level preview');
+  const sx0 = await ev<number>(`${scene}.previewSx`);
+  await page.keyboard.press('ArrowRight');
+  await page.mouse.move(vx(700), vy(240));
+  await page.mouse.down();
+  await page.mouse.move(vx(500), vy(240), { steps: 5 });
+  await page.mouse.up();
+  if ((await ev<number>(`${scene}.previewSx`)) !== sx0 + 48 + 100) fail('the level preview did not scroll');
+  await click(828 + 46, 26 + 14); // Close
+  if ((await ev<number>(`${scene}.overlay.length`)) !== 0) fail('the level preview did not close');
   await done();
   if ((await state()).phase !== 'blinds') fail('the assignment did not end');
 
@@ -117,7 +132,7 @@ try {
   if (t.money !== s.money || t.colony.length !== s.colony.length || t.blinds[2].status !== 'current') fail('the saved run did not continue');
   await page.screenshot({ path: `${REPO_ROOT}/tools/e2e/run.png` });
   if (errors.length) fail('errors in the page:\n' + errors.join('\n'));
-  console.log('e2e ok: a run: abilities assigned, blind played and accepted, cash out, shop, skip, continued after a reload');
+  console.log('e2e ok: a run: abilities assigned, a level previewed, blind played and accepted, cash out, shop, skip, continued after a reload');
 } finally {
   await browser.close();
   await server.close();
