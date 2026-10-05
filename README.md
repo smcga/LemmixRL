@@ -99,6 +99,10 @@ this GitHub repository and treats `main` as its production branch, so merging a 
 new production deployment automatically. Cloudflare runs `npm run build` and publishes the generated `dist/`
 directory. The checked-in `wrangler.jsonc` records the Pages project name and build output directory.
 
+Every build Cloudflare makes shows up on GitHub as a *Cloudflare Pages* check on its commit. A push to `main` without
+that check never reached Cloudflare: the Cloudflare app in GitHub (Settings > Applications > Installed GitHub Apps)
+needs access to this repository. Pull requests should target `main`; `master` is not deployed.
+
 ## The roguelike run
 
 Press F6 in the menu (on a touch screen: tap *Tap here for a Roguelike Run*). A run wraps the original game; it does
