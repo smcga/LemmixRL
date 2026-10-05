@@ -1,12 +1,13 @@
-# The game on GitHub Pages, to play it on a phone: master at https://<owner>.github.io/<repo>/, and every pull request
-# at https://<owner>.github.io/<repo>/pr-<number>/ (a comment on the pull request links to it; the preview goes away
-# when the pull request is closed). The site is the gh-pages branch, which this workflow writes. GitHub Pages has to be
+# The game on GitHub Pages, to play it on a phone: the default branch (master or main) at
+# https://<owner>.github.io/<repo>/, and every pull request at https://<owner>.github.io/<repo>/pr-<number>/ (a comment
+# on the pull request links to it; the preview goes away when the pull request is closed). (The production site is
+# Cloudflare Pages, which deploys main: see the README.) The site is the gh-pages branch, which this workflow writes. GitHub Pages has to be
 # told once to serve it: Settings > Pages > Build and deployment > Source "Deploy from a branch", gh-pages, / (root).
 name: pages
 
 on:
   push:
-    branches: [master]
+    branches: [master, main]
   pull_request:
     types: [opened, reopened, synchronize, closed]
 
@@ -21,11 +22,13 @@ concurrency:
 
 jobs:
   publish:
-    # a pull request from a fork has no write access to this repository
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    # pushes: only the default branch is the site; a pull request from a fork has no write access to this repository
+    if: >-
+      (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch) ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-24.04
     env:
-      # the folder on the site: the root for master, pr-<number> for a pull request
+      # the folder on the site: the root for the default branch, pr-<number> for a pull request
       TARGET: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || '.' }}
       CLOSED: ${{ github.event.action == 'closed' }}
     steps:

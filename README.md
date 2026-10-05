@@ -61,7 +61,7 @@ Lemmings, Holiday Lemmings 94, XMas Lemmings 91 and 92), F5 the options, `l` loa
 The game can be played with a finger (an addition of LemmixRL). It switches to touch controls at the first touch and
 back to the mouse at the first click; with a mouse nothing changes.
 
-To open it on a phone: the workflow `.github/workflows/pages.yml` publishes master on GitHub Pages at
+To open it on a phone: the workflow `.github/workflows/pages.yml` publishes the default branch on GitHub Pages at
 `https://<owner>.github.io/<repo>/` and every pull request at `https://<owner>.github.io/<repo>/pr-<number>/` (with a
 comment on the pull request that links to it), once GitHub Pages serves the `gh-pages` branch (Settings > Pages >
 Build and deployment > Deploy from a branch > `gh-pages`, `/ (root)`). Otherwise: put the files of `npm run build`
