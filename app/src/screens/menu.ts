@@ -4,6 +4,7 @@ import type { LemmixApp } from '../app.ts';
 import { CR, FULL_PROGRAM_NAME, SCredits, SProgramTexts, formatSimple } from '../texts.ts';
 import { speak, VoiceOption } from '../voice.ts';
 import { DosScreenBase, ScreenType } from './base.ts';
+import { touch } from '../touch.ts';
 import { toggleVoice } from './player.ts';
 
 /** The dialogs the menu screen opens (Windows dialogs in Lemmix). */
@@ -167,7 +168,12 @@ export class MenuScreen extends DosScreenBase {
       this.drawBitmapElement(e);
 
     // program text
-    this.drawPurpleTextCentered(this.screen, formatSimple(SProgramTexts[app.styleDef], [app.style.name]) + CR + CR + FULL_PROGRAM_NAME, YPos_ProgramText);
+    // LemmixRL: the entry of the roguelike run takes the empty line
+    this.drawPurpleTextCentered(
+      this.screen,
+      formatSimple(SProgramTexts[app.styleDef], [app.style.name]) + CR + FULL_PROGRAM_NAME + CR + (touch.active ? 'Tap here for a Roguelike Run' : 'Press F6 for a Roguelike Run'),
+      YPos_ProgramText,
+    );
 
     // credits animation
     this.drawWorkerLemmings(0);
@@ -189,6 +195,9 @@ export class MenuScreen extends DosScreenBase {
         break;
       case 'F2':
         this.close(ScreenType.LevelCode);
+        break;
+      case 'F6': // LemmixRL
+        this.close(ScreenType.Run);
         break;
       case 'F3':
         this.nextSoundSetting();
@@ -237,6 +246,29 @@ export class MenuScreen extends DosScreenBase {
 
   mouseDown(button: number): void {
     if (button === 0 && !this.dialogOpen) this.close(ScreenType.Preview);
+  }
+
+  /**
+   * LemmixRL, touch screens only (a click anywhere is "play" in Lemmix): the signs do what their keys do. Returns
+   * false when the tap is not on a sign (then it is a click).
+   */
+  touchAt(x: number, y: number): boolean {
+    if (this.dialogOpen) return true;
+    const on = (e: MenuBitmap) => {
+      const [px, py] = POSITIONS[e];
+      const b = this.elements[e];
+      return x >= px && x < px + b.width && y >= py && y < py + b.height;
+    };
+    const press = (key: string) => this.keyDown(key, false, false, false);
+    if (on(MenuBitmap.Play)) press('F1');
+    else if (on(MenuBitmap.LevelCode)) press('F2');
+    else if (on(MenuBitmap.Music)) press('F3');
+    else if (on(MenuBitmap.Navigation)) press('F4');
+    else if (on(MenuBitmap.Section)) press(y < POSITIONS[MenuBitmap.Section][1] + this.elements[MenuBitmap.Section].height / 2 ? 'ArrowUp' : 'ArrowDown');
+    else if (on(MenuBitmap.Exit)) return true; // a browser page does not exit
+    else if (y >= YPos_ProgramText + 32 && y < YPos_ProgramText + 48) press('F6');
+    else return false;
+    return true;
   }
 
   private dialogOpen = false;
@@ -391,6 +423,7 @@ const MENU_HELP = [
   ['F3', 'Select sound setting'],
   ['F4', 'Select style'],
   ['F5', 'Configuration'],
+  ['F6', 'Roguelike run'],
   ['Up', 'Next section'],
   ['Down', 'Previous section'],
   ['Space', 'Pause or unpause the credits'],

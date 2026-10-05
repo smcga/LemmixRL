@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
+import { appIcon } from './engine/src/node/icon.ts';
 
 /**
  * The Phaser front-end lives in app/. The original Lemmix data (src/Data) is served to the browser under
@@ -32,8 +33,33 @@ function dataFiles(): Record<string, () => Uint8Array> {
     'orig_music.zip': zipInResource('Orig_music.RES'),
     'ohno_music.zip': zipInResource('Ohno_music.RES'),
     'h94_music.zip': zipInResource('H94_music.RES'),
+    // installing the game on a phone's home screen (full screen, landscape)
+    'manifest.webmanifest': () => new TextEncoder().encode(JSON.stringify(MANIFEST)),
+    'icon-180.png': () => appIcon(180),
+    'icon-192.png': () => appIcon(192),
+    'icon-512.png': () => appIcon(512),
   };
 }
+
+const MANIFEST = {
+  name: 'Lemmix',
+  short_name: 'Lemmix',
+  start_url: '../',
+  display: 'fullscreen',
+  orientation: 'landscape',
+  background_color: '#000000',
+  theme_color: '#000000',
+  icons: [
+    { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
+    { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
+  ],
+};
+
+const CONTENT_TYPES: Record<string, string> = {
+  ico: 'image/x-icon',
+  png: 'image/png',
+  webmanifest: 'application/manifest+json',
+};
 
 function lemmixData(): Plugin {
   const files = dataFiles();
@@ -44,7 +70,7 @@ function lemmixData(): Plugin {
         const m = /\/data\/([^/?]+)/.exec(req.url ?? '');
         const f = m && files[m[1]];
         if (!f) return next();
-        res.setHeader('Content-Type', m[1].endsWith('.ico') ? 'image/x-icon' : 'application/octet-stream');
+        res.setHeader('Content-Type', CONTENT_TYPES[m[1].split('.').pop()!] ?? 'application/octet-stream');
         res.end(f());
       });
     },

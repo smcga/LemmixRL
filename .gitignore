@@ -13,3 +13,5 @@ app/public/data/
 *.tsbuildinfo
 tools/difftest/failures/
 tools/e2e/postview.png
+tools/e2e/run.png
+tools/e2e/touch.png

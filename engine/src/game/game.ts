@@ -702,6 +702,12 @@ export class LemmingGame {
   private bashMasks: [Bitmap32, Bitmap32] = [new Bitmap32(), new Bitmap32()]; // (not RTL, RTL)
   private mineMasks: [Bitmap32, Bitmap32] = [new Bitmap32(), new Bitmap32()];
   onFinish: (() => void) | null = null;
+  /**
+   * LemmixRL, not in the original: called for every lemming that comes out of an entrance, with its release index
+   * (0 for the first lemming). The roguelike layer gives colony lemmings their permanent abilities here. When it is
+   * not set the game is exactly the original.
+   */
+  onLemmingReleased: ((l: Lemming, releaseIndex: number) => void) | null = null;
 
   // owned objects
   readonly lemmingList: Lemming[] = [];
@@ -2929,8 +2935,25 @@ export class LemmingGame {
         newLemming.objectBelow = DOM_NONE;
         this.lemmingsReleased++;
         this.lemmingsOut++;
+        this.onLemmingReleased?.(newLemming, this.lemmingsReleased - 1);
       }
     }
+  }
+
+  /**
+   * LemmixRL, not in the original: makes a lemming a climber and/or floater without using a skill (no count, sound
+   * or replay record), with the same state and colours as when the skill is assigned.
+   */
+  grantPermanentAbilities(l: Lemming, climber: boolean, floater: boolean): void {
+    if (climber) {
+      l.isClimber = true;
+      l.combineFlags = (l.combineFlags | COMBINE_FLAG_CLIMBER) & 0xff;
+    }
+    if (floater) {
+      l.isFloater = true;
+      l.combineFlags = (l.combineFlags | COMBINE_FLAG_FLOATER) & 0xff;
+    }
+    this.updatePixelCombine(l);
   }
 
   private checkUpdateNuking(): void {

@@ -12,6 +12,7 @@ import {
   SPreviewScreen_Time_s,
   SPreviewScreen_ToBeSaved_s,
 } from '../texts.ts';
+import { BLIND_NAMES } from '../run/state.ts';
 import { DosScreenBase, ScreenType } from './base.ts';
 
 export class PreviewScreen extends DosScreenBase {
@@ -35,6 +36,8 @@ export class PreviewScreen extends DosScreenBase {
     if (!app.currentLevelInfo) app.currentLevelInfo = app.style.levelSystem.firstLevel();
     if (!this.initialLevelInfo) this.initialLevelInfo = app.currentLevelInfo;
     app.currentLevelInfo.loadLevel(app.level);
+    // LemmixRL: a blind plays the level with the squad, skills and clock of the run
+    if (app.inRun) app.run?.applyToLevel(app.level);
 
     // prepare the renderer
     app.graphicSet.load(app.data.provider, app.level.info.graphicSet, app.level.info.graphicSetEx);
@@ -77,6 +80,9 @@ export class PreviewScreen extends DosScreenBase {
     const info = app.currentLevelInfo!;
     const levelInfo = app.level.info;
     const replayString = app.replayFile && this.initialLevelInfo === info ? 'Replay' : '';
+    // LemmixRL: the blind of the run, in the empty line under the title
+    const blind = app.inRun ? app.run?.currentBlind : null;
+    const blindString = blind ? `${BLIND_NAMES[blind.kind]} - Ante ${app.run!.state.ante}` : '';
     let styleDescriptor = info.style.description;
     if (styleDescriptor.length > 24) styleDescriptor = info.style.name;
     const percStr = app.config.miscOptions.has(MiscOption.LemmingsPercentages)
@@ -85,7 +91,7 @@ export class PreviewScreen extends DosScreenBase {
     const indent = ' '.repeat(10);
     return [
       formatSimple(SPreviewScreen_Level_ss, [String(info.levelIndex + 1), delphiTrim(levelInfo.title)]),
-      '',
+      blindString,
       replayString,
       indent + formatSimple(SPreviewScreen_NumberOfLemmings_s, [String(levelInfo.lemmingsCount)]),
       '',
@@ -116,7 +122,10 @@ export class PreviewScreen extends DosScreenBase {
     if (shift || ctrl || alt) return;
     switch (key) {
       case 'Escape':
-        this.closeScreen(ScreenType.Menu);
+        if (this.app.inRun) {
+          this.app.run?.abandonAttempt();
+          this.close(ScreenType.Run);
+        } else this.closeScreen(ScreenType.Menu);
         break;
       case 'Enter':
         this.closeScreen(ScreenType.Play);
@@ -138,7 +147,7 @@ export class PreviewScreen extends DosScreenBase {
 
   /** 'l': play a replay file of this level (the replay finder of Lemmix lists the matching replays) */
   keyPress(ch: string): void {
-    if (ch !== 'l' || this.selecting) return;
+    if (ch !== 'l' || this.selecting || this.app.inRun) return;
     this.selecting = true;
     void this.host.selectReplayFile().then((f) => {
       this.selecting = false;
@@ -156,7 +165,7 @@ export class PreviewScreen extends DosScreenBase {
 
   private showNextLevel(forwards: boolean): void {
     const app = this.app;
-    if (!app.config.miscOptions.has(MiscOption.CheatScrollingInPreviewScreen)) return;
+    if (!app.config.miscOptions.has(MiscOption.CheatScrollingInPreviewScreen) || app.inRun) return;
     if (forwards) app.currentLevelInfo = app.currentLevelInfo!.next ?? app.style.levelSystem.firstLevel();
     else app.currentLevelInfo = app.currentLevelInfo!.prev ?? app.style.levelSystem.lastLevel();
     this.build();

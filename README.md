@@ -1,7 +1,9 @@
 # LemmixRL
 
-A faithful copy of Lemmings, with roguelike elements to come. The first step, in this repository: **Lemmix, the
-Delphi Lemmings clone by Eric Langedijk (in `src/`), ported to TypeScript and Phaser, with the same game behaviour.**
+A faithful copy of Lemmings, with a roguelike run around it. The base: **Lemmix, the Delphi Lemmings clone by Eric
+Langedijk (in `src/`), ported to TypeScript and Phaser, with the same game behaviour.** Around it: a run in the spirit
+of Balatro, where the original levels are the blinds and your lemmings are the deck (see [The roguelike
+run](#the-roguelike-run)).
 
 The port is a behaviour-preserving engine port, not a rewrite by feature. Every unit, class, method and quirk of the
 original simulation has its counterpart in TypeScript (with the same names), and the port is checked step by step
@@ -24,6 +26,7 @@ npm run difftest     # compare the TypeScript engine with the original on every 
 | `src/` | The original Lemmix 3.0.0 source code (Delphi 10.3) and data. Unchanged: it is the reference. |
 | `engine/` | The TypeScript port of the simulation, without any browser dependency: the DOS data files (`dos/`, `level/`, `styles/`), the Graphics32 subset the game uses (`gr32/`), the renderer, `TLemmingGame` (`game/game.ts`) and the replay recorder (`game/recorder.ts`, .lrb files are compatible with Lemmix). |
 | `app/` | The Phaser front-end: the Lemmix screens ported (`screens/`: menu, level code, preview, game, skill panel, postview), shown by Phaser scenes (`scenes/`), with Web Audio sound effects, a ProTracker player for the music and Web Speech for the voice. |
+| `app/src/run/`, `app/src/scenes/run.ts` | The roguelike run: its rules (`session.ts`), content (`content.ts`), levels (`catalog.ts`), seeded randomness and saving, and its screens. |
 | `oracle/`, `tools/oracle/` | The *oracle*: the original game units compiled with Free Pascal. |
 | `tools/difftest/` | The differential test of the TypeScript engine against the oracle. |
 
@@ -53,12 +56,104 @@ replay (`u`), loading a replay (`l`), fast forward (`f`), sound and music (`s`, 
 In the menu F2 opens the level code screen, F3 the sound setting, F4 selects the style (Original Lemmings, Oh No More
 Lemmings, Holiday Lemmings 94, XMas Lemmings 91 and 92), F5 the options, `l` loads a replay file.
 
+### On a phone or a tablet
+
+The game can be played with a finger (an addition of LemmixRL). It switches to touch controls at the first touch and
+back to the mouse at the first click; with a mouse nothing changes.
+
+To open it on a phone: the workflow `.github/workflows/pages.yml` publishes the default branch on GitHub Pages at
+`https://<owner>.github.io/<repo>/` and every pull request at `https://<owner>.github.io/<repo>/pr-<number>/` (with a
+comment on the pull request that links to it), once GitHub Pages serves the `gh-pages` branch (Settings > Pages >
+Build and deployment > Deploy from a branch > `gh-pages`, `/ (root)`). Otherwise: put the files of `npm run build`
+(`dist/`) on any web server, or run `npm run dev -- --host` and open the *Network* address it prints on a phone in the
+same network. `?diag` at the end of the address shows what the browser reports (the build, the safe area, full
+screen, the sideways lock, the wake lock, the audio); `?diag=0` hides it again.
+
+* Hold the phone sideways: the level is drawn at the resolution of the screen, scaled by whole device pixels, with
+  the touch buttons next to it. Upright, it is smaller (the run screens ask you to turn the phone). Every screen
+  stays out of the notch, the rounded corners and the home indicator.
+* Full screen: the FULLSCREEN button in the menu (Android browsers), or *Add to Home Screen*, which installs the game
+  as a full screen app with a lemming icon (iPhone too; Android wants the page served over HTTPS for that).
+* Menu: tap a sign to do what its key does (1 Player, New Level, music, the style, the arrows of the difficulty
+  sign) and *Tap here for a Roguelike Run* for the run. OPTIONS and STYLE are buttons next to the menu. The level
+  code screen gets a text box for the phone's keyboard.
+* Preview and result screens: a tap is a click; BACK and MENU do what Escape and the right mouse button do.
+* In a level: tap a skill in the panel, then tap a lemming. The skill is assigned when the finger comes up; while
+  the finger is down the cursor shows which lemming it is on, and a tap a little next to a lemming (up to 8 pixels of
+  the game) still selects the nearest one. Drag the level sideways to scroll, or tap and drag the minimap. Hold the
+  release rate buttons; the nuke wants two taps on it. The touch buttons are the keys a phone does not have: PAUSE,
+  FAST (fast forward), WALKER (the right mouse button: the next tap selects the lemming that is not working where
+  lemmings overlap, a walker rather than a builder, and the cursor shows it), STEP (the next frame, while paused),
+  -1 SEC (rewind one second), RESTART and END (Escape), the last two after a second tap. Turning the phone cancels
+  what a finger was doing, and a second tap that was asked for. The screen stays on while a level is played. With
+  WALKER on, a tap on a worker with nobody else under the finger does nothing (with the right mouse button Lemmix
+  raises an exception there, see below).
+* Run screens: a tap shows what something is; a second tap on something that costs or uses something (buying,
+  hiring, using a tarot, skipping, rerolling the boss) does it. A tap on a joker shows it with its Sell button. A tap
+  on an empty spot closes the information.
+
 ## Deployment
 
 Cloudflare Pages serves the production build at <https://lemmings.steves.tools>. The Pages project is connected to
 this GitHub repository and treats `main` as its production branch, so merging a pull request into `main` triggers a
 new production deployment automatically. Cloudflare runs `npm run build` and publishes the generated `dist/`
 directory. The checked-in `wrangler.jsonc` records the Pages project name and build output directory.
+
+## The roguelike run
+
+Press F6 in the menu (on a touch screen: tap *Tap here for a Roguelike Run*). A run wraps the original game; it does
+not replace it. Once a blind starts, it is the original
+level: the same terrain, objects, traps, physics, release rate, timer and rescue requirement, played with the original
+preview, game and result screens. The run decides only *what you bring*: how many lemmings and how many of each
+skill.
+
+| Balatro | Lemmings |
+|---|---|
+| Ante (8) | Three original levels from a band of the 120 levels of the original game, moving from Fun to Mayhem |
+| Small, Big, Boss blind | An easier, a medium and a harder level of the ante's band (no level twice in a run) |
+| Deck | Your colony: 80 lemmings at the start |
+| Hand | The squad of a level: min(colony, level lemmings), drawn at random; the same squad for every attempt |
+| Hand levels | Abilities: 60 points you spread over the eight skills at the start (at most 20 in one); a level gets **min(your ability, the level's allocation)** of every skill |
+| Destroyed cards | Lemmings that die in an accepted result leave the colony for good; survivors and rescued lemmings stay |
+| Card editions | Gold ($2 when it exits), Lucky (chance of $4 or a tarot), Mentor (+1 ability when it exits), Champion (multiplies the rescue bonus when it exits), Insured (comes back once), permanent Climbers and Floaters |
+| Jokers (5) | Passive gadgets: protection against kinds of deaths, money for performance, abilities (also more points to place or move after every boss), and a few rule breakers (+1 Builder above the level maximum, +1 minute, starting climbers or floaters) |
+| Tarots (2) | Consumables that change selected lemmings (floaters, climbers, gold, lucky, mentor, champion, insured, clones, retraining into abilities) or the abilities (5 new points, moving 10) |
+| Skip | The small and big blind can be skipped for a tag (recruits, floaters, a doubled boss payout, a free shop, ...) |
+| Director's Cut | The boss of an ante can be rerolled once ($6), for a level your colony cannot do |
+| Hands left | Three attempts per blind are paid ($1 each unused); you can always retry, nothing counts until you accept |
+
+A run starts with the ability assignment: 60 points to spread over the skills, at most 20 in one, with the three
+levels of the first ante in view (their allocation, and below it what your team would bring, as you assign).
+*Preview* shows a level as it starts at twice its size, with a strip of the whole level: drag it (or the strip, or
+use the arrow keys and the mouse wheel) to look for the traps, the gaps and the exits before you choose. The pictures
+of the levels on the blind screen open the same preview. After
+every boss blind, before the shop, the next ante's levels are drawn and the assignment comes back: up to 10 points can
+be moved to other skills. The Personal Trainer adds 5 new points there and the Careers Advisor 5 more to move; the
+Boot Camp (5 new points) and The Rethink (move 10) tarots open the assignment whenever you use them. Training, drives
+and mentors add abilities on top of the assignment (also above 20).
+
+The blind screen shows all three levels of the ante up front: the level, its numbers, a thumbnail, and per skill the
+original allocation and what you would bring (green: the full allocation, yellow: part of it, red: none). The
+allocation works like Balatro's score requirement: it tells you whether your colony looks ready, and invites you to
+find another way. Clicking a skill (with a finger: tapping it twice) hires one more for this level ($1). Your best result on a level (over all runs) is
+shown as well.
+
+Accepting a successful result pays: the blind ($3, $4, $5), unused attempts, a rescue bonus that grows from the
+requirement to 100% (not the number of lemmings, so big levels are not worth more), a perfect rescue bonus, gold
+lemmings, jokers and interest ($1 per $5, up to $5). The shop sells training (abilities), recruitment drives,
+jokers and tarots, and always 5 recruits for $3.
+
+In a level, special lemmings of the squad carry a small mark in the colour of their card. Pressing Escape ends a
+level as in Lemmix: the lemmings that are still out survive (no need to nuke your blockers). The run is saved after
+every step (in the browser), the seed decides every random choice.
+
+The only change to the engine for the run is opt-in: a callback for every released lemming and a method that makes
+a lemming a permanent climber or floater (`onLemmingReleased`, `grantPermanentAbilities` in `engine/src/game/game.ts`).
+Without them the game is the original, which the differential test keeps checking.
+
+What a "normal" solution of a level needs is not in the level files: the allocation is an upper bound, and many
+levels give 20 of everything. The run shows the original allocation and your own best result; a table of known
+solutions (verified replays) would be the next step.
 
 ## How the port is verified
 
@@ -147,7 +242,8 @@ is compared as well. Lemmix itself shows the error and terminates; the browser v
 to the menu.)
 
 `npm run e2e` is a browser smoke test of the front-end (menu, preview, a level solved with a digger, postview, and
-the game speed). The GitHub workflow in `.github/workflows/verify.yml` runs the type check, the unit tests, the build,
+the game speed) and of a roguelike run (a blind played and accepted, the cash out, the shop, a skip, and continuing
+the saved run after a reload). The GitHub workflow in `.github/workflows/verify.yml` runs the type check, the unit tests, the build,
 the browser test, and the differential test with an oracle built from `src/` (on pull requests and manually).
 
 ## Differences with Lemmix
@@ -163,6 +259,10 @@ The simulation is the same. The program around it is a browser application, so s
   instead of SAPI.
 * Replay files are downloaded (`u`) and loaded with a file dialog (`l`); there is no replay finder, level finder,
   autosave or result text file. The options are browser dialogs. User styles (custom levels) are not available yet.
+* Touch screens are an addition (see [On a phone or a tablet](#on-a-phone-or-a-tablet)); with a mouse the screens
+  work as in Lemmix. The canvas has the resolution of the screen (device pixels), so the level is scaled by whole
+  pixels of the screen, as Lemmix scales by whole pixels of its window (the zoom factor option counts pixels as the
+  browser shows them).
 * A bug of the original that raises an exception during the game (for example: holding the right mouse button and
   clicking on a blocker without other lemmings under the cursor, while the selected skill is available) terminates
   Lemmix after an error message. A browser page cannot terminate itself: the game stops, the error is shown, and
