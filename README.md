@@ -92,6 +92,13 @@ screen, the sideways lock, the wake lock, the audio); `?diag=0` hides it again.
   hiring, using a tarot, skipping, rerolling the boss) does it. A tap on a joker shows it with its Sell button. A tap
   on an empty spot closes the information.
 
+## Deployment
+
+Cloudflare Pages serves the production build at <https://lemmings.steves.tools>. The Pages project is connected to
+this GitHub repository and treats `main` as its production branch, so merging a pull request into `main` triggers a
+new production deployment automatically. Cloudflare runs `npm run build` and publishes the generated `dist/`
+directory. The checked-in `wrangler.jsonc` records the Pages project name and build output directory.
+
 ## The roguelike run
 
 Press F6 in the menu (on a touch screen: tap *Tap here for a Roguelike Run*). A run wraps the original game; it does
