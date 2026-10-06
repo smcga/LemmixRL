@@ -1,7 +1,7 @@
 /** A small UI toolkit for the run screens: labels in the DOS font, panels, buttons, cards and tooltips. */
 import * as Phaser from 'phaser';
 import { touch } from '../../touch.ts';
-import { FONT, FONT_BIG, FONT_PURPLE } from './assets.ts';
+import { FONT, FONT_BIG, FONT_PLAIN, FONT_PURPLE } from './assets.ts';
 
 /** The colours of Balatro's interface (its G.C table), for the panels, buttons and texts of the run screens. */
 export const COLORS = {
@@ -31,6 +31,8 @@ export interface LabelOptions {
   color?: number;
   /** the original purple colours of the font */
   purple?: boolean;
+  /** the small font without its dark outline (for dark text on a light box) */
+  plain?: boolean;
   originX?: number;
   originY?: number;
   maxWidth?: number;
@@ -38,7 +40,7 @@ export interface LabelOptions {
 }
 
 export function label(scene: Phaser.Scene, x: number, y: number, text: string, o: LabelOptions = {}): Phaser.GameObjects.BitmapText {
-  const t = scene.add.bitmapText(x, y, o.purple ? FONT_PURPLE : o.big ? FONT_BIG : FONT, text, o.size ?? 16, o.align ?? 0);
+  const t = scene.add.bitmapText(x, y, o.purple ? FONT_PURPLE : o.big ? FONT_BIG : o.plain ? FONT_PLAIN : FONT, text, o.size ?? 16, o.align ?? 0);
   if (o.maxWidth) t.setMaxWidth(o.maxWidth);
   t.setOrigin(o.originX ?? 0, o.originY ?? 0);
   if (!o.purple) t.setTint(o.color ?? COLORS.text);
@@ -200,7 +202,7 @@ export class Tooltip {
     const box = s.add.container(0, 0).setDepth(1000);
     const title = label(s, width / 2, 8, c.title, { originX: 0.5, maxWidth: width - 16, align: 1 });
     const text = c.lines.join('\n');
-    const body = label(s, width / 2, 0, text, { maxWidth: width - 28, color: COLORS.ink, originX: 0.5, align: 1 });
+    const body = label(s, width / 2, 0, text, { maxWidth: width - 28, color: COLORS.ink, plain: true, originX: 0.5, align: 1 });
     const boxY = title.y + title.height + 6;
     const boxH = text ? body.height + 12 : 0;
     body.setY(boxY + 6);

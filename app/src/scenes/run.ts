@@ -970,7 +970,8 @@ export class RunScene extends Phaser.Scene {
     if (current) this.btn('play', x + 8, y + 8, w - 16, 28, 'Select', COLORS.orange, () => this.play(run), { big: true });
     else {
       const text = b.status === 'upcoming' ? 'Upcoming' : b.status === 'skipped' ? 'Skipped' : 'Defeated';
-      k(new Button(this, x + 8, y + 8, w - 16, 28, text, COLORS.gray, () => {}, { big: true, enabled: false }));
+      // (above the shade over the column, so that it can be read)
+      k(new Button(this, x + 8, y + 8, w - 16, 28, text, COLORS.gray, () => {}, { big: true, enabled: false })).setDepth(1);
     }
     k(panel(this, x + 8, y + 43, w - 16, 24, color, 0x000000, 6));
     k(label(this, x + w / 2, y + 55, BLIND_NAMES[b.kind], { big: true, originX: 0.5, originY: 0.5 }));
@@ -994,7 +995,8 @@ export class RunScene extends Phaser.Scene {
     const mine = p.squad < l.lemmings;
     const setup = current ? run.state.setup : null;
     const squadSpecials = setup ? setup.hand.map((id) => run.card(id)).filter((c): c is LemmingCard => !!c && isSpecial(c)) : [];
-    row(y + 172, 'Lemmings', mine ? `${l.lemmings}, you have ${p.squad}` : String(l.lemmings), mine ? COLORS.orange : COLORS.text);
+    // (short: the special lemmings of the squad are marked next to the name)
+    row(y + 172, 'Lemmings', mine ? `${p.squad} of ${l.lemmings}` : String(l.lemmings), mine ? COLORS.orange : COLORS.text);
     if (current) {
       const zone = k(this.add.zone(x + 8, y + 170, w - 16, 17).setOrigin(0, 0).setInteractive());
       hoverTip(zone, this.tip, () => ({
@@ -1120,7 +1122,8 @@ export class RunScene extends Phaser.Scene {
     const y = MAIN_Y;
     const w = MAIN_R - MAIN_X;
     k(panel(this, x, y, w, 440, COLORS.panel, out.success ? COLORS.green : COLORS.red, 12));
-    k(label(this, x + w / 2, y + 14, out.success ? 'Level complete' : 'Not enough lemmings saved', { size: 32, big: true, color: out.success ? COLORS.green : COLORS.red, originX: 0.5 }));
+    const title = k(label(this, x + w / 2, y + 14, out.success ? 'Level complete' : 'Not enough lemmings saved', { size: 32, big: true, color: out.success ? COLORS.green : COLORS.red, originX: 0.5 }));
+    if (title.width > w - 32) title.setScale((w - 32) / title.width);
     k(label(this, x + w / 2, y + 54, `${levelName(l)}  ${l.title}`, { purple: true, originX: 0.5 }));
     // accept or retry, on top like the Cash Out of Balatro
     const giveUp = () => {
@@ -1142,7 +1145,7 @@ export class RunScene extends Phaser.Scene {
       this.btn('retry', x + 16, y + 80, 306, 34, 'Retry', COLORS.blue, () => this.retry(run), { big: true });
       this.btn('giveUp', x + 336, y + 80, 306, 34, 'Give up the run', COLORS.red, giveUp, { big: true });
     }
-    this.well(x + 12, y + 126, w - 24, 274);
+    this.well(x + 12, y + 126, w - 24, 262);
     const pct = out.hand ? Math.floor((out.rescued * 100) / out.hand) : 0;
     k(label(this, x + 24, y + 134, `Rescued ${out.rescued} of ${out.hand} (${pct}%), you needed ${out.required}.`, { color: COLORS.text }));
     const count = (f: (x: Fate) => boolean) => out.fates.filter(f).length;
@@ -1153,8 +1156,8 @@ export class RunScene extends Phaser.Scene {
     for (const f of out.fates) if (isDeath(f)) deaths.set(f, (deaths.get(f) ?? 0) + 1);
     const how = [...deaths].map(([f, n]) => `${n} ${FATE_TEXTS[f]}`).join(', ');
     k(label(this, x + 24, y + 154, `Survived ${alive}   Stayed home ${home}   Lost ${lost}${how ? ` (${how})` : ''}`, { color: COLORS.dim, maxWidth: w - 48 }));
-    if (out.success && lost > 0) k(label(this, x + 24, y + 190, 'If you accept this result, the lost lemmings leave your colony for good.', { color: COLORS.orange, maxWidth: w - 48 }));
-    k(label(this, x + 24, y + 226, `Skills used: ${describeSkills(out.skillsUsed, 'none')}`, { color: COLORS.dim, maxWidth: w - 48 }));
+    if (out.success && lost > 0) k(label(this, x + 24, y + 188, 'If you accept this result, the lost lemmings leave your colony for good.', { color: COLORS.orange, maxWidth: w - 48 }));
+    k(label(this, x + 24, y + 222, `Skills used: ${describeSkills(out.skillsUsed, 'none')}`, { color: COLORS.dim, maxWidth: w - 48 }));
 
     // what happened to the special lemmings
     const specials: [LemmingCard, Fate][] = [];
@@ -1163,18 +1166,18 @@ export class RunScene extends Phaser.Scene {
       if (c && isSpecial(c)) specials.push([c, out.fates[i]]);
     });
     if (specials.length) {
-      k(label(this, x + 24, y + 264, 'Special lemmings', { color: COLORS.purple }));
+      k(label(this, x + 24, y + 258, 'Special lemmings', { color: COLORS.purple }));
       specials.slice(0, 8).forEach(([c, f], i) => {
         const cx = x + 24 + (i % 2) * 310;
-        const cy = y + 286 + Math.floor(i / 2) * 22;
+        const cy = y + 280 + Math.floor(i / 2) * 22;
         const sp = k(lemmingSprite(this, cx + 8, cy + 6, FATE_ANIMS[f] ?? 'walk', 1));
         sp.setTint(EDITION_TINTS[c.edition]);
         k(label(this, cx + 22, cy, `${cardTitle(c)}: ${FATE_TEXTS[f]}`, { color: isDeath(f) ? COLORS.red : f === 'saved' ? COLORS.green : COLORS.text }));
       });
-      if (specials.length > 8) k(label(this, x + 24, y + 376, `and ${specials.length - 8} more`, { color: COLORS.dim }));
+      if (specials.length > 8) k(label(this, x + 24, y + 366, `and ${specials.length - 8} more`, { color: COLORS.dim }));
     }
     const unused = Math.max(0, ATTEMPTS - setup.attempts);
-    k(label(this, x + w / 2, y + 406, `Attempt ${setup.attempts}. Unused attempts pay $1 each (${unused} left).`, { color: COLORS.dim, originX: 0.5 }));
+    k(label(this, x + w / 2, y + 394, `Attempt ${setup.attempts}. Unused attempts pay $1 each (${unused} left).`, { color: COLORS.dim, originX: 0.5 }));
   }
 
   private retry(run: RunSession): void {
