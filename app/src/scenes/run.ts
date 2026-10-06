@@ -2,6 +2,11 @@
  * The roguelike screens around the levels: the blinds of the ante, the result of an attempt, the cash out, the shop,
  * the colony, and the end of a run. The levels themselves are played by the original screens (preview, game,
  * postview). Everything is laid out on a 960 x 540 screen that is scaled to the window.
+ *
+ * The screen is the one of Balatro: the column on the left (what is going on, the abilities, Run Info and Options,
+ * the money, the ante and the round), the jokers and the tarots along the top, the colony as the deck in the corner,
+ * and in the middle the blinds, the cash out or the shop coming up from below. The cards are handled as in Balatro on
+ * a phone (see ui/cards.ts): tap a card for what it is and its buttons, or drag it to where it should go.
  */
 import * as Phaser from 'phaser';
 import { SoundEffect } from '../../../engine/src/index.ts';
@@ -9,20 +14,37 @@ import type { LemmixApp } from '../app.ts';
 import { type RunLevel, levelName } from '../run/catalog.ts';
 import { EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, type Fate, isDeath, JOKERS, jokerDef, type Rarity, tagDef, tarotDef } from '../run/content.ts';
 import { normalizeSeed, randomSeed } from '../run/rng.ts';
-import { type BlindPreview, cardTitle, isSpecial, RunSession, sellPrice } from '../run/session.ts';
+import { type BlindPreview, cardTitle, isSpecial, RunSession, sellPrice, tarotSellPrice } from '../run/session.ts';
 import { describeSkills, SKILL_NAMES, SKILL_PLURALS, SKILLS, type Skill, totalSkills } from '../run/skills.ts';
 import { ABILITY_CAP, ANTES, ATTEMPTS, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
 import { loadMeta, loadRun, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
 import { BACKGROUND, ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
-import { Button, COLORS, containerHitArea, hoverTip, label, panel, showTip, type TipContent, Tooltip } from '../run/ui/widgets.ts';
+import { type Art, CARD_H, CARD_W, type CardBehaviour, CardTable, CardView, type DropTarget, inRect, type Rect } from '../run/ui/cards.ts';
+import { Button, type ButtonOptions, COLORS, hoverTip, label, panel, showTip, type TipContent, Tooltip } from '../run/ui/widgets.ts';
 import { cssPx, onTouchChange, safeAreaInsets, touch } from '../touch.ts';
 import { ScreenType } from '../screens/base.ts';
 import { getApp, gotoScreen, listen } from './shared.ts';
 
 const W = 960;
 const H = 540;
-const MAIN_X = 240;
-const MAIN_Y = 120;
+/** the column on the left */
+const SIDE_X = 6;
+const SIDE_W = 200;
+/** the middle of the screen: from the column to the deck, below the jokers */
+const MAIN_X = 214;
+const MAIN_Y = 126;
+const MAIN_R = 872;
+/** the right edge of the screen (the ability assignment uses the room of the deck too) */
+const FULL_R = 954;
+/** where the jokers and the tarots lie, and the colony (the middle of its pile) */
+const JOKER_AREA: Rect = { x: 214, y: 6, w: 506, h: 100 };
+const TAROT_AREA: Rect = { x: 728, y: 6, w: 226, h: 100 };
+const DECK = { x: 917, y: 466 };
+/** the areas a dragged card is dropped on: over the jokers and the tarots to buy, over the other row to sell, above the deck to use */
+const BUY_ZONE: Rect = { x: 214, y: 4, w: 740, h: 118 };
+const SELL_JOKER_ZONE: Rect = { x: 728, y: 4, w: 226, h: 118 };
+const SELL_TAROT_ZONE: Rect = { x: 214, y: 4, w: 506, h: 118 };
+const USE_ZONE: Rect = { x: 880, y: 130, w: 74, h: 280 };
 /** the bar of points of the assignment screen: where it starts in the panel, and the width of a point */
 const ASSIGN_BAR_X = 134;
 const ASSIGN_SEG = 8;
@@ -32,8 +54,9 @@ const ASSIGN_ROW_H = 29;
 
 const BLIND_COLORS: Record<BlindKind, number> = { small: COLORS.blue, big: COLORS.orange, boss: COLORS.red };
 const RARITY_COLORS: Record<Rarity, number> = { common: COLORS.blue, uncommon: COLORS.green, rare: COLORS.red };
-
-type Art = { anim: LemmingAnim; tint?: number } | { icon: string } | { text: string; color: number };
+const RARITY_NAMES: Record<Rarity, string> = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare' };
+/** the rock behind the screens, in the colour of what is going on */
+const BACKDROPS: Record<string, number> = { assign: 0x4fa8a0, blinds: 0x58a070, shop: 0xb8705c, result: 0x7088b0, cashout: 0xc0a050, over: 0x8a7a8a };
 
 const JOKER_ART: Record<string, Art> = {
   toolkit: { anim: 'build' },
@@ -93,6 +116,9 @@ const FATE_ANIMS: Partial<Record<Fate, LemmingAnim>> = {
   fell: 'fall',
 };
 
+/** a tarot that is used: one of the player's, or one of the shop that is bought for it */
+type TarotUse = { uid?: number; offer?: number; max: number; name: string };
+
 /** What the team lacks for a level: the skills it brings fewer of than the level has, the biggest gap named. */
 function shortSummary(p: BlindPreview): { text: string; color: number } {
   const short: { gap: number; text: string }[] = [];
@@ -105,7 +131,7 @@ function shortSummary(p: BlindPreview): { text: string; color: number } {
   return { text: short.length === 1 ? `Short of ${short[0].text}` : `Short in ${short.length} skills, most: ${short[0].text}`, color: COLORS.orange };
 }
 
-/** The level band names of an ante, for the sidebar. */
+/** The level band names of an ante. */
 function bandName(run: RunSession): string {
   const levels = run.state.blinds.map((b) => run.level(b.levelId));
   const names = [...new Set(levels.map((l) => l.sectionName))];
@@ -120,6 +146,7 @@ export class RunScene extends Phaser.Scene {
   private app!: LemmixApp;
   private objs: Phaser.GameObjects.GameObject[] = [];
   private tip!: Tooltip;
+  private table!: CardTable;
   private overlay: Phaser.GameObjects.GameObject[] = [];
   private toastObj: Phaser.GameObjects.GameObject[] = [];
   /** the screen when there is no run: start a new one or continue */
@@ -131,6 +158,11 @@ export class RunScene extends Phaser.Scene {
   /** the level preview: its first column in the window, and scrolling it (keys) */
   private previewSx = 0;
   private previewPan: ((d: number) => void) | null = null;
+  /** where things are on the screen, by name: the middle of the buttons and cards (for the tests) */
+  private spots: Record<string, { x: number; y: number }> = {};
+  /** what the middle of the screen showed last: when it changes, the new one comes up from below */
+  private shown = '';
+  private shownMoney: number | null = null;
 
   constructor() {
     super('run');
@@ -145,8 +177,12 @@ export class RunScene extends Phaser.Scene {
     this.objs = [];
     this.overlay = [];
     this.toastObj = [];
+    this.spots = {};
+    this.shown = '';
+    this.shownMoney = null;
     ensureRunAssets(this, this.app);
     this.tip = new Tooltip(this);
+    this.table = new CardTable(this, this.tip, (name, x, y) => this.spot(name, x, y));
     this.app.enterRunMode();
     const run = this.run;
     if (run && run.state.phase === 'playing') run.abandonAttempt();
@@ -229,7 +265,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   /**
-   * Touch: the first tap on something that acts (buy, sell, use, hire, skip) shows what it is, the second tap acts.
+   * Touch: the first tap on a small thing that costs money (hiring a skill) shows what it is, the second tap does it.
    * Returns true when the action goes ahead (always with the mouse).
    */
   private confirmTap(owner: object, content: TipContent, hint: string): boolean {
@@ -248,32 +284,58 @@ export class RunScene extends Phaser.Scene {
     return o;
   }
 
+  private spot(name: string, x: number, y: number): void {
+    this.spots[name] = { x, y };
+  }
+
+  /** a button with a name (see spots) */
+  private btn(name: string, x: number, y: number, w: number, h: number, caption: string, color: number, onClick: () => void, o: ButtonOptions = {}): Button {
+    this.spot(name, x + w / 2, y + h / 2);
+    return this.k(new Button(this, x, y, w, h, caption, color, onClick, o));
+  }
+
+  /** a dark rounded box, the inside of a panel */
+  private well(x: number, y: number, w: number, h: number, color: number = COLORS.dark, alpha = 1, radius = 8): Phaser.GameObjects.Graphics {
+    const g = this.k(this.add.graphics());
+    g.fillStyle(color, alpha);
+    g.fillRoundedRect(x, y, w, h, radius);
+    return g;
+  }
+
   private clear(): void {
     this.tip.hide();
+    this.table.clear();
+    this.tweens.killTweensOf(this.objs);
     for (const o of this.objs) o.destroy();
     this.objs = [];
+    this.spots = {};
     this.closeOverlay();
   }
 
   /** Builds the screen of the current phase. */
   private render(): void {
     this.clear();
-    // background: the brown rock of the DOS screens, darkened
-    this.k(this.add.tileSprite(0, 0, W, H, BACKGROUND).setOrigin(0, 0).setTint(0x8a7a8a));
-    this.k(this.add.rectangle(0, 0, W, H, 0x05050c, 0.72).setOrigin(0, 0));
     const run = this.run;
+    const phase = this.choosing || !run ? 'start' : run.state.phase === 'playing' ? 'blinds' : run.state.phase;
+    // background: the brown rock of the DOS screens, in the colour of the phase, drifting slowly
+    const rock = this.k(this.add.tileSprite(0, 0, W, H, BACKGROUND).setOrigin(0, 0).setTint(BACKDROPS[phase] ?? 0x8a7a8a));
+    rock.tilePositionX = (this.time.now / 90) % 4096;
+    this.tweens.add({ targets: rock, tilePositionX: rock.tilePositionX + 4096, tilePositionY: 1024, duration: 360000, repeat: -1 });
+    this.k(this.add.rectangle(0, 0, W, H, 0x101820, 0.3).setOrigin(0, 0));
     if (this.choosing || !run) {
       this.renderStart();
+      this.shown = 'start';
       return;
     }
     this.renderSidebar(run);
-    this.renderTopBar(run);
-    switch (run.state.phase) {
+    this.renderTopAreas(run);
+    if (phase !== 'assign') this.renderDeck(run);
+    const first = this.objs.length;
+    switch (phase) {
       case 'assign':
         this.renderAssign(run);
         break;
       case 'blinds':
-      case 'playing':
         this.renderBlinds(run);
         break;
       case 'result':
@@ -289,6 +351,17 @@ export class RunScene extends Phaser.Scene {
         this.renderOver(run);
         break;
     }
+    // what is new in the middle of the screen comes up from below, as the shop and the blinds of Balatro do
+    const key = `${phase}:${run.state.ante}`;
+    if (key !== this.shown) {
+      this.shown = key;
+      for (const o of this.objs.slice(first)) {
+        const t = o as unknown as { y: number };
+        const y = t.y;
+        t.y = y + 440;
+        this.tweens.add({ targets: o, y, duration: 380, ease: 'Back.easeOut', easeParams: [0.7] });
+      }
+    }
   }
 
   /* -------------------------------------------------------------------------------------------- start */
@@ -297,7 +370,7 @@ export class RunScene extends Phaser.Scene {
     const saved = loadRun();
     const meta = loadMeta();
     const k = this.k.bind(this);
-    k(panel(this, 180, 40, 600, 460, COLORS.panel, COLORS.purple, 12));
+    k(panel(this, 180, 40, 600, 460, COLORS.panel, COLORS.panelLight, 12));
     k(label(this, W / 2, 72, 'Lemmings', { size: 48, purple: true, originX: 0.5 }));
     k(label(this, W / 2, 128, 'the roguelike run', { size: 16, color: COLORS.gold, originX: 0.5 }));
     const text = [
@@ -308,18 +381,14 @@ export class RunScene extends Phaser.Scene {
     k(label(this, 212, 168, text.join('\n'), { color: COLORS.text, maxWidth: 536 }));
     for (let i = 0; i < 6; i++) k(lemmingSprite(this, 230 + i * 100, 372, i % 2 ? 'walkLeft' : 'walk', 2));
     const seed = randomSeed();
-    let y = 410;
+    const y = 410;
     if (saved) {
       const s = saved;
-      k(
-        new Button(this, 210, y, 260, 52, 'Continue run', COLORS.blue, () => this.continueRun(s), {
-          sub: `Ante ${s.ante}, $${s.money}, ${s.colony.length} lemmings`,
-        }),
-      );
-      k(new Button(this, 490, y, 260, 52, 'New run', COLORS.red, () => this.newRun(seed), { sub: `seed ${seed}` }));
-    } else k(new Button(this, 350, y, 260, 52, 'New run', COLORS.red, () => this.newRun(seed), { sub: `seed ${seed}` }));
-    k(new Button(this, 210, 470, 120, 24, 'Seed...', COLORS.gray, () => this.askSeed()));
-    k(new Button(this, 630, 470, 120, 24, 'Menu', COLORS.gray, () => this.toMenu()));
+      this.btn('continue', 210, y, 260, 52, 'Continue run', COLORS.blue, () => this.continueRun(s), { sub: `Ante ${s.ante}, $${s.money}, ${s.colony.length} lemmings` });
+      this.btn('newRun', 490, y, 260, 52, 'New run', COLORS.red, () => this.newRun(seed), { sub: `seed ${seed}` });
+    } else this.btn('newRun', 350, y, 260, 52, 'New run', COLORS.red, () => this.newRun(seed), { sub: `seed ${seed}` });
+    this.btn('seed', 210, 470, 120, 24, 'Seed...', COLORS.gray, () => this.askSeed());
+    this.btn('menu', 630, 470, 120, 24, 'Menu', COLORS.gray, () => this.toMenu());
     if (meta.runs > 0) k(label(this, W / 2, 476, `Runs ${meta.runs}  Won ${meta.wins}  Best ante ${meta.bestAnte}`, { color: COLORS.dim, originX: 0.5 }));
   }
 
@@ -336,6 +405,7 @@ export class RunScene extends Phaser.Scene {
     meta.bestAnte = Math.max(meta.bestAnte, 1);
     saveMeta(meta);
     this.choosing = false;
+    this.shownMoney = null;
     this.sfx(SoundEffect.LetsGo);
     this.save();
     this.render();
@@ -349,61 +419,60 @@ export class RunScene extends Phaser.Scene {
     this.render();
   }
 
-  /* -------------------------------------------------------------------------------------------- sidebar and top bar */
+  /* -------------------------------------------------------------------------------------------- the column on the left */
 
   private renderSidebar(run: RunSession): void {
     const k = this.k.bind(this);
     const s = run.state;
-    const blind = run.currentBlind;
-    const color = blind ? BLIND_COLORS[blind.kind] : COLORS.purple;
-    k(panel(this, 8, 8, 224, 524, COLORS.panel, COLORS.border, 10));
-    // the phase
-    const title: Record<string, string> = {
-      assign: 'Assign your\nabilities',
-      blinds: 'Choose your\nnext blind',
-      playing: 'Choose your\nnext blind',
-      result: 'Level over',
-      cashout: 'Cash out',
-      shop: 'Shop',
-      over: s.won ? 'You won!' : 'Run over',
-    };
-    k(panel(this, 16, 16, 208, 64, color, 0x000000, 8));
-    k(label(this, 120, 48, title[s.phase], { big: true, originX: 0.5, originY: 0.5, align: 1 }));
-    // ante
-    k(label(this, 20, 90, 'Ante', { color: COLORS.dim }));
-    k(label(this, 62, 90, `${Math.min(s.ante, ANTES)} of ${ANTES}`, { color: COLORS.orange }));
-    k(label(this, 216, 90, bandName(run), { color: COLORS.dim, originX: 1 }));
-    // money
-    k(panel(this, 16, 116, 208, 50, COLORS.dark, COLORS.border, 8));
-    k(label(this, 120, 141, `$${s.money}`, { size: 32, big: true, color: COLORS.gold, originX: 0.5, originY: 0.5 }));
-    // colony
-    k(panel(this, 16, 176, 208, 92, COLORS.dark, COLORS.border, 8));
-    k(lemmingSprite(this, 40, 206, 'walk', 2));
-    k(label(this, 62, 188, `${s.colony.length} lemmings`, { color: COLORS.text }));
-    const specials = run.specialCards();
-    k(label(this, 62, 208, specials.length ? `${specials.length} special` : 'all plain', { color: COLORS.dim }));
-    const colonyBtn = k(new Button(this, 24, 236, 192, 24, 'Colony', COLORS.purple, () => this.showColony(null)));
-    // (touch: the button just opens the colony, which says all of this)
-    hoverTip(
-      colonyBtn,
-      this.tip,
-      () => ({
-        title: 'Your colony',
-        color: COLORS.purple,
-        lines: [this.specialCounts(s.colony) || 'Only plain lemmings.', '', 'Click to see all your lemmings.'],
-        x: 236,
-        y: 200,
-      }),
-      false,
-    );
-    // abilities
-    k(label(this, 20, 280, 'Abilities', { color: COLORS.dim }));
+    const x = SIDE_X;
+    const w = SIDE_W;
+    k(panel(this, x, 6, w, 528, COLORS.panel, COLORS.panelLight, 10));
+
+    // what is going on: the blind that is played, the shop, or what to do
+    const setup = s.setup;
+    const played = setup && (s.phase === 'result' || s.phase === 'cashout') ? s.blinds[setup.blind] : null;
+    if (played && setup) {
+      const l = run.level(setup.levelId);
+      k(panel(this, x + 6, 12, w - 12, 84, BLIND_COLORS[played.kind], 0x000000, 8));
+      k(label(this, x + w / 2, 30, BLIND_NAMES[played.kind], { big: true, originX: 0.5, originY: 0.5 }));
+      k(label(this, x + w / 2, 54, levelName(l), { originX: 0.5, originY: 0.5 }));
+      k(label(this, x + w / 2, 76, `Attempt ${setup.attempts}`, { originX: 0.5, originY: 0.5 }));
+    } else if (s.phase === 'shop') {
+      this.well(x + 6, 12, w - 12, 84);
+      k(label(this, x + w / 2, 42, 'SHOP', { size: 32, big: true, color: COLORS.red, originX: 0.5, originY: 0.5 }));
+      k(label(this, x + w / 2, 76, 'Improve your colony!', { color: COLORS.gold, originX: 0.5, originY: 0.5 }));
+    } else {
+      const title: Record<string, string> = { assign: 'Assign your\nabilities', blinds: 'Choose your\nnext Blind', playing: 'Choose your\nnext Blind', over: s.won ? 'You won!' : 'Run over' };
+      const color = s.phase === 'assign' ? COLORS.teal : s.phase === 'over' ? (s.won ? COLORS.gold : COLORS.red) : COLORS.text;
+      this.well(x + 6, 12, w - 12, 84);
+      k(label(this, x + w / 2, 54, title[s.phase] ?? '', { big: true, color, originX: 0.5, originY: 0.5, align: 1 }));
+    }
+
+    // the colony, where Balatro has the score of the round
+    k(label(this, x + 14, 124, 'Colony', { originY: 0.5 }));
+    this.well(x + 76, 104, w - 82, 40);
+    k(lemmingSprite(this, x + 94, 124, 'walk', 2));
+    k(label(this, x + 112, 124, String(s.colony.length), { size: 32, big: true, originY: 0.5 }));
+    const specials = run.specialCards().length;
+    const colonyZone = k(this.add.zone(x + 6, 102, w - 12, 44).setOrigin(0, 0).setInteractive());
+    hoverTip(colonyZone, this.tip, () => ({
+      title: 'Your colony',
+      color: COLORS.purple,
+      lines: [`${s.colony.length} lemmings, ${specials ? `${specials} of them special:` : 'all of them plain.'}`, ...(specials ? [this.specialCounts(s.colony)] : []), '', 'The pile in the corner shows them all.'],
+      x: x + w + 6,
+      y: 100,
+    }));
+
+    // the abilities, where Balatro has the hand that is played
+    this.well(x + 6, 150, w - 12, 140);
+    k(label(this, x + 14, 156, 'Abilities', { color: COLORS.dim }));
+    k(label(this, x + w - 14, 156, bandName(run), { color: COLORS.dim, originX: 1 }));
     const cap = run.capability();
     SKILLS.forEach((sk, i) => {
-      const x = 22 + (i % 4) * 52;
-      const y = 300 + Math.floor(i / 4) * 52;
-      const icon = k(this.add.image(x, y, SKILL_ICONS, sk).setOrigin(0, 0).setScale(1.5));
-      k(label(this, x + 25, y + 18, String(cap[sk]), { color: cap[sk] > 0 ? COLORS.text : COLORS.dim }));
+      const cx = x + 12 + (i % 4) * 46;
+      const cy = 178 + Math.floor(i / 4) * 54;
+      const icon = k(this.add.image(cx, cy, SKILL_ICONS, sk).setOrigin(0, 0).setScale(1.5));
+      k(label(this, cx + 24, cy + 18, String(cap[sk]), { color: cap[sk] > 0 ? COLORS.text : COLORS.dim }));
       icon.setInteractive();
       hoverTip(icon, this.tip, () => ({
         title: SKILL_PLURALS[sk],
@@ -413,21 +482,46 @@ export class RunScene extends Phaser.Scene {
           '(never more than the level allows).',
           ...(cap[sk] > s.capacity[sk] ? [`${s.capacity[sk]} of your own, +${cap[sk] - s.capacity[sk]} from jokers.`] : []),
         ],
-        x: x + 30,
-        y: y,
+        x: x + w + 6,
+        y: cy,
       }));
     });
-    // stats and buttons
-    k(label(this, 20, 412, `Saved ${s.stats.saved}   Lost ${s.stats.lost}`, { color: COLORS.dim }));
-    k(label(this, 20, 432, `Seed ${s.seed}`, { color: COLORS.dim }));
-    k(new Button(this, 24, 462, 92, 28, 'Menu', COLORS.gray, () => this.toMenu()));
-    if (s.phase !== 'over')
-      k(
-        new Button(this, 124, 462, 92, 28, 'Give up', COLORS.red, () => {
-          if (window.confirm('Give up this run?')) this.finishRun(false);
-        }),
-      );
-    k(label(this, 20, 502, touch.active ? 'The run is saved as you go' : 'Esc: menu, the run is saved', { color: 0x606080 }));
+
+    // Run Info and Options; the attempts and the lemmings lost; the money; the ante and the round
+    this.btn('runInfo', x + 6, 298, 82, 112, 'Run\nInfo', COLORS.red, () => this.showRunInfo(run), { big: true });
+    this.btn('options', x + 6, 418, 82, 110, 'Options', COLORS.orange, () => this.showOptions(run));
+    const rx = x + 94;
+    const box = (bx: number, by: number, bw: number, bh: number, name: string, value: string, color: number, big = true) => {
+      k(panel(this, bx, by, bw, bh, COLORS.panelLight, COLORS.panelLight, 6));
+      k(label(this, bx + bw / 2, by + 11, name, { originX: 0.5, originY: 0.5 }));
+      this.well(bx + 4, by + 22, bw - 8, bh - 26, COLORS.dark, 1, 5);
+      const t = k(label(this, bx + bw / 2, by + 22 + (bh - 26) / 2, value, { size: 32, big, color, originX: 0.5, originY: 0.5 }));
+      if (t.width > bw - 12) t.setScale((bw - 12) / t.width);
+      return t;
+    };
+    const tries = Math.max(0, ATTEMPTS - (setup?.attempts ?? 0));
+    const triesBox = k(this.add.zone(rx, 298, 48, 72).setOrigin(0, 0).setInteractive());
+    box(rx, 298, 48, 72, 'Tries', String(tries), COLORS.blue);
+    hoverTip(triesBox, this.tip, () => ({
+      title: 'Attempts',
+      color: COLORS.blue,
+      lines: [`Three attempts per blind are paid: $1 for each one you do not need. You can always retry.`],
+      x: x + w + 6,
+      y: 298,
+    }));
+    box(rx + 52, 298, 48, 72, 'Lost', String(s.stats.lost), COLORS.red);
+    k(panel(this, rx, 376, 100, 72, COLORS.panelLight, COLORS.panelLight, 6));
+    this.well(rx + 4, 380, 92, 64, COLORS.dark, 1, 5);
+    const money = k(label(this, rx + 50, 412, `$${s.money}`, { size: 32, big: true, color: COLORS.gold, originX: 0.5, originY: 0.5 }));
+    if (money.width > 86) money.setScale(86 / money.width);
+    if (this.shownMoney !== null && this.shownMoney !== s.money) {
+      const to = money.scale;
+      money.setScale(to * 1.35);
+      this.tweens.add({ targets: money, scale: to, duration: 260, ease: 'Back.easeOut' });
+    }
+    this.shownMoney = s.money;
+    box(rx, 454, 48, 74, 'Ante', `${Math.min(s.ante, ANTES)}/${ANTES}`, COLORS.orange, false);
+    box(rx + 52, 454, 48, 74, 'Round', String(s.stats.blindsWon + (s.phase === 'over' || s.phase === 'cashout' || s.phase === 'shop' ? 0 : 1)), COLORS.orange);
   }
 
   private specialCounts(colony: LemmingCard[]): string {
@@ -449,144 +543,161 @@ export class RunScene extends Phaser.Scene {
     return parts.join(', ');
   }
 
-  private renderTopBar(run: RunSession): void {
+  /** Run Info: the blinds of the ante, the abilities and the numbers of the run. */
+  private showRunInfo(run: RunSession): void {
+    const o = this.openOverlay();
+    const s = run.state;
+    o(panel(this, 200, 50, 560, 440, COLORS.panel, COLORS.panelLight, 12));
+    o(label(this, 480, 74, 'Run Info', { size: 32, big: true, originX: 0.5, originY: 0.5 }));
+    o(label(this, 224, 104, `Ante ${Math.min(s.ante, ANTES)} of ${ANTES}: ${bandName(run)}`, { color: COLORS.orange }));
+    s.blinds.forEach((b, i) => {
+      const l = run.level(b.levelId);
+      const y = 128 + i * 40;
+      const g = o(this.add.graphics());
+      g.fillStyle(COLORS.dark, 1);
+      g.fillRoundedRect(224, y, 512, 34, 6);
+      g.fillStyle(BLIND_COLORS[b.kind], 1);
+      g.fillRoundedRect(224, y, 8, 34, 3);
+      o(label(this, 240, y + 9, BLIND_NAMES[b.kind], { color: BLIND_COLORS[b.kind] }));
+      o(label(this, 330, y + 9, `${levelName(l)}  ${l.title}`, { maxWidth: 300 }));
+      const status = b.status === 'current' ? 'Current' : b.status === 'upcoming' ? 'Upcoming' : b.status === 'skipped' ? 'Skipped' : 'Defeated';
+      o(label(this, 728, y + 9, status, { color: b.status === 'current' ? COLORS.gold : COLORS.dim, originX: 1 }));
+    });
+    const cap = run.capability();
+    o(label(this, 224, 258, 'Abilities', { color: COLORS.dim }));
+    SKILLS.forEach((sk, i) => {
+      const x = 224 + i * 64;
+      o(this.add.image(x, 280, SKILL_ICONS, sk).setOrigin(0, 0).setScale(1.5));
+      o(label(this, x + 26, 290, String(cap[sk]), { color: cap[sk] > 0 ? COLORS.text : COLORS.dim }));
+      if (cap[sk] > s.capacity[sk]) o(label(this, x + 26, 306, `+${cap[sk] - s.capacity[sk]}`, { color: COLORS.teal }));
+    });
+    const st = s.stats;
+    const tags = s.pendingTags.map((t) => tagDef(t).name);
+    const lines = [
+      `Blinds won ${st.blindsWon}, skipped ${st.skipped}, attempts ${st.attempts}`,
+      `Lemmings saved ${st.saved}, lost ${st.lost}, colony ${s.colony.length}`,
+      `Money earned $${st.earned}`,
+      ...(tags.length ? [`Tags waiting: ${tags.join(', ')}`] : []),
+      `Seed ${s.seed}`,
+    ];
+    o(label(this, 224, 336, lines.join('\n'), { color: COLORS.text, maxWidth: 512 }));
+    this.spot('back', 480, 465);
+    o(new Button(this, 380, 450, 200, 30, 'Back', COLORS.orange, () => this.closeOverlay()));
+  }
+
+  /** Options: back to the menu of Lemmix, or the end of the run. */
+  private showOptions(run: RunSession): void {
+    const o = this.openOverlay();
+    o(panel(this, 340, 130, 280, 280, COLORS.panel, COLORS.panelLight, 12));
+    o(label(this, 480, 156, 'Options', { size: 32, big: true, originX: 0.5, originY: 0.5 }));
+    o(new Button(this, 364, 190, 232, 40, 'Main menu', COLORS.blue, () => this.toMenu(), { sub: 'the run is saved' }));
+    if (run.state.phase !== 'over')
+      o(
+        new Button(this, 364, 244, 232, 40, 'Give up the run', COLORS.red, () => {
+          if (window.confirm('Give up this run?')) this.finishRun(false);
+        }),
+      );
+    o(label(this, 480, 312, `Seed ${run.state.seed}`, { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
+    o(label(this, 480, 334, touch.active ? 'The run is saved as you go' : 'Esc: menu, the run is saved', { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
+    this.spot('back', 480, 379);
+    o(new Button(this, 364, 364, 232, 30, 'Back', COLORS.orange, () => this.closeOverlay()));
+  }
+
+  /* -------------------------------------------------------------------------------------------- jokers, tarots, the deck */
+
+  /** where the cards of a row lie: next to each other in the middle of the area, closer together when it is full */
+  private slots(area: Rect, n: number): number[] {
+    const pitch = n > 1 ? Math.min(CARD_W + 8, (area.w - 16 - CARD_W) / (n - 1)) : 0;
+    const x0 = area.x + area.w / 2 - (pitch * (n - 1)) / 2;
+    return Array.from({ length: n }, (_, i) => Math.round(x0 + i * pitch));
+  }
+
+  private renderTopAreas(run: RunSession): void {
     const k = this.k.bind(this);
     const s = run.state;
-    k(panel(this, MAIN_X, 8, 712, 104, COLORS.panel, COLORS.border, 10));
-    k(label(this, MAIN_X + 12, 14, `Jokers ${s.jokers.length}/${JOKER_SLOTS}`, { color: COLORS.dim }));
-    for (let i = 0; i < JOKER_SLOTS; i++) {
-      const x = MAIN_X + 12 + i * 76;
-      const j = s.jokers[i];
-      if (!j) {
-        k(panel(this, x, 34, 68, 70, COLORS.dark, COLORS.border, 6));
-        continue;
-      }
+    for (const a of [JOKER_AREA, TAROT_AREA]) {
+      const g = this.well(a.x, a.y, a.w, a.h, 0x000000, 0.36, 10);
+      g.lineStyle(2, 0xffffff, 0.1);
+      g.strokeRoundedRect(a.x + 1, a.y + 1, a.w - 2, a.h - 2, 10);
+    }
+    k(label(this, JOKER_AREA.x + 6, 108, `${s.jokers.length}/${JOKER_SLOTS}`, { color: COLORS.text }));
+    k(label(this, TAROT_AREA.x + TAROT_AREA.w - 6, 108, `${s.tarots.length}/${TAROT_SLOTS}`, { color: COLORS.text, originX: 1 }));
+    const cy = JOKER_AREA.y + JOKER_AREA.h / 2;
+    const canSell = s.phase !== 'over';
+
+    const jx = this.slots(JOKER_AREA, s.jokers.length);
+    s.jokers.forEach((j, i) => {
       const d = jokerDef(j.id);
-      // (touch: one tap shows the joker and its sell button, under each other)
-      this.card(x, 34, 68, 70, RARITY_COLORS[d.rarity], JOKER_ART[j.id], () => this.jokerMenu(run, j.uid, x, 34), () => ({
-        title: d.name,
-        color: RARITY_COLORS[d.rarity],
-        lines: [d.text, '', `${d.rarity} joker, sells for $${sellPrice(j.id)}`],
-        x: x,
-        y: touch.active ? 154 : 110,
-      }), null);
-    }
-    const tx = MAIN_X + 412;
-    k(label(this, tx, 14, `Tarots ${s.tarots.length}/${TAROT_SLOTS}`, { color: COLORS.dim }));
-    for (let i = 0; i < TAROT_SLOTS; i++) {
-      const x = tx + i * 76;
-      const t = s.tarots[i];
-      if (!t) {
-        k(panel(this, x, 34, 68, 70, COLORS.dark, COLORS.border, 6));
-        continue;
-      }
-      const d = tarotDef(t.id);
-      const art = t.id === 'manual' && t.skill ? { icon: t.skill } : TAROT_ART[t.id];
-      this.card(x, 34, 68, 70, COLORS.purple, art, () => this.useTarot(run, t.uid), () => ({
-        title: d.name,
-        color: COLORS.purple,
-        lines: [t.skill && d.skillText ? d.skillText(SKILL_NAMES[t.skill]) : d.text, ...(touch.active ? [] : ['', 'Click to use it.'])],
-        x: x - 120,
-        y: 110,
-      }), 'Tap again to use it.');
-    }
-    // the blind being played
-    const setup = s.setup;
-    if (setup && (s.phase === 'result' || s.phase === 'cashout')) {
-      const l = run.level(setup.levelId);
-      k(label(this, MAIN_X + 580, 20, levelName(l), { purple: true }));
-      k(label(this, MAIN_X + 580, 42, `Attempt ${setup.attempts}`, { color: COLORS.dim }));
-    }
-  }
-
-  /** a card with art; click and tooltip */
-  private card(
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    color: number,
-    art: Art | undefined,
-    onClick: (() => void) | null,
-    tip: (() => TipContent) | null,
-    /** touch: what the second tap does; null: the first tap shows the tooltip and acts (the action asks itself) */
-    touchHint: string | null = 'Tap it again to go ahead.',
-  ): Phaser.GameObjects.Container {
-    const c = this.k(this.add.container(x, y));
-    const g = panel(this, 0, 0, w, h, COLORS.dark, color, 6);
-    g.fillStyle(color, 0.25);
-    g.fillRoundedRect(4, 4, w - 8, h - 8, 4);
-    c.add(g);
-    if (art) {
-      if ('anim' in art) {
-        const sp = lemmingSprite(this, w / 2, h / 2, art.anim, w >= 90 ? 4 : 3);
-        if (art.tint) sp.setTint(art.tint);
-        c.add(sp);
-      } else if ('icon' in art) c.add(this.add.image(w / 2, h / 2, SKILL_ICONS, art.icon).setScale(w >= 90 ? 3 : 2));
-      else c.add(label(this, w / 2, h / 2, art.text, { size: 32, big: true, color: art.color, originX: 0.5, originY: 0.5 }));
-    }
-    c.setSize(w, h);
-    c.setInteractive(containerHitArea(w, h), Phaser.Geom.Rectangle.Contains);
-    c.on('pointerover', () => {
-      if (touch.active) return;
-      this.tweens.add({ targets: c, y: y - 4, duration: 80 });
-      if (tip) showTip(this.tip, tip());
-    });
-    c.on('pointerout', () => {
-      if (touch.active) return;
-      this.tweens.add({ targets: c, y, duration: 80 });
-      this.tip.hide();
-    });
-    c.on('pointerup', () => {
-      if (!touch.active) {
-        onClick?.();
-        return;
-      }
-      if (!tip) {
-        onClick?.();
-        return;
-      }
-      if (!onClick) {
-        if (this.tip.owner === c) this.tip.hide();
-        else showTip(this.tip, tip(), c);
-        return;
-      }
-      if (touchHint === null) {
-        onClick();
-        showTip(this.tip, tip(), c);
-        return;
-      }
-      if (this.confirmTap(c, tip(), touchHint)) onClick();
-    });
-    return c;
-  }
-
-  private jokerMenu(run: RunSession, uid: number, x: number, y: number): void {
-    const j = run.state.jokers.find((jj) => jj.uid === uid);
-    if (!j) return;
-    this.closeOverlay();
-    const o = (g: Phaser.GameObjects.GameObject) => {
-      this.overlay.push(g);
-      return g;
-    };
-    // a click anywhere else closes it
-    const away = o(this.add.zone(0, 0, W, H).setOrigin(0, 0).setDepth(499).setInteractive()) as Phaser.GameObjects.Zone;
-    away.on('pointerdown', () => {
-      this.closeOverlay();
-      this.tip.hide();
-    });
-    o(panel(this, x - 6, y + 74, 140, 40, COLORS.dark, COLORS.border, 6).setDepth(500));
-    o(
-      new Button(this, x, y + 80, 128, 28, `Sell $${sellPrice(j.id)}`, COLORS.orange, () => {
-        run.sellJoker(uid);
+      const sell = () => {
+        if (!run.sellJoker(j.uid)) return;
         this.sfx(SoundEffect.AssignSkill);
         this.save();
         this.render();
-      }).setDepth(501),
-    );
+      };
+      const card = k(new CardView(this, jx[i], cy, { color: RARITY_COLORS[d.rarity], art: JOKER_ART[j.id] }));
+      this.spot(`joker:${i}`, jx[i], cy);
+      this.table.add(card, {
+        tip: () => ({ title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } }),
+        buttons: () => (canSell ? [{ label: 'SELL', sub: `$${sellPrice(j.id)}`, color: COLORS.green, side: 'right', run: sell }] : []),
+        targets: () => (canSell ? [{ rect: SELL_JOKER_ZONE, color: COLORS.gold, lines: ['SELL', `$${sellPrice(j.id)}`], active: true, release: sell }] : []),
+        // dropped among the jokers: it goes where it was dropped
+        reorder: {
+          area: { x: JOKER_AREA.x, y: 0, w: JOKER_AREA.w, h: 122 },
+          drop: (x) => {
+            const index = jx.filter((ox, oi) => oi !== i && ox < x).length;
+            if (!run.moveJoker(j.uid, index)) return;
+            this.sfx(SoundEffect.SkillButtonSelect);
+            this.save();
+            this.render();
+          },
+        },
+      });
+    });
+
+    const tx = this.slots(TAROT_AREA, s.tarots.length);
+    s.tarots.forEach((t, i) => {
+      const d = tarotDef(t.id);
+      const art = t.id === 'manual' && t.skill ? { icon: t.skill } : TAROT_ART[t.id];
+      const canUse = this.tarotsUsable(run);
+      const use = () => this.useTarot(run, t.uid);
+      const sell = () => {
+        if (!run.sellTarot(t.uid)) return;
+        this.sfx(SoundEffect.AssignSkill);
+        this.save();
+        this.render();
+      };
+      const card = k(new CardView(this, tx[i], cy, { color: COLORS.purple, art }));
+      this.spot(`tarot:${i}`, tx[i], cy);
+      this.table.add(card, {
+        tip: () => ({ title: d.name, color: COLORS.purple, lines: [t.skill && d.skillText ? d.skillText(SKILL_NAMES[t.skill]) : d.text], badge: { text: 'Tarot', color: COLORS.purple } }),
+        buttons: () => [
+          { label: 'USE', color: COLORS.red, side: 'below', enabled: canUse, run: use },
+          { label: 'SELL', sub: `$${tarotSellPrice(t.id)}`, color: COLORS.green, side: 'right', enabled: run.canSellTarot(), run: sell },
+        ],
+        targets: () => [
+          { rect: SELL_TAROT_ZONE, color: COLORS.gold, lines: ['SELL', `$${tarotSellPrice(t.id)}`], active: run.canSellTarot(), release: sell },
+          { rect: USE_ZONE, color: COLORS.red, lines: ['USE'], active: canUse, release: use, refused: use },
+        ],
+      });
+    });
   }
 
-  /* -------------------------------------------------------------------------------------------- blinds */
+  private tarotsUsable(run: RunSession): boolean {
+    const p = run.state.phase;
+    return p === 'blinds' || p === 'cashout' || p === 'shop';
+  }
+
+  /** the colony as the deck of Balatro: a pile in the corner, a tap shows every lemming */
+  private renderDeck(run: RunSession): void {
+    const s = run.state;
+    const card = this.k(new CardView(this, DECK.x, DECK.y, { color: COLORS.purple, art: { anim: 'walk' }, pile: true }));
+    this.spot('deck', DECK.x, DECK.y);
+    this.k(label(this, DECK.x, DECK.y + CARD_H / 2 + 14, String(s.colony.length), { originX: 0.5, originY: 0.5 }));
+    this.table.add(card, {
+      tip: () => ({ title: 'Your colony', color: COLORS.purple, lines: [`${s.colony.length} lemmings.`, this.specialCounts(s.colony) || 'Only plain lemmings.'], badge: { text: touch.active ? 'Tap to see them' : 'Click to see them', color: COLORS.purple } }),
+      tap: () => this.showColony(null),
+    });
+  }
 
   /* -------------------------------------------------------------------------------------------- ability assignment */
 
@@ -599,8 +710,8 @@ export class RunScene extends Phaser.Scene {
     const s = run.state;
     const a = s.assign!;
     const st = run.assignment()!;
-    const x = MAIN_X + 4;
-    const y = MAIN_Y + 4;
+    const x = MAIN_X;
+    const y = MAIN_Y;
     const w = 392;
     k(panel(this, x, y, w, 404, COLORS.panel, COLORS.teal, 12));
     k(label(this, x + 16, y + 10, 'Abilities', { size: 32, big: true, color: COLORS.teal }));
@@ -628,6 +739,8 @@ export class RunScene extends Phaser.Scene {
       k(new Button(this, x + 100, ry, 30, 26, '-', COLORS.gray, () => this.setAbility(run, sk, cur - 1), { enabled: range.min < cur, size: 32 }));
       // the bar: a segment per point up to the cap; kept points, new ones, and the ones moved away
       const bx = x + ASSIGN_BAR_X;
+      // (the middle of the first point of the bar; a point is ASSIGN_SEG wide)
+      this.spot(`ability:${sk}`, bx + ASSIGN_SEG / 2, ry + 13);
       const g = k(this.add.graphics());
       for (let v = 0; v < ABILITY_CAP; v++) {
         const sx = bx + v * ASSIGN_SEG + 1;
@@ -637,7 +750,7 @@ export class RunScene extends Phaser.Scene {
         else g.fillStyle(COLORS.dark, 1);
         g.fillRect(sx, ry + 4, ASSIGN_SEG - 2, 18);
         if (v >= Math.max(cur, before)) {
-          g.lineStyle(1, v < range.max ? COLORS.border : 0x24243c, 1);
+          g.lineStyle(1, v < range.max ? COLORS.border : COLORS.panelLight, 1);
           g.strokeRect(sx + 0.5, ry + 4.5, ASSIGN_SEG - 3, 17);
         }
       }
@@ -668,25 +781,23 @@ export class RunScene extends Phaser.Scene {
       }));
     });
 
-    k(
-      new Button(this, x + 16, y + 362, 110, 30, 'Reset', COLORS.gray, () => {
-        run.resetAssignment();
-        this.save();
-        this.render();
-      }, { enabled: st.moved + st.added > 0 }),
-    );
-    k(
-      new Button(this, x + w - 166, y + 362, 150, 30, 'Done', COLORS.red, () => {
-        if (!run.finishAssignment()) return;
-        this.sfx(SoundEffect.LetsGo);
-        this.save();
-        this.render();
-      }, { big: true, enabled: run.canFinishAssignment() }),
-    );
+    const reset = () => {
+      run.resetAssignment();
+      this.save();
+      this.render();
+    };
+    this.btn('reset', x + 16, y + 362, 110, 30, 'Reset', COLORS.gray, reset, { enabled: st.moved + st.added > 0 });
+    const done = () => {
+      if (!run.finishAssignment()) return;
+      this.sfx(SoundEffect.LetsGo);
+      this.save();
+      this.render();
+    };
+    this.btn('done', x + w - 166, y + 362, 150, 30, 'Done', COLORS.orange, done, { big: true, enabled: run.canFinishAssignment() });
 
     // the levels of the ante, with what the team brings as it is now
     const lx = x + w + 8;
-    const lw = MAIN_X + 712 - lx;
+    const lw = FULL_R - lx;
     s.blinds.forEach((_, i) => this.renderAssignBlind(run, run.preview(i), lx, y + i * 137, lw, 130));
   }
 
@@ -696,7 +807,7 @@ export class RunScene extends Phaser.Scene {
     const l = p.level;
     const done = b.status === 'defeated' || b.status === 'skipped';
     const color = BLIND_COLORS[b.kind];
-    k(panel(this, x, y, w, h, COLORS.panel, done ? COLORS.border : color, 10));
+    k(panel(this, x, y, w, h, COLORS.panel, done ? COLORS.panelLight : color, 10));
     k(label(this, x + 10, y + 8, BLIND_NAMES[b.kind], { color: done ? COLORS.dim : color }));
     k(label(this, x + w - 10, y + 8, levelName(l), { purple: true, originX: 1 }));
     k(label(this, x + 10, y + 27, l.title, { color: COLORS.text, maxWidth: w - 20 }));
@@ -705,7 +816,7 @@ export class RunScene extends Phaser.Scene {
     const summary = done ? { text: b.status === 'skipped' ? 'Skipped' : 'Defeated', color: COLORS.dim } : shortSummary(p);
     k(label(this, x + 10, y + 108, summary.text, { color: summary.color }));
     if (done) k(this.add.rectangle(x, y, w, h, 0x000000, 0.4).setOrigin(0, 0));
-    else k(new Button(this, x + w - 74, y + 43, 64, 20, 'Preview', COLORS.blue, () => this.showLevelPreview(run, p.index)));
+    else this.btn(`preview:${p.index}`, x + w - 74, y + 43, 64, 20, 'Preview', COLORS.blue, () => this.showLevelPreview(run, p.index));
   }
 
   /** the skills of a level (its allocation, and below what the team brings), 36 pixels per skill */
@@ -729,27 +840,35 @@ export class RunScene extends Phaser.Scene {
     });
   }
 
-  /**
-   * A level of the ante as it starts, at twice its size: drag it (or the strip of the whole level below it; or the
-   * arrow keys and the mouse wheel) to look around. With its numbers and skills, and what the team would bring.
-   */
-  private showLevelPreview(run: RunSession, index: number): void {
+  /** Something over the screen (the colony, a level, Run Info): returns what adds a game object to it. */
+  private openOverlay(dim = 0.65): <T extends Phaser.GameObjects.GameObject>(g: T) => T {
     this.closeOverlay();
     this.tip.hide();
+    this.table.select(null);
     const o = <T extends Phaser.GameObjects.GameObject>(g: T): T => {
       this.overlay.push(g);
       (g as unknown as Phaser.GameObjects.Components.Depth).setDepth?.(600);
       return g;
     };
+    o(this.add.rectangle(0, 0, W, H, 0x000000, dim).setOrigin(0, 0).setInteractive());
+    return o;
+  }
+
+  /**
+   * A level of the ante as it starts, at twice its size: drag it (or the strip of the whole level below it; or the
+   * arrow keys and the mouse wheel) to look around. With its numbers and skills, and what the team would bring.
+   */
+  private showLevelPreview(run: RunSession, index: number): void {
+    const o = this.openOverlay(0.7);
     const p = run.preview(index);
     const l = p.level;
     const color = BLIND_COLORS[p.blind.kind];
-    o(this.add.rectangle(0, 0, W, H, 0x000000, 0.7).setOrigin(0, 0).setInteractive());
     o(panel(this, 20, 16, 920, 508, COLORS.panel, color, 12));
     const kind = o(label(this, 40, 30, BLIND_NAMES[p.blind.kind], { color }));
     const name = o(label(this, kind.x + kind.width + 12, 30, levelName(l), { purple: true }));
     o(label(this, name.x + name.width + 12, 30, l.title, { color: COLORS.text, maxWidth: 800 - name.x - name.width }));
-    o(new Button(this, 828, 26, 92, 28, 'Close', COLORS.gray, () => this.closeOverlay()));
+    this.spot('close', 828 + 46, 26 + 14);
+    o(new Button(this, 828, 26, 92, 28, 'Close', COLORS.orange, () => this.closeOverlay()));
     const lemmings = p.squad < l.lemmings ? `${l.lemmings} (you have ${p.squad})` : String(l.lemmings);
     o(label(this, 40, 56, `Lemmings ${lemmings} · Rescue ${p.required} · Release rate ${l.releaseRate} · Time ${minutes(p.minutes)}`, { color: COLORS.dim }));
     const meta = loadMeta().levels[l.id];
@@ -824,36 +943,50 @@ export class RunScene extends Phaser.Scene {
     });
   }
 
+  /* -------------------------------------------------------------------------------------------- blinds */
+
   private renderBlinds(run: RunSession): void {
     // the squad of the current blind is drawn now, so you can see who comes along
     if (run.currentBlind && run.state.colony.length > 0) run.ensureSetup();
-    for (let i = 0; i < 3; i++) this.renderBlind(run, run.preview(i), MAIN_X + 4 + i * 236, MAIN_Y + 4);
+    for (let i = 0; i < 3; i++) this.renderBlind(run, run.preview(i), MAIN_X + i * 222);
   }
 
-  private renderBlind(run: RunSession, p: BlindPreview, x: number, y: number): void {
+  /**
+   * A blind, as a column that comes up from the bottom of the screen: Select on top, the level and what it asks, the
+   * reward, and below it the tag for skipping it. The current blind stands a little higher than the others.
+   */
+  private renderBlind(run: RunSession, p: BlindPreview, x: number): void {
     const k = this.k.bind(this);
     const b = p.blind;
     const l = p.level;
     const current = b.status === 'current';
+    const done = b.status === 'defeated' || b.status === 'skipped';
     const color = BLIND_COLORS[b.kind];
-    const w = 228;
-    const h = 404;
-    k(panel(this, x, y, w, h, current ? COLORS.panelLight : COLORS.panel, current ? color : COLORS.border, 10));
-    k(panel(this, x + 8, y + 8, w - 16, 26, color, 0x000000, 6));
-    k(label(this, x + w / 2, y + 21, BLIND_NAMES[b.kind], { big: true, originX: 0.5, originY: 0.5 }));
-    k(label(this, x + w / 2, y + 40, levelName(l), { purple: true, originX: 0.5 }));
-    k(label(this, x + w / 2, y + 60, l.title, { color: COLORS.text, originX: 0.5, maxWidth: w - 20, align: 1 }));
-    const thumb = levelThumbnail(this, this.app, l, 212, 40);
-    const pic = k(this.add.image(x + 8, y + 98, thumb).setOrigin(0, 0));
-    if (!current) k(this.add.rectangle(x + 8, y + 98, 212, 40, 0x000000, 0.35).setOrigin(0, 0));
+    const w = 214;
+    const y = MAIN_Y + (current ? 0 : 12);
+    k(panel(this, x, y, w, 440, COLORS.panel, current ? color : COLORS.panelLight, 10));
+
+    // Select: play the level
+    if (current) this.btn('play', x + 8, y + 8, w - 16, 28, 'Select', COLORS.orange, () => this.play(run), { big: true });
+    else {
+      const text = b.status === 'upcoming' ? 'Upcoming' : b.status === 'skipped' ? 'Skipped' : 'Defeated';
+      k(new Button(this, x + 8, y + 8, w - 16, 28, text, COLORS.gray, () => {}, { big: true, enabled: false }));
+    }
+    k(panel(this, x + 8, y + 43, w - 16, 24, color, 0x000000, 6));
+    k(label(this, x + w / 2, y + 55, BLIND_NAMES[b.kind], { big: true, originX: 0.5, originY: 0.5 }));
+    k(label(this, x + w / 2, y + 74, levelName(l), { purple: true, originX: 0.5 }));
+    k(label(this, x + w / 2, y + 92, l.title, { color: COLORS.text, originX: 0.5, maxWidth: w - 16, align: 1 }));
+    const thumb = levelThumbnail(this, this.app, l, w - 16, 40);
+    const pic = k(this.add.image(x + 8, y + 128, thumb).setOrigin(0, 0));
     // the picture opens the level preview
-    const hint = label(this, x + 216, y + 135, 'Preview', { color: COLORS.text, originX: 1, originY: 1 });
+    const hint = label(this, x + w - 12, y + 165, 'Preview', { color: COLORS.text, originX: 1, originY: 1 });
     k(this.add.rectangle(hint.x - hint.width - 4, hint.y - hint.height - 1, hint.width + 6, hint.height + 2, 0x000000, 0.65).setOrigin(0, 0));
     k(hint).setDepth(1);
     pic.setInteractive({ useHandCursor: true });
     pic.on('pointerup', () => this.showLevelPreview(run, p.index));
+    this.spot(`preview:${p.index}`, x + w / 2, y + 148);
 
-    // the numbers of the level
+    // what the level asks
     const row = (yy: number, name: string, value: string, c: number = COLORS.text) => {
       k(label(this, x + 12, yy, name, { color: COLORS.dim }));
       k(label(this, x + w - 12, yy, value, { color: c, originX: 1 }));
@@ -861,9 +994,9 @@ export class RunScene extends Phaser.Scene {
     const mine = p.squad < l.lemmings;
     const setup = current ? run.state.setup : null;
     const squadSpecials = setup ? setup.hand.map((id) => run.card(id)).filter((c): c is LemmingCard => !!c && isSpecial(c)) : [];
-    row(y + 146, 'Lemmings', mine ? `${l.lemmings}, you have ${p.squad}` : String(l.lemmings), mine ? COLORS.orange : COLORS.text);
+    row(y + 172, 'Lemmings', mine ? `${l.lemmings}, you have ${p.squad}` : String(l.lemmings), mine ? COLORS.orange : COLORS.text);
     if (current) {
-      const zone = k(this.add.zone(x + 8, y + 144, w - 16, 18).setOrigin(0, 0).setInteractive());
+      const zone = k(this.add.zone(x + 8, y + 170, w - 16, 17).setOrigin(0, 0).setInteractive());
       hoverTip(zone, this.tip, () => ({
         title: `Your squad: ${p.squad} lemmings`,
         color: COLORS.purple,
@@ -871,19 +1004,19 @@ export class RunScene extends Phaser.Scene {
           ? ['Special lemmings in the squad, in the order they come out:', ...squadSpecials.slice(0, 10).map((c) => cardTitle(c)), ...(squadSpecials.length > 10 ? [`and ${squadSpecials.length - 10} more`] : [])]
           : ['Only plain lemmings in this squad.'],
         x: x + 20,
-        y: y + 166,
+        y: y + 192,
       }));
-      if (squadSpecials.length) k(label(this, x + 12 + 70, y + 146, `*${squadSpecials.length}`, { color: COLORS.purple }));
+      if (squadSpecials.length) k(label(this, x + 12 + 70, y + 172, `*${squadSpecials.length}`, { color: COLORS.purple }));
     }
-    row(y + 164, 'Rescue', String(p.required), p.tooFewLemmings ? COLORS.red : COLORS.text);
-    row(y + 182, 'Time', minutes(p.minutes), p.minutes > l.time ? COLORS.green : COLORS.text);
-    row(y + 200, 'Release rate', String(l.releaseRate));
+    row(y + 189, 'Rescue at least', String(p.required), p.tooFewLemmings ? COLORS.red : COLORS.text);
+    row(y + 206, 'Time', minutes(p.minutes), p.minutes > l.time ? COLORS.green : COLORS.text);
+    row(y + 223, 'Release rate', String(l.releaseRate));
 
     // skills: the level's allocation and what you bring (min(abilities, allocation))
-    k(label(this, x + 12, y + 222, 'Skills: level / yours', { color: COLORS.dim }));
+    k(label(this, x + 12, y + 244, 'Skills: level / yours', { color: COLORS.dim }));
     SKILLS.forEach((sk, i) => {
-      const cx = x + 12 + (i % 4) * 52;
-      const cy = y + 242 + Math.floor(i / 4) * 36;
+      const cx = x + 12 + (i % 4) * 48;
+      const cy = y + 263 + Math.floor(i / 4) * 36;
       const alloc = p.allocation[sk] + p.aboveMax[sk];
       const u = p.usable[sk];
       const icon = k(this.add.image(cx, cy + 4, SKILL_ICONS, sk).setOrigin(0, 0));
@@ -904,7 +1037,8 @@ export class RunScene extends Phaser.Scene {
         y: cy + 40,
       });
       hoverTip(icon, this.tip, skillTip, !canHire);
-      if (canHire)
+      if (canHire) {
+        if (!this.spots.hire) this.spot('hire', cx + 7, cy + 15);
         icon.on('pointerup', () => {
           if (!this.confirmTap(icon, skillTip(), `Tap again to hire one for this level ($${HIRE_PRICE}).`)) return;
           if (run.hire(sk)) {
@@ -913,58 +1047,49 @@ export class RunScene extends Phaser.Scene {
             this.render();
           }
         });
+      }
     });
     const meta = loadMeta().levels[l.id];
-    if (meta?.fewest) k(label(this, x + 12, y + 316, `Your best: ${meta.best}%, ${totalSkills(meta.fewest)} skills`, { color: COLORS.teal, maxWidth: w - 24 }));
+    if (meta?.fewest) k(label(this, x + 12, y + 336, `Your best: ${meta.best}%, ${totalSkills(meta.fewest)} skills`, { color: COLORS.teal, maxWidth: w - 24 }));
 
-    // reward and actions
-    k(label(this, x + 12, y + 340, 'Reward', { color: COLORS.dim }));
-    k(label(this, x + w - 12, y + 336, `$${p.reward}`, { big: true, color: COLORS.gold, originX: 1 }));
-    if (b.kind === 'boss' && b.status !== 'defeated' && !run.state.bossRerolled) {
-      const can = run.canRerollBoss();
-      const rerollTip = (): TipContent => ({
-        title: "Director's Cut",
-        color: COLORS.red,
-        lines: ['Another level for the Boss Blind, from the same band.', 'Once per ante, before the boss is played.'],
-        x: x - 80,
-        y: y + 64,
-      });
-      const rr: Button = k(
-        new Button(this, x + w - 86, y + 102, 74, 18, `Reroll $${run.bossRerollPrice()}`, COLORS.red, () => {
-          if (!this.confirmTap(rr, rerollTip(), `Tap again to reroll the boss ($${run.bossRerollPrice()}).`)) return;
-          if (run.rerollBoss()) {
-            this.sfx(SoundEffect.SkillButtonSelect);
-            this.save();
-            this.render();
-          }
-        }, { enabled: can }),
-      );
-      hoverTip(rr, this.tip, rerollTip, !can); // (touch: an enabled button shows the tooltip itself, see confirmTap)
-    }
-    if (current) {
-      const playW = b.kind === 'boss' ? w - 24 : 100;
-      k(new Button(this, x + 12, y + 362, playW, 30, 'Play', COLORS.red, () => this.play(run), { big: true }));
-      if (b.kind !== 'boss' && b.tag) {
-        const tag = tagDef(b.tag);
-        const skipTip = (): TipContent => ({
-          title: `Skip for: ${tag.name}`,
-          color: COLORS.orange,
-          lines: [tag.text, '', 'No reward and no shop for this blind.'],
-          x: x - 40,
-          y: y + 250,
+    // the reward, and what skipping gives (the boss: another level instead)
+    k(label(this, x + 12, y + 355, 'Reward:', { color: COLORS.dim }));
+    k(label(this, x + w - 12, y + 355, `${'$'.repeat(p.reward)}+`, { color: COLORS.gold, originX: 1 }));
+    if (b.kind === 'boss') {
+      if (b.status !== 'defeated' && !run.state.bossRerolled) {
+        const can = run.canRerollBoss();
+        const rerollTip = (): TipContent => ({
+          title: "Director's Cut",
+          color: COLORS.red,
+          lines: ['Another level for the Boss Blind, from the same band.', 'Once per ante, before the boss is played.'],
+          x: x - 60,
+          y: y + 270,
         });
-        const skip: Button = k(
-          new Button(this, x + 120, y + 362, 96, 30, 'Skip', COLORS.orange, () => {
-            if (this.confirmTap(skip, skipTip(), 'Tap Skip again to skip.')) this.skip(run);
-          }, { big: true, enabled: run.canSkip() }),
-        );
-        hoverTip(skip, this.tip, skipTip, !run.canSkip());
+        const reroll = () => {
+          if (!run.rerollBoss()) return;
+          this.sfx(SoundEffect.SkillButtonSelect);
+          this.save();
+          this.render();
+        };
+        const rr = this.btn('rerollBoss', x + 8, y + 374, w - 16, 26, `Reroll Boss $${run.bossRerollPrice()}`, COLORS.red, reroll, { enabled: can });
+        hoverTip(rr, this.tip, rerollTip, !can);
       }
-    } else {
-      const text = b.status === 'upcoming' ? (b.tag ? `Skip reward:\n${tagDef(b.tag).name}` : 'Upcoming') : b.status === 'skipped' ? 'Skipped' : 'Defeated';
-      const c = b.status === 'skipped' ? COLORS.orange : b.status === 'defeated' ? COLORS.green : COLORS.dim;
-      k(label(this, x + w / 2, y + 362, text, { color: c, originX: 0.5, align: 1 }));
+    } else if (b.tag) {
+      const tag = tagDef(b.tag);
+      const tagLabel = k(label(this, x + 12, y + 379, tag.name, { color: done ? COLORS.dim : COLORS.orange, maxWidth: w - 96 }));
+      tagLabel.setInteractive();
+      hoverTip(tagLabel, this.tip, () => ({
+        title: `Skip for: ${tag.name}`,
+        color: COLORS.orange,
+        lines: [tag.text, '', 'No reward and no shop for this blind.'],
+        x: x - 20,
+        y: y + 290,
+      }));
+      k(new Button(this, x + w - 78, y + 374, 70, 26, 'Skip', COLORS.red, () => this.skip(run), { enabled: current && run.canSkip() }));
+      if (current) this.spot('skip', x + w - 43, y + 387);
     }
+    if (done) k(this.add.rectangle(x, y, w, 440, 0x000000, 0.45).setOrigin(0, 0));
+    else if (!current) k(this.add.rectangle(x, y, w, 440, 0x000000, 0.2).setOrigin(0, 0));
   }
 
   private play(run: RunSession): void {
@@ -991,13 +1116,35 @@ export class RunScene extends Phaser.Scene {
     const out = s.outcome!;
     const setup = s.setup!;
     const l = run.level(setup.levelId);
-    const x = MAIN_X + 4;
-    const y = MAIN_Y + 4;
-    k(panel(this, x, y, 704, 404, COLORS.panel, out.success ? COLORS.green : COLORS.red, 12));
-    k(label(this, x + 352, y + 18, out.success ? 'Level complete' : 'Not enough lemmings saved', { size: 32, big: true, color: out.success ? COLORS.green : COLORS.red, originX: 0.5 }));
-    k(label(this, x + 352, y + 60, `${levelName(l)}  ${l.title}`, { purple: true, originX: 0.5 }));
+    const x = MAIN_X;
+    const y = MAIN_Y;
+    const w = MAIN_R - MAIN_X;
+    k(panel(this, x, y, w, 440, COLORS.panel, out.success ? COLORS.green : COLORS.red, 12));
+    k(label(this, x + w / 2, y + 14, out.success ? 'Level complete' : 'Not enough lemmings saved', { size: 32, big: true, color: out.success ? COLORS.green : COLORS.red, originX: 0.5 }));
+    k(label(this, x + w / 2, y + 54, `${levelName(l)}  ${l.title}`, { purple: true, originX: 0.5 }));
+    // accept or retry, on top like the Cash Out of Balatro
+    const giveUp = () => {
+      if (window.confirm('Give up this run?')) this.finishRun(false);
+    };
+    if (out.success) {
+      const accept = () => {
+        run.accept();
+        const meta = loadMeta();
+        recordLevel(meta, setup.levelId, out);
+        saveMeta(meta);
+        this.save();
+        this.sfx(SoundEffect.Yippee);
+        this.render();
+      };
+      this.btn('accept', x + 16, y + 80, 306, 34, 'Accept result', COLORS.orange, accept, { big: true });
+      this.btn('retry', x + 336, y + 80, 306, 34, 'Retry', COLORS.blue, () => this.retry(run), { big: true });
+    } else {
+      this.btn('retry', x + 16, y + 80, 306, 34, 'Retry', COLORS.blue, () => this.retry(run), { big: true });
+      this.btn('giveUp', x + 336, y + 80, 306, 34, 'Give up the run', COLORS.red, giveUp, { big: true });
+    }
+    this.well(x + 12, y + 126, w - 24, 274);
     const pct = out.hand ? Math.floor((out.rescued * 100) / out.hand) : 0;
-    k(label(this, x + 24, y + 96, `Rescued ${out.rescued} of ${out.hand} (${pct}%), you needed ${out.required}.`, { color: COLORS.text }));
+    k(label(this, x + 24, y + 134, `Rescued ${out.rescued} of ${out.hand} (${pct}%), you needed ${out.required}.`, { color: COLORS.text }));
     const count = (f: (x: Fate) => boolean) => out.fates.filter(f).length;
     const lost = count(isDeath);
     const alive = count((f) => f === 'alive');
@@ -1005,10 +1152,9 @@ export class RunScene extends Phaser.Scene {
     const deaths = new Map<Fate, number>();
     for (const f of out.fates) if (isDeath(f)) deaths.set(f, (deaths.get(f) ?? 0) + 1);
     const how = [...deaths].map(([f, n]) => `${n} ${FATE_TEXTS[f]}`).join(', ');
-    k(label(this, x + 24, y + 118, `Survived ${alive}   Stayed home ${home}   Lost ${lost}${how ? ` (${how})` : ''}`, { color: COLORS.dim, maxWidth: 660 }));
-    if (out.success && lost > 0)
-      k(label(this, x + 24, y + 144, 'If you accept this result, the lost lemmings leave your colony for good.', { color: COLORS.orange }));
-    k(label(this, x + 24, y + 166, `Skills used: ${describeSkills(out.skillsUsed, 'none')}`, { color: COLORS.dim, maxWidth: 660 }));
+    k(label(this, x + 24, y + 154, `Survived ${alive}   Stayed home ${home}   Lost ${lost}${how ? ` (${how})` : ''}`, { color: COLORS.dim, maxWidth: w - 48 }));
+    if (out.success && lost > 0) k(label(this, x + 24, y + 190, 'If you accept this result, the lost lemmings leave your colony for good.', { color: COLORS.orange, maxWidth: w - 48 }));
+    k(label(this, x + 24, y + 226, `Skills used: ${describeSkills(out.skillsUsed, 'none')}`, { color: COLORS.dim, maxWidth: w - 48 }));
 
     // what happened to the special lemmings
     const specials: [LemmingCard, Fate][] = [];
@@ -1017,41 +1163,18 @@ export class RunScene extends Phaser.Scene {
       if (c && isSpecial(c)) specials.push([c, out.fates[i]]);
     });
     if (specials.length) {
-      k(label(this, x + 24, y + 196, 'Special lemmings', { color: COLORS.purple }));
-      specials.slice(0, 12).forEach(([c, f], i) => {
-        const cx = x + 24 + (i % 2) * 340;
-        const cy = y + 220 + Math.floor(i / 2) * 22;
+      k(label(this, x + 24, y + 264, 'Special lemmings', { color: COLORS.purple }));
+      specials.slice(0, 8).forEach(([c, f], i) => {
+        const cx = x + 24 + (i % 2) * 310;
+        const cy = y + 286 + Math.floor(i / 2) * 22;
         const sp = k(lemmingSprite(this, cx + 8, cy + 6, FATE_ANIMS[f] ?? 'walk', 1));
         sp.setTint(EDITION_TINTS[c.edition]);
         k(label(this, cx + 22, cy, `${cardTitle(c)}: ${FATE_TEXTS[f]}`, { color: isDeath(f) ? COLORS.red : f === 'saved' ? COLORS.green : COLORS.text }));
       });
-      if (specials.length > 12) k(label(this, x + 24, y + 352, `and ${specials.length - 12} more`, { color: COLORS.dim }));
+      if (specials.length > 8) k(label(this, x + 24, y + 376, `and ${specials.length - 8} more`, { color: COLORS.dim }));
     }
-
     const unused = Math.max(0, ATTEMPTS - setup.attempts);
-    k(label(this, x + 24, y + 346, `Attempt ${setup.attempts}. Unused attempts pay $1 each (${unused} left).`, { color: COLORS.dim }));
-    if (out.success) {
-      k(
-        new Button(this, x + 24, y + 366, 200, 30, 'Accept result', COLORS.green, () => {
-          const cash = run.accept();
-          const meta = loadMeta();
-          recordLevel(meta, setup.levelId, out);
-          saveMeta(meta);
-          this.save();
-          this.sfx(SoundEffect.Yippee);
-          this.render();
-          void cash;
-        }),
-      );
-      k(new Button(this, x + 236, y + 366, 200, 30, 'Retry', COLORS.blue, () => this.retry(run)));
-    } else {
-      k(new Button(this, x + 24, y + 366, 200, 30, 'Retry', COLORS.blue, () => this.retry(run)));
-      k(
-        new Button(this, x + 480, y + 366, 200, 30, 'Give up the run', COLORS.red, () => {
-          if (window.confirm('Give up this run?')) this.finishRun(false);
-        }),
-      );
-    }
+    k(label(this, x + w / 2, y + 406, `Attempt ${setup.attempts}. Unused attempts pay $1 each (${unused} left).`, { color: COLORS.dim, originX: 0.5 }));
   }
 
   private retry(run: RunSession): void {
@@ -1074,126 +1197,158 @@ export class RunScene extends Phaser.Scene {
 
   /* -------------------------------------------------------------------------------------------- cash out */
 
+  /** The cash out of Balatro: the button on top, and below it what the blind paid, line by line. */
   private renderCashout(run: RunSession): void {
     const k = this.k.bind(this);
     const cash = run.state.cashout!;
-    const x = MAIN_X + 104;
-    const y = MAIN_Y + 4;
-    k(panel(this, x, y, 504, 404, COLORS.panel, COLORS.gold, 12));
-    k(label(this, x + 252, y + 16, 'Cash out', { size: 32, big: true, color: COLORS.gold, originX: 0.5 }));
-    const items: Phaser.GameObjects.GameObject[] = [];
+    const x = MAIN_X + 60;
+    const y = MAIN_Y;
+    const w = MAIN_R - MAIN_X - 120;
+    k(panel(this, x, y, w, 440, COLORS.panel, COLORS.panelLight, 12));
+    const cashOut = () => {
+      run.cashOut();
+      this.save();
+      if (run.state.phase === 'over') this.finishRun(true);
+      else this.render();
+    };
+    this.btn('cashout', x + 12, y + 12, w - 24, 44, `Cash Out: $${cash.total}`, COLORS.orange, cashOut, { big: true });
+    this.well(x + 12, y + 70, w - 24, 340);
+    const items: Phaser.GameObjects.BitmapText[] = [];
     cash.lines.forEach((ln, i) => {
-      const ly = y + 64 + i * 22;
+      const ly = y + 82 + i * 22;
       const a = k(label(this, x + 24, ly, ln.label, { color: COLORS.text }));
-      const b = k(label(this, x + 480, ly, `+$${ln.amount}`, { color: COLORS.gold, originX: 1 }));
+      // the money as Balatro counts it out: a $ for every dollar
+      const b = k(label(this, x + w - 24, ly, ln.amount <= 12 ? '$'.repeat(ln.amount) : `$${ln.amount}`, { color: COLORS.gold, originX: 1 }));
       // leader dots from the label to the amount
       const from = x + 24 + a.width + 8;
-      const to = x + 480 - b.width - 8;
-      const dots = k(label(this, from, ly, '.'.repeat(Math.max(0, Math.floor((to - from) / 4))), { color: 0x505070 }));
+      const to = x + w - 24 - b.width - 8;
+      const dots = k(label(this, from, ly, '.'.repeat(Math.max(0, Math.floor((to - from) / 4))), { color: COLORS.border }));
       for (const o of [a, dots, b]) {
         o.setAlpha(0);
         items.push(o);
       }
     });
-    const ty = y + 64 + cash.lines.length * 22 + 8;
-    const total = k(label(this, x + 480, ty, `$${cash.total}`, { size: 32, big: true, color: COLORS.gold, originX: 1 }));
-    total.setAlpha(0);
-    cash.notes.slice(0, 6).forEach((n, i) => k(label(this, x + 24, ty + 44 + i * 20, n, { color: COLORS.dim, maxWidth: 456 })));
+    const ty = y + 82 + cash.lines.length * 22 + 10;
+    cash.notes.slice(0, 6).forEach((n, i) => k(label(this, x + 24, ty + i * 20, n, { color: COLORS.dim, maxWidth: w - 48 })));
     // the lines come in one by one, with a click each
     items.forEach((o, i) =>
       this.tweens.add({
         targets: o,
         alpha: 1,
-        delay: 150 + Math.floor(i / 3) * 260,
+        delay: 400 + Math.floor(i / 3) * 260,
         duration: 120,
         onStart: () => {
           if (i % 3 === 0) this.sfx(SoundEffect.AssignSkill);
         },
       }),
     );
-    this.tweens.add({ targets: total, alpha: 1, delay: 300 + (items.length / 3) * 260, duration: 200, onStart: () => this.sfx(SoundEffect.Yippee) });
-    k(
-      new Button(this, x + 152, y + 362, 200, 32, `Cash out $${cash.total}`, COLORS.gold, () => {
-        run.cashOut();
-        this.save();
-        if (run.state.phase === 'over') this.finishRun(true);
-        else this.render();
-      }),
-    );
   }
 
   /* -------------------------------------------------------------------------------------------- shop */
 
+  /**
+   * The shop of Balatro: Next Round and Reroll on the left, the cards on offer next to them with their price on top,
+   * and below them the next blind and the packs (the recruits every shop has, and what a Supply Drop adds). A card is
+   * bought by dragging it up to the jokers, or by tapping it and then its Buy button.
+   */
   private renderShop(run: RunSession): void {
     const k = this.k.bind(this);
     const s = run.state;
     const shop = s.shop!;
-    const x = MAIN_X + 4;
-    const y = MAIN_Y + 4;
-    k(panel(this, x, y, 704, 404, COLORS.panel, COLORS.red, 12));
-    k(label(this, x + 24, y + 12, 'Shop', { size: 32, big: true, color: COLORS.red }));
-    k(lemmingSprite(this, x + 178, y + 30, 'build', 2));
-    k(label(this, x + 204, y + 22, `Recruits, training, jokers and tarots. ${touch.active ? 'Tap twice' : 'Click'} to buy.`, { color: COLORS.dim }));
+    const x = MAIN_X;
+    const y = MAIN_Y;
+    const w = MAIN_R - MAIN_X;
+    k(panel(this, x, y, w, 440, COLORS.panel, COLORS.red, 12));
 
-    const step = shop.offers.length > 4 ? 94 : 116;
-    const cw = shop.offers.length > 4 ? 86 : 100;
-    shop.offers.forEach((o, i) => {
-      const cx = x + 24 + i * step;
-      const cy = y + 70;
-      const info = this.offerInfo(run, o);
-      const can = run.canBuy(o);
-      // touch: the tooltip says why an offer cannot be bought, so tapping it only shows the tooltip
-      const buy = o.sold || (!can && touch.active) ? null : () => this.buy(run, o);
-      const tail = o.sold ? 'Sold.' : !can ? this.whyNot(run, o) : touch.active ? null : `Click to buy for $${o.price}.`;
-      const card = this.card(cx, cy, cw, 132, info.color, info.art, buy, () => ({
-        title: info.title,
-        color: info.color,
-        lines: tail ? [...info.lines, '', tail] : info.lines,
-        x: cx,
-        y: cy + 180,
-      }), `Tap again to buy it for $${o.price}.`);
-      if (o.sold) card.setAlpha(0.3);
-      k(label(this, cx + cw / 2, cy + 140, o.sold ? 'sold' : `$${o.price}`, { color: o.sold ? COLORS.dim : can ? COLORS.gold : COLORS.red, originX: 0.5 }));
-      k(label(this, cx + cw / 2, cy + 160, info.short, { color: COLORS.text, originX: 0.5, maxWidth: cw + 8, align: 1 }));
-    });
+    const nextRound = () => {
+      run.nextRound();
+      this.save();
+      this.render();
+    };
+    this.btn('nextRound', x + 12, y + 12, 124, 58, 'Next\nRound', COLORS.red, nextRound, { big: true });
+    const reroll = () => {
+      if (!run.reroll()) return;
+      this.sfx(SoundEffect.SkillButtonSelect);
+      this.save();
+      this.render();
+    };
+    this.btn('reroll', x + 12, y + 80, 124, 58, 'Reroll', COLORS.green, reroll, { big: true, enabled: s.money >= run.rerollPrice(), sub: `$${run.rerollPrice()}` });
 
-    // the staples
-    const rx = x + 500;
-    k(
-      new Button(this, rx, y + 70, 184, 52, 'Next round', COLORS.red, () => {
-        run.nextRound();
-        this.save();
-        this.render();
-      }),
-    );
-    k(
-      new Button(this, rx, y + 136, 184, 44, `Reroll $${run.rerollPrice()}`, COLORS.green, () => {
-        if (run.reroll()) {
-          this.sfx(SoundEffect.SkillButtonSelect);
-          this.save();
-          this.render();
-        }
-      }, { enabled: s.money >= run.rerollPrice() }),
-    );
-    k(
-      new Button(this, rx, y + 194, 184, 52, 'Recruit 5 lemmings', COLORS.blue, () => {
-        if (run.buyRecruits()) {
-          this.sfx(SoundEffect.LetsGo);
-          this.save();
-          this.render();
-        }
-      }, { enabled: s.money >= shop.recruitPrice, sub: `$${shop.recruitPrice}` }),
-    );
+    // the cards on offer
+    const top: Rect = { x: x + 146, y: y + 12, w: w - 158, h: 130 };
+    this.well(top.x, top.y, top.w, top.h);
+    const offers = shop.offers.slice(0, 3).filter((o) => !o.sold);
+    const ox = this.slots(top, offers.length);
+    offers.forEach((o, i) => this.offerCard(run, o, ox[i], top.y + 36 + CARD_H / 2, `offer:${i}`));
+    if (!offers.length) k(label(this, top.x + top.w / 2, top.y + top.h / 2, 'Sold out', { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
 
     // the next blind
+    const by = y + 152;
+    this.well(x + 12, by, 216, 130);
     const next = s.blinds.find((b) => b.status === 'current') ?? s.blinds.find((b) => b.status === 'upcoming');
-    const nextKind = next ? next.kind : 'small';
-    const nextLevel = next ? run.level(next.levelId) : null;
-    k(label(this, x + 24, y + 300, next ? `Next: ${BLIND_NAMES[nextKind]}` : `Next: Ante ${s.ante + 1}`, { color: next ? BLIND_COLORS[nextKind] : COLORS.orange }));
-    if (nextLevel) {
-      k(label(this, x + 24, y + 320, `${levelName(nextLevel)}  ${nextLevel.title}`, { purple: true }));
-      k(label(this, x + 24, y + 342, `Rescue ${nextLevel.rescue} of ${nextLevel.lemmings}. Skills: ${describeSkills(nextLevel.skills)}`, { color: COLORS.dim, maxWidth: 660 }));
-    }
+    if (next) {
+      const index = s.blinds.indexOf(next);
+      const nl = run.level(next.levelId);
+      k(label(this, x + 20, by + 6, `Next: ${BLIND_NAMES[next.kind]}`, { color: BLIND_COLORS[next.kind] }));
+      const pic = k(this.add.image(x + 20, by + 26, levelThumbnail(this, this.app, nl, 200, 40)).setOrigin(0, 0));
+      pic.setInteractive({ useHandCursor: true });
+      pic.on('pointerup', () => this.showLevelPreview(run, index));
+      this.spot('nextBlind', x + 120, by + 46);
+      k(label(this, x + 20, by + 70, levelName(nl), { purple: true }));
+      k(label(this, x + 220, by + 72, `Rescue ${nl.rescue}/${nl.lemmings}`, { color: COLORS.dim, originX: 1 }));
+      k(label(this, x + 20, by + 90, nl.title, { color: COLORS.text, maxWidth: 200 }));
+    } else k(label(this, x + 20, by + 6, `Next: Ante ${s.ante + 1}`, { color: COLORS.orange }));
+
+    // the packs: the recruits, and the extra offers of a Supply Drop
+    const packs: Rect = { x: x + 238, y: by, w: w - 250, h: 130 };
+    this.well(packs.x, packs.y, packs.w, packs.h);
+    const extras = shop.offers.slice(3).filter((o) => !o.sold);
+    const px = this.slots(packs, extras.length + 1);
+    const py = packs.y + 36 + CARD_H / 2;
+    const canRecruit = s.money >= shop.recruitPrice;
+    const recruit = () => {
+      if (!run.buyRecruits()) {
+        this.toast('Not enough money.');
+        return;
+      }
+      this.sfx(SoundEffect.LetsGo);
+      this.save();
+      this.render();
+    };
+    const price = shop.recruitPrice === 0 ? 'FREE' : `$${shop.recruitPrice}`;
+    const pack = k(new CardView(this, px[0], py, { color: COLORS.blue, art: { anim: 'walk' }, price, pile: true }));
+    this.spot('recruits', px[0], py);
+    this.table.add(pack, {
+      tip: () => ({ title: 'Recruits', color: COLORS.blue, lines: ['5 plain lemmings join the colony.', 'Every shop has them, as often as you like.'], badge: { text: 'Lemming Pack', color: COLORS.blue } }),
+      buttons: () => [{ label: 'BUY', color: COLORS.orange, side: 'below', enabled: canRecruit, run: recruit }],
+      targets: () => [{ rect: BUY_ZONE, color: COLORS.green, lines: ['BUY', price], active: canRecruit, release: recruit, refused: recruit }],
+    });
+    extras.forEach((o, i) => this.offerCard(run, o, px[i + 1], py, `extra:${i}`));
+
+    k(label(this, x + w / 2, y + 296, touch.active ? 'Drag a card up to buy it, or tap it for what it is' : 'Drag a card up to buy it, or click it for its Buy button', { color: COLORS.dim, originX: 0.5 }));
+  }
+
+  /** a card of the shop: its price on top, bought by a drag to the jokers or with its Buy button */
+  private offerCard(run: RunSession, o: ShopOffer, cx: number, cy: number, spot: string): void {
+    const info = this.offerInfo(run, o);
+    const price = o.price === 0 ? 'FREE' : `$${o.price}`;
+    const card = this.k(new CardView(this, cx, cy, { color: info.color, art: info.art, price }));
+    this.spot(spot, cx, cy);
+    const buy = () => this.buy(run, o);
+    const buyUse = () => this.buyAndUse(run, o);
+    const behaviour: CardBehaviour = {
+      tip: () => ({ title: info.title, color: info.color, lines: [...info.lines, ...(run.canBuy(o) ? [] : ['', this.whyNot(run, o)])], badge: info.badge }),
+      buttons: () => [
+        { label: 'BUY', color: COLORS.orange, side: 'below', enabled: run.canBuy(o), run: buy },
+        ...(o.type === 'tarot' ? [{ label: 'BUY &', sub: 'USE', color: COLORS.orange, side: 'right' as const, enabled: run.canBuyAndUse(o), run: buyUse }] : []),
+      ],
+      targets: () => {
+        const targets: DropTarget[] = [{ rect: BUY_ZONE, color: COLORS.green, lines: ['BUY', price], active: run.canBuy(o), release: buy, refused: buy }];
+        if (run.canBuyAndUse(o)) targets.push({ rect: USE_ZONE, color: COLORS.orange, lines: ['BUY', '&', 'USE', price], active: true, release: buyUse });
+        return targets;
+      },
+    };
+    this.table.add(card, behaviour);
   }
 
   private whyNot(run: RunSession, o: ShopOffer): string {
@@ -1204,16 +1359,16 @@ export class RunScene extends Phaser.Scene {
     return '';
   }
 
-  private offerInfo(run: RunSession, o: ShopOffer): { title: string; color: number; lines: string[]; art: Art; short: string } {
+  private offerInfo(run: RunSession, o: ShopOffer): { title: string; color: number; lines: string[]; art: Art; badge: { text: string; color: number } } {
     switch (o.type) {
       case 'joker': {
         const d = jokerDef(o.id);
-        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text, '', `${d.rarity} joker`], art: JOKER_ART[d.id], short: d.name };
+        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text], art: JOKER_ART[d.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } };
       }
       case 'tarot': {
         const d = tarotDef(o.id);
         const text = o.skill && d.skillText ? d.skillText(SKILL_NAMES[o.skill]) : d.text;
-        return { title: d.name, color: COLORS.purple, lines: [text, '', 'tarot (keep up to 2, use any time)'], art: o.id === 'manual' && o.skill ? { icon: o.skill } : TAROT_ART[d.id], short: d.name };
+        return { title: d.name, color: COLORS.purple, lines: [text], art: o.id === 'manual' && o.skill ? { icon: o.skill } : TAROT_ART[d.id], badge: { text: 'Tarot', color: COLORS.purple } };
       }
       case 'training': {
         const sk = o.skill!;
@@ -1222,7 +1377,7 @@ export class RunScene extends Phaser.Scene {
           color: COLORS.teal,
           lines: [`+${o.amount} ${SKILL_NAMES[sk]} ability for good.`, `You have ${run.capability()[sk]}.`],
           art: { icon: sk },
-          short: `+${o.amount} ${SKILL_PLURALS[sk]}`,
+          badge: { text: 'Training', color: COLORS.teal },
         };
       }
       case 'drive': {
@@ -1231,8 +1386,8 @@ export class RunScene extends Phaser.Scene {
           title: `${SKILL_NAMES[sk]} Recruitment Drive`,
           color: COLORS.teal,
           lines: [`+${o.amount} lemmings and +${o.amount} ${SKILL_NAMES[sk]} ability.`],
-          art: { anim: 'walk' },
-          short: `${SKILL_NAMES[sk]} Drive`,
+          art: { anim: 'walk', tint: 0x9ff0e0 },
+          badge: { text: 'Recruitment Drive', color: COLORS.teal },
         };
       }
     }
@@ -1246,6 +1401,25 @@ export class RunScene extends Phaser.Scene {
     this.sfx(SoundEffect.AssignSkill);
     this.save();
     this.render();
+  }
+
+  /** a tarot of the shop, used at once (it needs no room among the tarots) */
+  private buyAndUse(run: RunSession, o: ShopOffer): void {
+    if (!run.canBuyAndUse(o)) {
+      this.toast(this.whyNot(run, o));
+      return;
+    }
+    const d = tarotDef(o.id);
+    if (d.select > 0) {
+      this.showColony({ offer: o.uid, max: d.select, name: d.name });
+      return;
+    }
+    const notes = run.buyAndUse(o.uid);
+    if (!notes) return;
+    this.sfx(SoundEffect.AssignSkill);
+    this.save();
+    this.render();
+    this.toast(notes.join('\n'));
   }
 
   /* -------------------------------------------------------------------------------------------- tarots and the colony */
@@ -1284,25 +1458,21 @@ export class RunScene extends Phaser.Scene {
     this.previewPan = null;
   }
 
-  /** The colony: every special lemming, and the plain ones. With a tarot: select lemmings for it. */
-  private showColony(tarot: { uid: number; max: number; name: string } | null): void {
+  /**
+   * The colony: every special lemming, and the plain ones. With a tarot: select lemmings for it, with a tap each or
+   * with one drag across them (what the drag does to the first lemming it touches, it does to all).
+   */
+  private showColony(tarot: TarotUse | null): void {
     const run = this.run;
     if (!run) return;
-    this.closeOverlay();
-    this.tip.hide();
-    const o = <T extends Phaser.GameObjects.GameObject>(g: T): T => {
-      this.overlay.push(g);
-      (g as unknown as Phaser.GameObjects.Components.Depth).setDepth?.(600);
-      return g;
-    };
+    const o = this.openOverlay(0.6);
     const selected = new Set<number>();
     const colony = run.state.colony;
     const squad = new Set(run.state.setup?.hand ?? []);
     const specials = colony.filter(isSpecial);
     const plain = colony.filter((c) => !isSpecial(c));
-    o(this.add.rectangle(0, 0, W, H, 0x000000, 0.6).setOrigin(0, 0).setInteractive());
     o(panel(this, 60, 30, 840, 480, COLORS.panel, COLORS.purple, 12));
-    o(label(this, 84, 44, tarot ? `${tarot.name}: select up to ${tarot.max}` : `Your colony: ${colony.length} lemmings`, { size: 16, color: COLORS.purple }));
+    o(label(this, 84, 44, tarot ? `${tarot.name}: select up to ${tarot.max}` : `Your colony: ${colony.length} lemmings`, { size: 16, color: COLORS.gold }));
     const info = o(label(this, 84, 66, '', { color: COLORS.dim }));
     const update = () =>
       info.setText(
@@ -1311,7 +1481,7 @@ export class RunScene extends Phaser.Scene {
           : 'Special lemmings have editions (Gold, Lucky, Mentor), abilities or insurance.',
       );
     update();
-    const cells: { c: LemmingCard; box: Phaser.GameObjects.Graphics }[] = [];
+    const cells: { c: LemmingCard; rect: Rect; draw: () => void }[] = [];
     const shown = specials.slice(0, 44);
     shown.forEach((c, i) => {
       const cx = 84 + (i % 4) * 200;
@@ -1325,11 +1495,12 @@ export class RunScene extends Phaser.Scene {
         box.strokeRoundedRect(cx, cy, 192, 28, 5);
       };
       draw();
-      cells.push({ c, box });
+      cells.push({ c, rect: { x: cx, y: cy, w: 192, h: 28 }, draw });
       const sp = o(lemmingSprite(this, cx + 12, cy + 14, c.floater ? 'float' : c.climber ? 'climb' : 'walk', 1));
       sp.setTint(EDITION_TINTS[c.edition]);
       o(label(this, cx + 26, cy + 6, cardTitle(c), { color: COLORS.text, maxWidth: 160 }));
       const zone = o(this.add.zone(cx, cy, 192, 28).setOrigin(0, 0).setInteractive());
+      this.spot(`colony:${i}`, cx + 96, cy + 14);
       const cellTip = (): TipContent => ({
         title: cardTitle(c),
         color: EDITION_TINTS[c.edition] === 0xffffff ? COLORS.text : EDITION_TINTS[c.edition],
@@ -1339,13 +1510,33 @@ export class RunScene extends Phaser.Scene {
         width: 320,
       });
       hoverTip(zone, this.tip, cellTip, !tarot);
-      if (tarot)
-        zone.on('pointerup', () => {
-          if (selected.has(c.id)) selected.delete(c.id);
-          else if (selected.size < tarot.max) selected.add(c.id);
-          draw();
+      if (!tarot) return;
+      zone.on('pointerdown', () => {
+        // the first lemming decides: the drag selects, or it takes lemmings out of the selection
+        const adding = !selected.has(c.id);
+        const apply = (cell: { c: LemmingCard; draw: () => void }) => {
+          if (adding === selected.has(cell.c.id)) return;
+          if (!adding) selected.delete(cell.c.id);
+          else if (selected.size < tarot.max) selected.add(cell.c.id);
+          else return;
+          cell.draw();
           update();
-        });
+        };
+        apply({ c, draw });
+        const move = (p: Phaser.Input.Pointer) => {
+          const cell = cells.find((cl) => inRect(cl.rect, p.worldX, p.worldY));
+          if (cell) apply(cell);
+        };
+        const stop = () => {
+          this.input.off('pointermove', move);
+          this.input.off('pointerup', stop);
+          this.input.off('pointerupoutside', stop);
+        };
+        this.input.on('pointermove', move);
+        this.input.on('pointerup', stop);
+        this.input.on('pointerupoutside', stop);
+        this.overlayCleanup.push(stop);
+      });
     });
     if (specials.length > shown.length) o(label(this, 84, 92 + 11 * 32, `and ${specials.length - shown.length} more special lemmings`, { color: COLORS.dim }));
     // the plain lemmings: one tile (with a tarot, every click selects another one)
@@ -1356,38 +1547,38 @@ export class RunScene extends Phaser.Scene {
     updPlain();
     o(lemmingSprite(this, 94, py + 14, 'walk', 1));
     if (tarot && plain.length) {
-      o(
-        new Button(this, 420, py + 2, 100, 26, 'Select one', COLORS.blue, () => {
-          const next = plain.find((c) => !selected.has(c.id) && !squad.has(c.id)) ?? plain.find((c) => !selected.has(c.id));
-          if (next && selected.size < tarot.max) selected.add(next.id);
-          updPlain();
-          update();
-        }).setDepth(601),
-      );
-      o(
-        new Button(this, 530, py + 2, 100, 26, 'Clear', COLORS.gray, () => {
-          for (const c of plain) selected.delete(c.id);
-          updPlain();
-          update();
-        }).setDepth(601),
-      );
+      this.spot('selectOne', 470, py + 15);
+      const selectOne = () => {
+        const next = plain.find((c) => !selected.has(c.id) && !squad.has(c.id)) ?? plain.find((c) => !selected.has(c.id));
+        if (next && selected.size < tarot.max) selected.add(next.id);
+        updPlain();
+        update();
+      };
+      o(new Button(this, 420, py + 2, 100, 26, 'Select one', COLORS.blue, selectOne));
+      const clearPlain = () => {
+        for (const c of plain) selected.delete(c.id);
+        updPlain();
+        update();
+      };
+      o(new Button(this, 530, py + 2, 100, 26, 'Clear', COLORS.gray, clearPlain));
     }
     if (tarot) {
-      o(
-        new Button(this, 600, 466, 130, 32, 'Use', COLORS.purple, () => {
-          const notes = run.useTarot(tarot.uid, [...selected]);
-          if (!notes) {
-            this.toast(selected.size === 0 ? 'Select at least one lemming.' : 'That does not work (the squad of a blind cannot leave the colony).');
-            return;
-          }
-          this.sfx(SoundEffect.AssignSkill);
-          this.save();
-          this.render();
-          this.toast(notes.join('\n'));
-        }).setDepth(601),
-      );
+      this.spot('use', 665, 482);
+      const use = () => {
+        const notes = tarot.offer !== undefined ? run.buyAndUse(tarot.offer, [...selected]) : run.useTarot(tarot.uid!, [...selected]);
+        if (!notes) {
+          this.toast(selected.size === 0 ? 'Select at least one lemming.' : 'That does not work (the squad of a blind cannot leave the colony).');
+          return;
+        }
+        this.sfx(SoundEffect.AssignSkill);
+        this.save();
+        this.render();
+        this.toast(notes.join('\n'));
+      };
+      o(new Button(this, 600, 466, 130, 32, 'Use', COLORS.red, use));
     }
-    o(new Button(this, 740, 466, 130, 32, tarot ? 'Cancel' : 'Close', COLORS.gray, () => this.closeOverlay()).setDepth(601));
+    this.spot('back', 805, 482);
+    o(new Button(this, 740, 466, 130, 32, tarot ? 'Cancel' : 'Back', COLORS.orange, () => this.closeOverlay()));
   }
 
   private cardLines(c: LemmingCard, inSquad: boolean): string[] {
@@ -1405,11 +1596,12 @@ export class RunScene extends Phaser.Scene {
   private renderOver(run: RunSession): void {
     const k = this.k.bind(this);
     const s = run.state;
-    const x = MAIN_X + 4;
-    const y = MAIN_Y + 4;
-    k(panel(this, x, y, 704, 404, COLORS.panel, s.won ? COLORS.gold : COLORS.red, 12));
-    k(label(this, x + 352, y + 24, s.won ? 'Victory!' : 'Run over', { size: 48, big: true, color: s.won ? COLORS.gold : COLORS.red, originX: 0.5 }));
-    k(label(this, x + 352, y + 90, s.won ? 'Your colony made it through all eight antes.' : `Your colony reached ante ${s.ante}.`, { color: COLORS.text, originX: 0.5 }));
+    const x = MAIN_X;
+    const y = MAIN_Y;
+    const w = MAIN_R - MAIN_X;
+    k(panel(this, x, y, w, 440, COLORS.panel, s.won ? COLORS.gold : COLORS.red, 12));
+    k(label(this, x + w / 2, y + 20, s.won ? 'You win!' : 'Game over', { size: 48, big: true, color: s.won ? COLORS.gold : COLORS.red, originX: 0.5 }));
+    k(label(this, x + w / 2, y + 84, s.won ? 'Your colony made it through all eight antes.' : `Your colony reached ante ${s.ante}.`, { color: COLORS.text, originX: 0.5 }));
     const st = s.stats;
     const lines = [
       `Blinds won ${st.blindsWon}, skipped ${st.skipped}, attempts ${st.attempts}`,
@@ -1418,21 +1610,20 @@ export class RunScene extends Phaser.Scene {
       `Jokers: ${s.jokers.map((j) => jokerDef(j.id).name).join(', ') || 'none'}`,
       `Seed ${s.seed}`,
     ];
-    k(label(this, x + 352, y + 130, lines.join('\n'), { color: COLORS.dim, originX: 0.5, align: 1 }));
-    for (let i = 0; i < 8; i++) k(lemmingSprite(this, x + 100 + i * 72, y + 280, s.won ? (i % 2 ? 'exit' : 'walk') : i % 2 ? 'splat' : 'drown', 2));
-    k(
-      new Button(this, x + 160, y + 340, 180, 40, 'New run', COLORS.red, () => {
-        this.app.run = null;
-        this.newRun(randomSeed());
-      }),
-    );
-    k(
-      new Button(this, x + 364, y + 340, 180, 40, 'Menu', COLORS.gray, () => {
-        this.app.run = null;
-        saveRun(null);
-        this.toMenu();
-      }),
-    );
+    this.well(x + 40, y + 112, w - 80, 126);
+    k(label(this, x + w / 2, y + 124, lines.join('\n'), { color: COLORS.text, originX: 0.5, align: 1, maxWidth: w - 100 }));
+    for (let i = 0; i < 8; i++) k(lemmingSprite(this, x + 77 + i * 72, y + 280, s.won ? (i % 2 ? 'exit' : 'walk') : i % 2 ? 'splat' : 'drown', 2));
+    const again = () => {
+      this.app.run = null;
+      this.newRun(randomSeed());
+    };
+    this.btn('newRun', x + 130, y + 330, 190, 44, 'New Run', COLORS.red, again, { big: true });
+    const menu = () => {
+      this.app.run = null;
+      saveRun(null);
+      this.toMenu();
+    };
+    this.btn('menu', x + 338, y + 330, 190, 44, 'Main Menu', COLORS.orange, menu, { big: true });
   }
 
   /* -------------------------------------------------------------------------------------------- messages */
@@ -1441,11 +1632,13 @@ export class RunScene extends Phaser.Scene {
     for (const o of this.toastObj) o.destroy();
     this.toastObj = [];
     if (!text) return;
-    const t = label(this, W / 2, 0, text, { color: COLORS.text, originX: 0.5, maxWidth: 600, align: 1 }).setDepth(900);
+    // over the middle of the screen, clear of the column on the left
+    const cx = (MAIN_X + MAIN_R) / 2;
+    const t = label(this, cx, 0, text, { color: COLORS.text, originX: 0.5, maxWidth: 560, align: 1 }).setDepth(900);
     const h = t.height + 20;
     const y = H - h - 16;
     t.setY(y + 10);
-    const bg = panel(this, W / 2 - 320, y, 640, h, COLORS.dark, COLORS.gold, 8).setDepth(899);
+    const bg = panel(this, cx - 300, y, 600, h, COLORS.dark, COLORS.gold, 8).setDepth(899);
     this.toastObj = [bg, t];
     this.time.delayedCall(3500, () => {
       for (const o of [bg, t]) if (o.active) this.tweens.add({ targets: o, alpha: 0, duration: 400, onComplete: () => o.destroy() });

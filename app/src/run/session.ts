@@ -57,6 +57,7 @@ import {
   START_COLONY,
   START_MONEY,
   TAROT_SLOTS,
+  type TarotInstance,
 } from './state.ts';
 
 /** The level bands of the antes, as positions in the level system (0 = Fun 1 ... 119 = Mayhem 30). */
@@ -819,7 +820,59 @@ export class RunSession {
     if (i < 0) return false;
     s.money += sellPrice(s.jokers[i].id);
     s.jokers.splice(i, 1);
+    if (s.setup) this.refreshSetup(s.setup);
     return true;
+  }
+
+  /** Puts a joker at another place in the row (the order is the player's; it does not change what they do). */
+  moveJoker(uid: number, index: number): boolean {
+    const jokers = this.state.jokers;
+    const i = jokers.findIndex((j) => j.uid === uid);
+    const to = Math.max(0, Math.min(jokers.length - 1, index));
+    if (i < 0 || i === to) return false;
+    const [j] = jokers.splice(i, 1);
+    jokers.splice(to, 0, j);
+    return true;
+  }
+
+  /** A tarot can be sold wherever it can be used (not while a level is played or the abilities are assigned). */
+  canSellTarot(): boolean {
+    const p = this.state.phase;
+    return p === 'blinds' || p === 'cashout' || p === 'shop';
+  }
+
+  sellTarot(uid: number): boolean {
+    const s = this.state;
+    const i = s.tarots.findIndex((t) => t.uid === uid);
+    if (i < 0 || !this.canSellTarot()) return false;
+    s.money += tarotSellPrice(s.tarots[i].id);
+    s.tarots.splice(i, 1);
+    return true;
+  }
+
+  /** A tarot of the shop can be used straight away: it does not need a free tarot slot. */
+  canBuyAndUse(offer: ShopOffer): boolean {
+    const s = this.state;
+    return s.phase === 'shop' && offer.type === 'tarot' && !offer.sold && s.money >= offer.price;
+  }
+
+  /** Buys a tarot of the shop and uses it on the selected cards. Returns what happened, or null when it cannot be. */
+  buyAndUse(uid: number, selected: number[] = []): string[] | null {
+    const s = this.state;
+    const offer = s.shop?.offers.find((o) => o.uid === uid);
+    if (!offer || !this.canBuyAndUse(offer)) return null;
+    const tarot: TarotInstance = { uid: this.uid(), id: offer.id, skill: offer.skill };
+    // paid first: The Hermit doubles what is left
+    s.money -= offer.price;
+    s.tarots.push(tarot);
+    const notes = this.useTarot(tarot.uid, selected);
+    if (!notes) {
+      s.tarots.pop();
+      s.money += offer.price;
+      return null;
+    }
+    offer.sold = true;
+    return notes;
   }
 
   /* -------------------------------------------------------------------------------------------- tarots and tags */
@@ -1024,6 +1077,10 @@ function randomSpecial(c: LemmingCard, rng: Rng): void {
 
 export function sellPrice(jokerId: string): number {
   return Math.max(1, Math.floor(jokerDef(jokerId).price / 2));
+}
+
+export function tarotSellPrice(tarotId: string): number {
+  return Math.max(1, Math.floor(tarotDef(tarotId).price / 2));
 }
 
 function percentOf(a: number, b: number): number {

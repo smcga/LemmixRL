@@ -2,7 +2,8 @@
  * Browser test with a finger, on an emulated phone (844 x 390 CSS pixels sideways, 3 device pixels per CSS pixel):
  * the menu signs, a level (a skill from the panel, a lemming tapped with the walker selection, the level dragged, the
  * touch buttons, the nuke that wants two taps of its own, a confirmation that a rotation cancels), the result screen's
- * menu button, the roguelike run (a tap shows what a button does, a second tap does it), and the screens with the safe
+ * menu button, the roguelike run (cards as in Balatro on a phone: a tap selects a card and shows its buttons, a card
+ * dragged to an area is bought or used, a finger dragged across lemmings selects them), and the screens with the safe
  * area of an iPhone (a notch on the left, the home indicator below).
  *
  *   npm run e2e         (CHROMIUM=/path/to/chromium to use a specific browser; otherwise Playwright's)
@@ -163,31 +164,70 @@ try {
     `(() => { const c = globalThis.phaserGame.scene.getScene('run').cameras.main; return { zoom: c.zoom, x: c.worldView.x, y: c.worldView.y }; })()`,
   );
   const v = (x: number, y: number) => ({ x: ((x - cam.x) * cam.zoom) / DPR, y: ((y - cam.y) * cam.zoom) / DPR });
-  p = v(480, 436);
-  await tap(p.x, p.y, 600);
+  const runScene = `globalThis.phaserGame.scene.getScene('run')`;
+  // where a button or a card of the run screens is (the scene keeps the middle of each by name), in CSS pixels
+  const spot = async (name: string, dx = 0) => {
+    const s = (await ev<{ x: number; y: number } | undefined>(`${runScene}.spots[${JSON.stringify(name)}]`)) ?? fail(`nothing called ${name} on the screen`);
+    return v(s.x + dx, s.y);
+  };
+  const tapSpot = async (name: string, wait = 400, dx = 0) => {
+    const s = await spot(name, dx);
+    await tap(s.x, s.y, wait);
+  };
+  const run = <T>(js: string) => ev<T>(`globalThis.lemmix.run.${js}`);
+  await tapSpot('newRun', 700);
   if (!(await ev<boolean>('!!globalThis.lemmix.run'))) fail('no new run');
   // the preview of the boss level opens and closes with taps
-  p = v(644 + 308 - 74 + 32, 124 + 2 * 137 + 43 + 10);
-  await tap(p.x, p.y, 500);
-  if ((await ev<number>(`globalThis.phaserGame.scene.getScene('run').overlay.length`)) === 0) fail('a tap on Preview did not open the level');
-  p = v(828 + 46, 26 + 14);
-  await tap(p.x, p.y);
-  if ((await ev<number>(`globalThis.phaserGame.scene.getScene('run').overlay.length`)) !== 0) fail('a tap on Close did not close the level preview');
+  await tapSpot('preview:2', 500);
+  if ((await ev<number>(`${runScene}.overlay.length`)) === 0) fail('a tap on Preview did not open the level');
+  await tapSpot('close');
+  if ((await ev<number>(`${runScene}.overlay.length`)) !== 0) fail('a tap on Close did not close the level preview');
   // the abilities: the 20th point of three bars, then Done
-  const row = (i: number) => 124 + 104 + i * 29 + 13;
-  for (const i of [7, 4, 5]) {
-    p = v(244 + 134 + 19 * 8 + 4, row(i));
-    await tap(p.x, p.y, 200);
-  }
-  p = v(244 + 392 - 166 + 75, 124 + 362 + 15);
-  await tap(p.x, p.y, 400);
-  if ((await ev<string>('globalThis.lemmix.run.state.phase')) !== 'blinds') fail('the abilities were not assigned by taps');
-  // Skip: the first tap shows what the tag gives, the second skips
-  p = v(244 + 120 + 48, 124 + 362 + 15);
-  await tap(p.x, p.y);
-  if ((await ev<string>('globalThis.lemmix.run.state.blinds[0].status')) !== 'current') fail('the first tap on Skip skipped');
-  await tap(p.x, p.y);
-  if ((await ev<string>('globalThis.lemmix.run.state.blinds[0].status')) !== 'skipped') fail('the second tap on Skip did not skip');
+  for (const skill of ['digger', 'builder', 'basher']) await tapSpot(`ability:${skill}`, 200, 19 * 8);
+  await tapSpot('done', 700);
+  if ((await run<string>('state.phase')) !== 'blinds') fail('the abilities were not assigned by taps');
+  // Skip Blind, as in Balatro: one tap (what the tag gives is next to it)
+  await tapSpot('skip', 700);
+  if ((await run<string>('state.blinds[0].status')) !== 'skipped') fail('a tap on Skip did not skip');
+
+  // the shop: a card is dragged up to the jokers to buy it
+  await ev(`(() => { const r = globalThis.lemmix.run; r.state.money = 10; r.openShop(); ${runScene}.render(); })()`);
+  await page.waitForTimeout(700);
+  const colony = await run<number>('state.colony.length');
+  const dragSpot = async (name: string, x: number, y: number) => {
+    const from = await spot(name);
+    const to = v(x, y);
+    await drag(from.x, from.y, to.x, to.y);
+    await page.waitForTimeout(400);
+  };
+  await dragSpot('recruits', 500, 60);
+  if ((await run<number>('state.colony.length')) !== colony + 5 || (await run<number>('state.money')) !== 7) fail('a card dragged to Buy was not bought');
+  await dragSpot('recruits', 500, 420);
+  if ((await run<number>('state.colony.length')) !== colony + 5) fail('a card dropped next to Buy was bought');
+  // a tap selects a card (it shows what it is, and its Buy button); a tap on the button buys
+  await tapSpot('recruits');
+  if ((await run<number>('state.colony.length')) !== colony + 5) fail('a tap on a card bought it');
+  if (!(await ev<boolean>(`!!${runScene}.tip.owner`))) fail('a tap on a card did not show what it is');
+  await tapSpot('card:BUY');
+  if ((await run<number>('state.colony.length')) !== colony + 10 || (await run<number>('state.money')) !== 4) fail('the Buy button of a tapped card did not buy it');
+  // a tarot: its Use button opens the colony, where a finger dragged across lemmings selects them
+  await ev(
+    `(() => { const s = globalThis.lemmix.run.state; s.tarots = [{ uid: 9001, id: 'umbrella' }]; s.jokers = [{ uid: 9002, id: 'piggy' }]; for (const c of s.colony) c.floater = false; for (let i = 0; i < 3; i++) s.colony[i].insured = true; ${runScene}.render(); })()`,
+  );
+  await page.waitForTimeout(200);
+  await tapSpot('tarot:0');
+  await tapSpot('card:USE', 500);
+  if ((await ev<number>(`${runScene}.overlay.length`)) === 0) fail('Use did not open the colony');
+  const first = await spot('colony:0');
+  const third = await spot('colony:2');
+  await drag(first.x, first.y, third.x, third.y);
+  await page.waitForTimeout(200);
+  await tapSpot('use', 500);
+  if ((await run<number>('state.colony.filter((c) => c.floater).length')) !== 3 || (await run<number>('state.tarots.length')) !== 0)
+    fail('a finger dragged across three lemmings did not select them for the tarot');
+  // a joker dragged to the tarots is sold
+  await dragSpot('joker:0', 840, 60);
+  if ((await run<number>('state.jokers.length')) !== 0 || (await run<number>('state.money')) !== 6) fail('a joker dragged to Sell was not sold');
   await page.screenshot({ path: `${REPO_ROOT}/tools/e2e/touch.png` });
 
   // the safe area of an iPhone held sideways: the screens stay out of the notch (left) and the home indicator (below)
@@ -219,7 +259,7 @@ try {
 
   if (errors.length) fail('errors in the page:\n' + errors.join('\n'));
   console.log(
-    'e2e ok: touch on a phone: menu signs, skill and lemming taps (walker selection), dragging, touch buttons, the nuke, a rotation, result menu, run screens (level preview, abilities, skip), safe areas',
+    'e2e ok: touch on a phone: menu signs, skill and lemming taps (walker selection), dragging, touch buttons, the nuke, a rotation, result menu, run screens (level preview, abilities, skip, cards tapped and dragged to buy, use and sell), safe areas',
   );
 } finally {
   await browser.close();

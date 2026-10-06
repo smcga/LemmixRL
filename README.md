@@ -88,9 +88,10 @@ screen, the sideways lock, the wake lock, the audio); `?diag=0` hides it again.
   what a finger was doing, and a second tap that was asked for. The screen stays on while a level is played. With
   WALKER on, a tap on a worker with nobody else under the finger does nothing (with the right mouse button Lemmix
   raises an exception there, see below).
-* Run screens: a tap shows what something is; a second tap on something that costs or uses something (buying,
-  hiring, using a tarot, skipping, rerolling the boss) does it. A tap on a joker shows it with its Sell button. A tap
-  on an empty spot closes the information.
+* Run screens: the cards are handled as in Balatro on a phone. A tap on a card (a joker, a tarot, a card of the
+  shop) selects it: it shows what it is and its buttons (Buy, Sell, Use). A card can also be dragged: the areas it can
+  be dropped on light up (Buy over the jokers, Sell over the other row, Use above the colony). A tap on anything else
+  shows what it is; hiring a skill wants a second tap. A tap on an empty spot closes the information.
 
 ## Deployment
 
@@ -106,7 +107,16 @@ needs access to this repository. Pull requests should target `main`; `master` is
 ## The roguelike run
 
 Press F6 in the menu (on a touch screen: tap *Tap here for a Roguelike Run*). A run wraps the original game; it does
-not replace it. Once a blind starts, it is the original
+not replace it.
+
+The screen is laid out like Balatro's: on the left what is going on, the colony, the abilities, Run Info and Options,
+the money, the ante and the round; along the top the jokers and the tarots; in the corner the colony as the deck (click
+it to see every lemming); in the middle the blinds, the cash out or the shop, coming up from below. The cards work as
+in Balatro, with its mobile way of dragging on every device: click a card for its buttons, or drag it. A card of the
+shop dragged up to the jokers is bought; a tarot of the shop dragged to the area above the colony is bought and used
+at once (it needs no free slot); a joker dragged to the tarots is sold (a tarot to the jokers), a tarot dragged above
+the colony is used, and a joker dragged along its row goes to another place. Where a tarot asks for lemmings, one
+drag across them selects them (or takes them out of the selection, when it starts on a selected one). Once a blind starts, it is the original
 level: the same terrain, objects, traps, physics, release rate, timer and rescue requirement, played with the original
 preview, game and result screens. The run decides only *what you bring*: how many lemmings and how many of each
 skill.
