@@ -267,6 +267,64 @@ describe('roguelike run', () => {
     expect(run.state.tarots.length).toBe(0);
   });
 
+  it('a tarot of the shop can be bought and used at once, without a free tarot slot', () => {
+    const run = started();
+    winCurrentBlind(run); // the shop
+    const s = run.state;
+    s.money = 10;
+    s.tarots = [
+      { uid: 6000, id: 'recruiter' },
+      { uid: 6001, id: 'recruiter' },
+    ];
+    s.shop!.offers[0] = { uid: 5000, type: 'tarot', id: 'hermit', price: 3, sold: false };
+    s.shop!.offers[1] = { uid: 5001, type: 'tarot', id: 'midas', price: 3, sold: false };
+    expect(run.canBuy(s.shop!.offers[0])).toBe(false); // no room
+    expect(run.canBuyAndUse(s.shop!.offers[0])).toBe(true);
+    // The Hermit doubles what is left after paying for it
+    expect(run.buyAndUse(5000)).not.toBeNull();
+    expect(s.money).toBe(14);
+    expect(s.shop!.offers[0].sold).toBe(true);
+    expect(s.tarots.map((t) => t.uid)).toEqual([6000, 6001]);
+    // a tarot that needs a lemming: without one nothing is bought
+    expect(run.buyAndUse(5001)).toBeNull();
+    expect(s.money).toBe(14);
+    expect(s.shop!.offers[1].sold).toBe(false);
+    expect(s.tarots.length).toBe(2);
+    expect(run.buyAndUse(5001, [s.colony[0].id])).not.toBeNull();
+    expect(s.colony[0].edition).toBe('gold');
+    expect(s.money).toBe(11);
+    // not twice, and not a joker
+    expect(run.buyAndUse(5001, [s.colony[1].id])).toBeNull();
+    s.shop!.offers[2] = { uid: 5002, type: 'joker', id: 'piggy', price: 5, sold: false };
+    expect(run.canBuyAndUse(s.shop!.offers[2])).toBe(false);
+  });
+
+  it('tarots can be sold, and the jokers put in another order', () => {
+    const run = started();
+    const s = run.state;
+    s.tarots = [{ uid: 6000, id: 'recruiter' }];
+    s.jokers = [
+      { uid: 7000, id: 'piggy' },
+      { uid: 7001, id: 'guild' },
+      { uid: 7002, id: 'scout' },
+    ];
+    const money = s.money;
+    expect(run.sellTarot(6000)).toBe(true);
+    expect(s.money).toBe(money + 1);
+    expect(s.tarots.length).toBe(0);
+    expect(run.sellTarot(6000)).toBe(false);
+    expect(run.moveJoker(7000, 2)).toBe(true);
+    expect(s.jokers.map((j) => j.id)).toEqual(['guild', 'scout', 'piggy']);
+    expect(run.moveJoker(7002, 0)).toBe(true);
+    expect(s.jokers.map((j) => j.id)).toEqual(['scout', 'guild', 'piggy']);
+    expect(run.moveJoker(7002, 0)).toBe(false);
+    expect(run.capability().builder).toBe(SPREAD.builder + 2); // the order changes nothing
+    // not while the abilities are assigned
+    s.tarots = [{ uid: 6001, id: 'recruiter' }];
+    s.phase = 'assign';
+    expect(run.sellTarot(6001)).toBe(false);
+  });
+
   it('starts with the ability assignment: 60 points, at most 20 in a skill, all placed before the first blind', () => {
     const run = RunSession.newRun(catalog, 'ASSIGN');
     expect(run.state.phase).toBe('assign');
