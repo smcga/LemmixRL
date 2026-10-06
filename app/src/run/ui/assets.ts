@@ -1,23 +1,27 @@
 /**
- * Textures for the run screens, all made from the original Lemmings data: the purple DOS font (as a proportional
- * bitmap font, also in white for tinting), the skill icons of the skill panel, the lemming animations, the brown
- * background and level thumbnails.
+ * Textures for the run screens. The text is m6x11, the pixel font of Balatro (see app/fonts/); the rest is made from
+ * the original Lemmings data: the purple DOS font (for the logo), the small font of the skill panel (for the touch
+ * buttons of the game), the skill icons of the skill panel, the lemming animations, the brown background and level
+ * thumbnails.
  */
 import * as Phaser from 'phaser';
 import { Bitmap32, GraphicSet, LemmingAnimationSet, Level, Renderer, GAME_BMPHEIGHT, GAME_BMPWIDTH } from '../../../../engine/src/index.ts';
+import M6X11 from '../../../fonts/m6x11.ttf?inline';
 import type { LemmixApp } from '../../app.ts';
 import { DosScreenBase } from '../../screens/base.ts';
 import { SkillPanel } from '../../screens/skillpanel.ts';
 import { SKILL_BUTTONS, SKILLS } from '../skills.ts';
 import type { RunLevel } from '../catalog.ts';
+import { type PixelFont, readPixelFont } from './pixelfont.ts';
 
-/** the small font of the skill panel (capitals and digits, plus some signs drawn in its style), outlined in black */
-export const FONT = 'rl-small';
-/** the small font without the outline, for dark text */
-export const FONT_PLAIN = 'rl-small-plain';
-/** the purple DOS font, white with a black outline for tinting, and light purple */
-export const FONT_BIG = 'rl-font';
-export const FONT_PURPLE = 'rl-font-purple';
+/** the text of the run screens: m6x11, white for tinting, with Balatro's shadow under the letters */
+export const FONT = 'rl-text';
+/** m6x11 without the shadow, for dark text on a light box */
+export const FONT_PLAIN = 'rl-text-plain';
+/** the logo: the purple font of the menus of Lemmings */
+export const FONT_LOGO = 'rl-logo';
+/** the small font of the skill panel (capitals and digits, plus some signs drawn in its style), for the game screens */
+export const PANEL_FONT = 'rl-small';
 export const SKILL_ICONS = 'rl-skills';
 export const BACKGROUND = 'rl-background';
 
@@ -69,77 +73,26 @@ export function bitmapToCanvas(bmp: Bitmap32, transform?: (c: number) => number)
 
 /**
  * The purple font of the menus has four colours: a highlight, a light and a dark purple for the body of a letter, and
- * a very dark edge. Most of a letter is the dark body and the edge, which is hard to read on the run screens (on a dark
- * panel, and tinted on a coloured button). These ramps give the letters a bright body and a dark edge instead.
+ * a very dark edge. Most of a letter is the dark body and the edge, which is dark on the panels of the run screens: the
+ * logo gets a light purple body and a dark purple edge instead.
  */
 function shadeOf(c: number, max: number): 0 | 1 | 2 | 3 {
   const l = (0.3 * ((c >>> 16) & 0xff) + 0.59 * ((c >>> 8) & 0xff) + 0.11 * (c & 0xff)) / max;
   return l > 0.85 ? 0 : l > 0.55 ? 1 : l > 0.3 ? 2 : 3;
 }
 
-/** white letters (to tint) with a black edge */
-const WHITE_RAMP = [0xffffff, 0xf2f2f2, 0xdedede, 0x000000];
-/** light purple letters with a dark purple edge */
 const PURPLE_RAMP = [0xf4eeff, 0xdcd0ff, 0xbfaef8, 0x14082e];
-
-function ramp(colors: readonly number[], max: number): (c: number) => number {
-  return (c) => colors[shadeOf(c, max)];
-}
-
-/**
- * Gives the letters of a sheet of glyphs (a row of cells, cw pixels wide, with a pixel of room around every letter) a
- * pixel of outline: every empty pixel next to a letter (also diagonally) in the same cell gets the colour.
- */
-function outlineGlyphs(sheet: Bitmap32, cw: number, color: number): void {
-  const letters = sheet.bits.slice();
-  const w = sheet.width;
-  for (let y = 0; y < sheet.height; y++)
-    for (let x = 0; x < w; x++) {
-      if (letters[y * w + x] !== 0) continue;
-      const cell = x - (x % cw);
-      let near = false;
-      for (let yy = Math.max(0, y - 1); yy <= Math.min(sheet.height - 1, y + 1) && !near; yy++)
-        for (let xx = Math.max(cell, x - 1); xx <= Math.min(cell + cw - 1, x + 1) && !near; xx++) near = letters[yy * w + xx] !== 0;
-      if (near) sheet.bits[y * w + x] = color;
-    }
-}
-
-/**
- * The glyph of a font of the run screens: the letter (from l to r in its cell, a pixel of room on every side) with its
- * outline, drawn a pixel up and left so that the letter is where it would be without the outline; the text is as wide
- * and as high as without it (Phaser measures it by the advances and the line height).
- */
-function outlinedGlyph(cellX: number, l: number, r: number, height: number, advance: number, tw: number, th: number) {
-  const x = cellX + l - 1;
-  const w = r - l + 3;
-  return {
-    x,
-    y: 0,
-    width: w,
-    height,
-    centerX: Math.floor(w / 2),
-    centerY: height / 2,
-    xOffset: -1,
-    yOffset: -1,
-    xAdvance: advance,
-    data: {},
-    kerning: {},
-    u0: x / tw,
-    v0: 1,
-    u1: (x + w) / tw,
-    v1: 1 - height / th,
-  };
-}
 
 /** a glyph cell of the purple font: the 16 x 16 letter and a pixel of outline around it */
 const CELL = 18;
 
 /**
- * The purple font as proportional bitmap fonts for the run screens: every glyph is as wide as its pixels, plus 2 pixels
- * of spacing, with a pixel of dark outline around it, so it reads on any background. Two textures: light purple, and
- * white that can be tinted.
+ * The purple font as a proportional bitmap font for the logo: every glyph is as wide as its pixels, plus 2 pixels of
+ * spacing, with a pixel of dark outline around it (drawn a pixel up and left, so that the letters are where they would
+ * be without it; Phaser lays the text out by the advances and the line height).
  */
-function addFonts(scene: Phaser.Scene, base: DosScreenBase): void {
+function addLogoFont(scene: Phaser.Scene, base: DosScreenBase): void {
+  if (scene.textures.exists(FONT_LOGO)) return;
   const n = CHARS_LAST - CHARS_FIRST + 1;
   // one more (empty) cell for the space
   const sheet = new Bitmap32(CELL * (n + 1), CELL);
@@ -169,23 +122,115 @@ function addFonts(scene: Phaser.Scene, base: DosScreenBase): void {
     // (no pixels: as wide as 6)
     spans.push(r < 0 ? [1, 6] : [l, r]);
   }
-  // the outline in the colour of the dark edge of the letters
-  outlineGlyphs(sheet, CELL, darkest);
-  for (const [key, colors] of [
-    [FONT_PURPLE, PURPLE_RAMP],
-    [FONT_BIG, WHITE_RAMP],
+  // the outline: every empty pixel next to a letter (also diagonally), in the same cell, in the colour of the dark edge
+  const letters = sheet.bits.slice();
+  for (let y = 0; y < CELL; y++)
+    for (let x = 0; x < sheet.width; x++) {
+      if (letters[y * sheet.width + x] !== 0) continue;
+      const cell = x - (x % CELL);
+      let near = false;
+      for (let yy = Math.max(0, y - 1); yy <= Math.min(CELL - 1, y + 1) && !near; yy++)
+        for (let xx = Math.max(cell, x - 1); xx <= Math.min(cell + CELL - 1, x + 1) && !near; xx++) near = letters[yy * sheet.width + xx] !== 0;
+      if (near) sheet.bits[y * sheet.width + x] = darkest;
+    }
+  const canvas = bitmapToCanvas(sheet, (c) => PURPLE_RAMP[shadeOf(c, maxLum)]);
+  scene.textures.addCanvas(FONT_LOGO, canvas);
+  const tw = canvas.width;
+  const chars: Record<number, unknown> = {};
+  // the glyph with its outline: from a pixel left of the letter (l) to a pixel right of it (r)
+  const glyph = (cellX: number, l: number, r: number, advance: number) => {
+    const x = cellX + l - 1;
+    const w = r - l + 3;
+    return { x, y: 0, width: w, height: CELL, centerX: Math.floor(w / 2), centerY: CELL / 2, xOffset: -1, yOffset: -1, xAdvance: advance, data: {}, kerning: {}, u0: x / tw, v0: 1, u1: (x + w) / tw, v1: 0 };
+  };
+  for (let i = 0; i < n; i++) {
+    const [l, r] = spans[i];
+    chars[CHARS_FIRST + i] = glyph(i * CELL, l, r, r - l + 3);
+  }
+  chars[32] = glyph(n * CELL, 1, 1, 8);
+  scene.cache.bitmapFont.add(FONT_LOGO, { data: { retroFont: true, font: FONT_LOGO, size: 16, lineHeight: 18, chars }, frame: null, texture: FONT_LOGO });
+}
+
+/** the characters of the run screens: the printable ASCII ones, and the middle dot */
+const TEXT_CODES = Array.from({ length: 95 }, (_, i) => 32 + i);
+const MIDDLE_DOT = 0xb7;
+/** a line of text, 16 pixels: 2 above the capitals (11 pixels high, m6x11's ascent), the descenders (3) */
+const TEXT_LINE = 16;
+const TEXT_TOP = 2;
+/** the shadow of the letters, as Balatro has it: a pixel down and right, black at this opacity */
+const SHADOW_ALPHA = 0.6;
+
+/** The glyphs of m6x11 at its size (16 pixels to the em), with a middle dot it does not have. */
+function readM6x11(): PixelFont {
+  const bytes = Uint8Array.from(atob(M6X11.slice(M6X11.indexOf(',') + 1)), (c) => c.charCodeAt(0));
+  const font = readPixelFont(bytes, 16, TEXT_CODES);
+  // the full stop, raised to the middle of the lower case letters
+  const stop = font.glyphs.get(46)!;
+  const xHeight = -font.glyphs.get(120)!.top;
+  font.glyphs.set(MIDDLE_DOT, { ...stop, top: -Math.round(xHeight / 2) - Math.floor(stop.height / 2) });
+  return font;
+}
+
+/**
+ * m6x11 as bitmap fonts: white letters (for tinting) with their shadow, and without it. A size of 16 shows the pixels
+ * of the font as they are, 32 twice as big.
+ */
+function addTextFonts(scene: Phaser.Scene): void {
+  if (scene.textures.exists(FONT) && scene.textures.exists(FONT_PLAIN)) return;
+  const font = readM6x11();
+  // the glyphs side by side, a pixel apart, each with a column and a row more for its shadow
+  const cells = new Map<number, number>();
+  let width = 1;
+  for (const [code, g] of font.glyphs) {
+    cells.set(code, width);
+    width += g.width + 2;
+  }
+  const height = Math.max(...[...font.glyphs.values()].map((g) => g.height)) + 1;
+  for (const [key, shadow] of [
+    [FONT, true],
+    [FONT_PLAIN, false],
   ] as const) {
     if (scene.textures.exists(key)) continue;
-    const canvas = bitmapToCanvas(sheet, ramp(colors, maxLum));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+    const img = ctx.createImageData(width, height);
+    // (ABGR on a little-endian machine, as browsers are)
+    const px = new Uint32Array(img.data.buffer);
+    for (const pass of shadow ? ['shadow', 'letters'] : ['letters'])
+      for (const [code, g] of font.glyphs) {
+        const x0 = cells.get(code)! + (pass === 'shadow' ? 1 : 0);
+        const y0 = pass === 'shadow' ? 1 : 0;
+        const color = pass === 'shadow' ? (Math.round(SHADOW_ALPHA * 255) << 24) >>> 0 : 0xffffffff;
+        for (let y = 0; y < g.height; y++) for (let x = 0; x < g.width; x++) if (g.bits[y * g.width + x]) px[(y0 + y) * width + x0 + x] = color;
+      }
+    ctx.putImageData(img, 0, 0);
     scene.textures.addCanvas(key, canvas);
     const chars: Record<number, unknown> = {};
-    for (let i = 0; i < n; i++) {
-      const [l, r] = spans[i];
-      chars[CHARS_FIRST + i] = outlinedGlyph(i * CELL, l, r, CELL, r - l + 3, canvas.width, canvas.height);
+    for (const [code, g] of font.glyphs) {
+      const x = cells.get(code)!;
+      const w = g.width + 1;
+      const h = g.height + 1;
+      chars[code] = {
+        x,
+        y: 0,
+        width: w,
+        height: h,
+        centerX: Math.floor(w / 2),
+        centerY: Math.floor(h / 2),
+        xOffset: g.left,
+        yOffset: TEXT_TOP + font.ascent + g.top,
+        xAdvance: g.advance,
+        data: {},
+        kerning: {},
+        u0: x / width,
+        v0: 1,
+        u1: (x + w) / width,
+        v1: 1 - h / height,
+      };
     }
-    // (the empty cell)
-    chars[32] = outlinedGlyph(n * CELL, 1, 1, CELL, 8, canvas.width, canvas.height);
-    scene.cache.bitmapFont.add(key, { data: { retroFont: true, font: key, size: 16, lineHeight: 18, chars }, frame: null, texture: key });
+    scene.cache.bitmapFont.add(key, { data: { retroFont: true, font: key, size: 16, lineHeight: TEXT_LINE, chars }, frame: null, texture: key });
   }
 }
 
@@ -214,17 +259,9 @@ const EXTRA_GLYPHS: Record<string, string[]> = {
   '&': ['.###', '#####', '##.##', '##.##', '.###', '.###', '#####.#', '##.####', '##..##', '#######', '.###.##'],
 };
 
-/** a glyph cell of the small font: the 8 x 16 letter and a pixel of outline around it */
-const SMALL_CELL_W = 10;
-const SMALL_CELL_H = 18;
-
-/**
- * The skill panel font: '%', '0'..'9', '-', 'A'..'Z', 8 x 16, plus the extra signs; proportional, 1 pixel apart. Two
- * textures, white for tinting: with a black outline (light text that reads on any background, coloured buttons too)
- * and without (dark text on a light box).
- */
-function addSmallFont(scene: Phaser.Scene, panel: SkillPanel): void {
-  if (scene.textures.exists(FONT) && scene.textures.exists(FONT_PLAIN)) return;
+/** The skill panel font: '%', '0'..'9', '-', 'A'..'Z', 8 x 16, plus the extra signs; proportional, 1 pixel apart. */
+function addPanelFont(scene: Phaser.Scene, panel: SkillPanel): void {
+  if (scene.textures.exists(PANEL_FONT)) return;
   const own = '%0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const extra = Object.keys(EXTRA_GLYPHS);
   const glyphs: { code: number; bits: (x: number, y: number) => boolean }[] = [];
@@ -234,43 +271,51 @@ function addSmallFont(scene: Phaser.Scene, panel: SkillPanel): void {
     const rows = EXTRA_GLYPHS[ch];
     glyphs.push({ code: ch.charCodeAt(0), bits: (x, y) => rows[y]?.[x] === '#' });
   }
-  // one more (empty) cell for the space
-  const plain = new Bitmap32(SMALL_CELL_W * (glyphs.length + 1), SMALL_CELL_H);
-  plain.clear(0);
+  const sheet = new Bitmap32(8 * glyphs.length, 16);
+  sheet.clear(0);
   const spans: [number, number][] = [];
   glyphs.forEach((g, i) => {
-    let l = SMALL_CELL_W;
+    let l = 8;
     let r = -1;
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 8; x++)
         if (g.bits(x, y)) {
-          plain.bits[(y + 1) * plain.width + i * SMALL_CELL_W + x + 1] = 0xffffffff;
-          if (x + 1 < l) l = x + 1;
-          if (x + 1 > r) r = x + 1;
+          sheet.bits[y * sheet.width + i * 8 + x] = 0xffffffff;
+          if (x < l) l = x;
+          if (x > r) r = x;
         }
-    spans.push(r < 0 ? [1, 1] : [l, r]);
+    spans.push(r < 0 ? [0, 0] : [l, r]);
   });
-  const outlined = new Bitmap32(plain.width, plain.height);
-  outlined.bits.set(plain.bits);
-  outlineGlyphs(outlined, SMALL_CELL_W, 0xff000000);
-  for (const [key, sheet] of [
-    [FONT, outlined],
-    [FONT_PLAIN, plain],
-  ] as const) {
-    if (scene.textures.exists(key)) continue;
-    const canvas = bitmapToCanvas(sheet);
-    scene.textures.addCanvas(key, canvas);
-    const chars: Record<number, unknown> = {};
-    glyphs.forEach((g, i) => {
-      const [l, r] = spans[i];
-      const c = outlinedGlyph(i * SMALL_CELL_W, l, r, SMALL_CELL_H, r - l + 2, canvas.width, canvas.height);
-      chars[g.code] = c;
-      // lower case letters are the capitals
-      if (g.code >= 65 && g.code <= 90) chars[g.code + 32] = c;
-    });
-    chars[32] = outlinedGlyph(glyphs.length * SMALL_CELL_W, 1, 1, SMALL_CELL_H, 4, canvas.width, canvas.height);
-    scene.cache.bitmapFont.add(key, { data: { retroFont: true, font: key, size: 16, lineHeight: 17, chars }, frame: null, texture: key });
-  }
+  const canvas = bitmapToCanvas(sheet);
+  scene.textures.addCanvas(PANEL_FONT, canvas);
+  const tw = canvas.width;
+  const chars: Record<number, unknown> = {};
+  const glyph = (x: number, w: number, adv: number) => ({
+    x,
+    y: 0,
+    width: w,
+    height: 16,
+    centerX: Math.floor(w / 2),
+    centerY: 8,
+    xOffset: 0,
+    yOffset: 0,
+    xAdvance: adv,
+    data: {},
+    kerning: {},
+    u0: x / tw,
+    v0: 1,
+    u1: (x + w) / tw,
+    v1: 0,
+  });
+  glyphs.forEach((g, i) => {
+    const [l, r] = spans[i];
+    const c = glyph(i * 8 + l, r - l + 1, r - l + 2);
+    chars[g.code] = c;
+    // lower case letters are the capitals
+    if (g.code >= 65 && g.code <= 90) chars[g.code + 32] = c;
+  });
+  chars[32] = glyph(0, 1, 4);
+  scene.cache.bitmapFont.add(PANEL_FONT, { data: { retroFont: true, font: PANEL_FONT, size: 16, lineHeight: 17, chars }, frame: null, texture: PANEL_FONT });
 }
 
 /** a texture with frames cut from a bitmap */
@@ -284,13 +329,14 @@ let animationSet: LemmingAnimationSet | null = null;
 
 /** Creates the textures and animations of the run screens (once per game). */
 export function ensureRunAssets(scene: Phaser.Scene, app: LemmixApp): void {
-  if (scene.textures.exists(FONT) && scene.textures.exists(FONT_BIG) && scene.textures.exists(SKILL_ICONS)) return;
+  if (scene.textures.exists(FONT) && scene.textures.exists(FONT_LOGO) && scene.textures.exists(SKILL_ICONS)) return;
+  addTextFonts(scene);
   const data = app.data.provider;
   const style = app.style;
   const base = new DosScreenBase(data, style);
   base.extractPurpleFont();
   base.extractBackGround();
-  addFonts(scene, base);
+  addLogoFont(scene, base);
   if (!scene.textures.exists(BACKGROUND)) scene.textures.addCanvas(BACKGROUND, bitmapToCanvas(base.background));
 
   // the skill buttons of the panel (with their black number area): x = 1 + 16 * (button - 1), 14 x 23
@@ -302,7 +348,7 @@ export function ensureRunAssets(scene: Phaser.Scene, app: LemmixApp): void {
   for (const s of SKILLS) frames.push([s, 1 + 16 * (SKILL_BUTTONS[s] - 1), 16, 14, 23]);
   frames.push(['slower', 1, 16, 14, 23], ['faster', 17, 16, 14, 23], ['pause', 161, 16, 14, 23], ['nuke', 177, 16, 14, 23]);
   addFramedTexture(scene, SKILL_ICONS, panel.bitmap, frames);
-  addSmallFont(scene, panel);
+  addPanelFont(scene, panel);
 
   // the lemmings
   animationSet ??= new LemmingAnimationSet(style);

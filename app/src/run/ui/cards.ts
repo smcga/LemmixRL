@@ -76,7 +76,7 @@ export class CardView extends Phaser.GameObjects.Container {
         this.add(sp);
       } else if ('icon' in art) this.add(scene.add.image(0, 0, SKILL_ICONS, art.icon).setScale(2));
       else {
-        const text = label(scene, 0, 0, art.text, { size: 32, big: true, color: art.color, originX: 0.5, originY: 0.5 });
+        const text = label(scene, 0, 0, art.text, { size: 32, color: art.color, originX: 0.5, originY: 0.5 });
         if (text.width > cw - 14) text.setScale((cw - 14) / text.width);
         this.add(text);
       }
@@ -401,7 +401,7 @@ export class CardTable {
       const g = s.add.graphics().setDepth(DEPTH_TARGETS);
       const ring = s.add.graphics().setDepth(DEPTH_TARGETS);
       const big = w >= 180;
-      const texts = spec.lines.map((line) => label(s, x + w / 2, 0, line, { big: true, size: big ? 32 : 16, originX: 0.5, originY: 0.5 }).setDepth(DEPTH_TARGETS + 1));
+      const texts = spec.lines.map((line) => label(s, x + w / 2, 0, line, { size: big ? 32 : 16, originX: 0.5, originY: 0.5 }).setDepth(DEPTH_TARGETS + 1));
       const step = big ? 36 : 20;
       texts.forEach((t, i) => {
         t.setY(y + h / 2 + (i - (texts.length - 1) / 2) * step);

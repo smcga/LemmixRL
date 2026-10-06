@@ -10,7 +10,7 @@ import { Bitmap32, type HighResolutionMessage, SkillPanelButton, type TColor32 }
 import { BitmapTexture } from '../display.ts';
 import { ScreenType } from '../screens/base.ts';
 import type { LemmingCard } from '../run/state.ts';
-import { ensureRunAssets, FONT } from '../run/ui/assets.ts';
+import { ensureRunAssets, PANEL_FONT } from '../run/ui/assets.ts';
 import { PlayerScreen } from '../screens/player.ts';
 import { canvasPoint, cssPx, DoubleTap, onTouchChange, pixelRatio, safeAreaInsets, touch } from '../touch.ts';
 import { keepScreenOn } from '../wakelock.ts';
@@ -161,7 +161,7 @@ export class PlayerScene extends Phaser.Scene {
       ],
       [this.cameras.main, this.textCam],
     );
-    this.portraitHint = this.add.bitmapText(0, 0, FONT, 'TURN YOUR PHONE SIDEWAYS FOR A BIGGER GAME', 16).setOrigin(0.5, 0.5).setTint(0x8080c0);
+    this.portraitHint = this.add.bitmapText(0, 0, PANEL_FONT, 'TURN YOUR PHONE SIDEWAYS FOR A BIGGER GAME', 16).setOrigin(0.5, 0.5).setTint(0x8080c0);
     this.cameras.main.ignore(this.portraitHint);
     this.textCam.ignore(this.portraitHint);
     this.layout();

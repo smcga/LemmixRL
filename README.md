@@ -27,6 +27,7 @@ npm run difftest     # compare the TypeScript engine with the original on every 
 | `engine/` | The TypeScript port of the simulation, without any browser dependency: the DOS data files (`dos/`, `level/`, `styles/`), the Graphics32 subset the game uses (`gr32/`), the renderer, `TLemmingGame` (`game/game.ts`) and the replay recorder (`game/recorder.ts`, .lrb files are compatible with Lemmix). |
 | `app/` | The Phaser front-end: the Lemmix screens ported (`screens/`: menu, level code, preview, game, skill panel, postview), shown by Phaser scenes (`scenes/`), with Web Audio sound effects, a ProTracker player for the music and Web Speech for the voice. |
 | `app/src/run/`, `app/src/scenes/run.ts` | The roguelike run: its rules (`session.ts`), content (`content.ts`), levels (`catalog.ts`), seeded randomness and saving, and its screens. |
+| `app/fonts/` | The font of the run screens: m6x11 by Daniel Linssen (the pixel font of Balatro). |
 | `oracle/`, `tools/oracle/` | The *oracle*: the original game units compiled with Free Pascal. |
 | `tools/difftest/` | The differential test of the TypeScript engine against the oracle. |
 
@@ -111,7 +112,11 @@ not replace it.
 
 The screen is laid out like Balatro's: on the left what is going on, the colony, the abilities, Run Info and Options,
 the money, the ante and the round; along the top the jokers and the tarots; in the corner the colony as the deck (click
-it to see every lemming); in the middle the blinds, the cash out or the shop, coming up from below. The cards work as
+it to see every lemming); in the middle the blinds, the cash out or the shop, coming up from below. The text is in
+Balatro's pixel font, [m6x11 by Daniel Linssen](https://managore.itch.io/m6x11) (free to use with attribution; it is in
+`app/fonts/`, and its glyphs are read pixel by pixel from the font file by `app/src/run/ui/pixelfont.ts`, so it looks
+the same in every browser), with Balatro's shadow under the letters; only the logo is in the purple font of the
+Lemmings menus. The cards work as
 in Balatro, with its mobile way of dragging on every device: click a card for its buttons, or drag it. A card of the
 shop dragged up to the jokers is bought; a tarot of the shop dragged to the area above the colony is bought and used
 at once (it needs no free slot); a joker dragged to the tarots is sold (a tarot to the jokers), a tarot dragged above

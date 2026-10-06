@@ -1,7 +1,7 @@
-/** A small UI toolkit for the run screens: labels in the DOS font, panels, buttons, cards and tooltips. */
+/** A small UI toolkit for the run screens: labels in Balatro's font, panels, buttons, cards and tooltips. */
 import * as Phaser from 'phaser';
 import { touch } from '../../touch.ts';
-import { FONT, FONT_BIG, FONT_PLAIN, FONT_PURPLE } from './assets.ts';
+import { FONT, FONT_LOGO, FONT_PLAIN } from './assets.ts';
 
 /** The colours of Balatro's interface (its G.C table), for the panels, buttons and texts of the run screens. */
 export const COLORS = {
@@ -22,16 +22,19 @@ export const COLORS = {
   /** the text of a description box */
   ink: 0x4f6367,
   cream: 0xf4f1e6,
+  /** the names of the levels: the purple of the menus of Lemmings, lighter */
+  lilac: 0xcbbcff,
 } as const;
 
 export interface LabelOptions {
+  /** 16: the pixels of the font as they are (11 pixels high capitals), 32: twice as big, and so on */
   size?: number;
-  /** the big purple font (white, tinted) */
-  big?: boolean;
   color?: number;
-  /** the original purple colours of the font */
+  /** a level name (lilac unless color says otherwise) */
   purple?: boolean;
-  /** the small font without its dark outline (for dark text on a light box) */
+  /** the logo: the purple font of the menus of Lemmings */
+  logo?: boolean;
+  /** without the shadow (for dark text on a light box) */
   plain?: boolean;
   originX?: number;
   originY?: number;
@@ -40,10 +43,10 @@ export interface LabelOptions {
 }
 
 export function label(scene: Phaser.Scene, x: number, y: number, text: string, o: LabelOptions = {}): Phaser.GameObjects.BitmapText {
-  const t = scene.add.bitmapText(x, y, o.purple ? FONT_PURPLE : o.big ? FONT_BIG : o.plain ? FONT_PLAIN : FONT, text, o.size ?? 16, o.align ?? 0);
+  const t = scene.add.bitmapText(x, y, o.logo ? FONT_LOGO : o.plain ? FONT_PLAIN : FONT, text, o.size ?? 16, o.align ?? 0);
   if (o.maxWidth) t.setMaxWidth(o.maxWidth);
   t.setOrigin(o.originX ?? 0, o.originY ?? 0);
-  if (!o.purple) t.setTint(o.color ?? COLORS.text);
+  if (!o.logo) t.setTint(o.color ?? (o.purple ? COLORS.lilac : COLORS.text));
   return t;
 }
 
@@ -67,8 +70,6 @@ export function panel(scene: Phaser.Scene, x: number, y: number, w: number, h: n
 
 export interface ButtonOptions {
   size?: number;
-  /** the caption in the big font */
-  big?: boolean;
   enabled?: boolean;
   /** a second line in a smaller size */
   sub?: string;
@@ -106,7 +107,7 @@ export class Button extends Phaser.GameObjects.Container {
     this.enabled = o.enabled ?? true;
     this.g = scene.add.graphics();
     this.add(this.g);
-    this.text = label(scene, bw / 2, o.sub ? bh / 2 - 9 : bh / 2 - 2, caption, { size: o.size ?? 16, big: o.big, originX: 0.5, originY: 0.5, align: 1 });
+    this.text = label(scene, bw / 2, o.sub ? bh / 2 - 9 : bh / 2 - 1, caption, { size: o.size ?? 16, originX: 0.5, originY: 0.5, align: 1 });
     this.add(this.text);
     if (o.sub) {
       this.subText = label(scene, bw / 2, bh / 2 + 9, o.sub, { originX: 0.5, originY: 0.5 });
@@ -163,7 +164,7 @@ export class Button extends Phaser.GameObjects.Container {
     g.fillRoundedRect(0, 3, this.bw, this.bh, 6);
     g.fillStyle(this.enabled && this.hover && !this.down ? shade(c, 1.15) : c, 1);
     g.fillRoundedRect(0, lift, this.bw, this.bh, 6);
-    this.text.setY((this.subText ? this.bh / 2 - 9 : this.bh / 2 - 2) + lift);
+    this.text.setY((this.subText ? this.bh / 2 - 9 : this.bh / 2 - 1) + lift);
     this.subText?.setY(this.bh / 2 + 9 + lift);
     this.text.setTint(this.enabled ? COLORS.text : 0xb0b0c0);
   }

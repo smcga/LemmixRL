@@ -4,7 +4,7 @@
  * level) want a second tap.
  */
 import * as Phaser from 'phaser';
-import { FONT } from '../run/ui/assets.ts';
+import { PANEL_FONT } from '../run/ui/assets.ts';
 import { cssPx } from '../touch.ts';
 
 export interface TouchButtonDef {
@@ -48,7 +48,7 @@ export class TouchBar {
   ) {
     for (const def of defs) {
       const g = scene.add.graphics();
-      const text = scene.add.bitmapText(0, 0, FONT, def.label, 16).setOrigin(0.5, 0.5);
+      const text = scene.add.bitmapText(0, 0, PANEL_FONT, def.label, 16).setOrigin(0.5, 0.5);
       const zone = scene.add.zone(0, 0, 1, 1).setOrigin(0, 0).setInteractive();
       const b: TouchButton = { def, g, text, zone, x: 0, y: 0, w: 1, h: 1, pressed: false, active: false, confirmUntil: 0 };
       zone.on('pointerdown', () => {
