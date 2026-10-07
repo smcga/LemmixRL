@@ -75,7 +75,7 @@ screen, the sideways lock, the wake lock, the audio); `?diag=0` hides it again.
 * Full screen: the FULLSCREEN button in the menu (Android browsers), or *Add to Home Screen*, which installs the game
   as a full screen app with a lemming icon (iPhone too; Android wants the page served over HTTPS for that).
 * Menu: tap a sign to do what its key does (1 Player, New Level, music, the style, the arrows of the difficulty
-  sign) and *Tap here for a Roguelike Run* for the run. OPTIONS and STYLE are buttons next to the menu. The level
+  sign, the ROGUELIKE RUN sign). OPTIONS and STYLE are buttons next to the menu. The level
   code screen gets a text box for the phone's keyboard.
 * Preview and result screens: a tap is a click; BACK and MENU do what Escape and the right mouse button do.
 * In a level: tap a skill in the panel, then tap a lemming. The skill is assigned when the finger comes up; while
@@ -106,7 +106,7 @@ needs access to this repository. Pull requests should target `main`; `master` is
 
 ## The roguelike run
 
-Press F6 in the menu (on a touch screen: tap *Tap here for a Roguelike Run*). A run wraps the original game; it does
+Click the ROGUELIKE RUN sign in the menu, or press F6. A run wraps the original game; it does
 not replace it.
 
 The screen is laid out like Balatro's: on the left what is going on, the colony, the abilities, Run Info and Options,

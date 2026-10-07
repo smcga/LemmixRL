@@ -117,6 +117,12 @@ export class DosScene extends Phaser.Scene {
     });
     listen(this, 'mousedown', (e) => {
       if (this.closed || e.target !== this.game.canvas || performance.now() - this.lastTouchTime < TOUCH_MOUSE_GUARD_MS) return;
+      // LemmixRL: the sign of the roguelike run in the menu is a button
+      if (e.button === 0 && 'clickAt' in screen) {
+        const p = canvasPoint(this.game.canvas, e.clientX, e.clientY);
+        const s = this.image.scaleX;
+        if (screen.clickAt((p.x - this.image.x) / s, (p.y - this.image.y) / s)) return;
+      }
       if ('mouseDown' in screen) screen.mouseDown(e.button);
     });
     // LemmixRL: a tap is a click with the left button, except on the signs of the menu (see MenuScreen.touchAt)
