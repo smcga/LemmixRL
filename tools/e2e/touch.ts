@@ -157,8 +157,8 @@ try {
   // the result screen: its MENU button (the right mouse button of Lemmix)
   await tapButton('dos', 'MENU', 800);
 
-  // the run: "Tap here for a Roguelike Run", then "New run"
-  await tap(mx(320), my(312), 800);
+  // the run: the sign of the roguelike run, then "New run"
+  await tap(mx(392 + 60), my(196 + 40), 800);
   if ((await sceneKeys()) !== 'run') fail('the menu did not start the run screens');
   const cam = await ev<{ zoom: number; x: number; y: number }>(
     `(() => { const c = globalThis.phaserGame.scene.getScene('run').cameras.main; return { zoom: c.zoom, x: c.worldView.x, y: c.worldView.y }; })()`,
