@@ -994,9 +994,9 @@ export class RunScene extends Phaser.Scene {
     const mine = p.squad < l.lemmings;
     const setup = current ? run.state.setup : null;
     const squadSpecials = setup ? setup.hand.map((id) => run.card(id)).filter((c): c is LemmingCard => !!c && isSpecial(c)) : [];
-    row(y + 172, 'Lemmings', mine ? `${l.lemmings}, you have ${p.squad}` : String(l.lemmings), mine ? COLORS.orange : COLORS.text);
+    row(y + 171, 'Lemmings', mine ? `${l.lemmings}, you have ${p.squad}` : String(l.lemmings), mine ? COLORS.orange : COLORS.text);
     if (current) {
-      const zone = k(this.add.zone(x + 8, y + 170, w - 16, 17).setOrigin(0, 0).setInteractive());
+      const zone = k(this.add.zone(x + 8, y + 170, w - 16, 20).setOrigin(0, 0).setInteractive());
       hoverTip(zone, this.tip, () => ({
         title: `Your squad: ${p.squad} lemmings`,
         color: COLORS.purple,
@@ -1006,17 +1006,17 @@ export class RunScene extends Phaser.Scene {
         x: x + 20,
         y: y + 192,
       }));
-      if (squadSpecials.length) k(label(this, x + 12 + 70, y + 172, `*${squadSpecials.length}`, { color: COLORS.purple }));
+      if (squadSpecials.length) k(label(this, x + 12 + 70, y + 171, `*${squadSpecials.length}`, { color: COLORS.purple }));
     }
-    row(y + 189, 'Rescue at least', String(p.required), p.tooFewLemmings ? COLORS.red : COLORS.text);
-    row(y + 206, 'Time', minutes(p.minutes), p.minutes > l.time ? COLORS.green : COLORS.text);
-    row(y + 223, 'Release rate', String(l.releaseRate));
+    row(y + 191, 'Rescue at least', String(p.required), p.tooFewLemmings ? COLORS.red : COLORS.text);
+    row(y + 211, 'Time', minutes(p.minutes), p.minutes > l.time ? COLORS.green : COLORS.text);
+    row(y + 231, 'Release rate', String(l.releaseRate));
 
     // skills: the level's allocation and what you bring (min(abilities, allocation))
-    k(label(this, x + 12, y + 244, 'Skills: level / yours', { color: COLORS.dim }));
+    // (the tooltip of a skill says which number is which; the colour of the second says how it compares)
     SKILLS.forEach((sk, i) => {
       const cx = x + 12 + (i % 4) * 48;
-      const cy = y + 263 + Math.floor(i / 4) * 36;
+      const cy = y + 256 + Math.floor(i / 4) * 38;
       const alloc = p.allocation[sk] + p.aboveMax[sk];
       const u = p.usable[sk];
       const icon = k(this.add.image(cx, cy + 4, SKILL_ICONS, sk).setOrigin(0, 0));

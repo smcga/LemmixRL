@@ -22,6 +22,8 @@ export const COLORS = {
   /** the text of a description box */
   ink: 0x4f6367,
   cream: 0xf4f1e6,
+  /** the names of the levels */
+  lilac: 0xcbb8ff,
 } as const;
 
 export interface LabelOptions {
@@ -38,10 +40,16 @@ export interface LabelOptions {
 }
 
 export function label(scene: Phaser.Scene, x: number, y: number, text: string, o: LabelOptions = {}): Phaser.GameObjects.BitmapText {
-  const t = scene.add.bitmapText(x, y, o.purple ? FONT_PURPLE : o.big ? FONT_BIG : FONT, text, o.size ?? 16, o.align ?? 0);
+  const size = o.size ?? 16;
+  // the purple of the original font is for titles; smaller, on a panel, it is the same letters in a lighter purple
+  const original = !!o.purple && size >= 48;
+  const t = scene.add.bitmapText(x, y, original ? FONT_PURPLE : o.purple || o.big ? FONT_BIG : FONT, text, size, o.align ?? 0);
   if (o.maxWidth) t.setMaxWidth(o.maxWidth);
   t.setOrigin(o.originX ?? 0, o.originY ?? 0);
-  if (!o.purple) t.setTint(o.color ?? COLORS.text);
+  if (!original) t.setTint(o.purple ? COLORS.lilac : (o.color ?? COLORS.text));
+  // a shadow under every text, as in Balatro: it keeps the letters apart from what is behind them (not under the dark
+  // text of a description, which is on white)
+  if (o.color !== COLORS.ink) t.setDropShadow(size / 16, size / 16, 0x000000, 0.55);
   return t;
 }
 

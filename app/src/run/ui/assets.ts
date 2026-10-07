@@ -9,9 +9,10 @@ import type { LemmixApp } from '../../app.ts';
 import { DosScreenBase } from '../../screens/base.ts';
 import { SkillPanel } from '../../screens/skillpanel.ts';
 import { SKILL_BUTTONS, SKILLS } from '../skills.ts';
+import { PIXEL_FONT_HEIGHT, pixelGlyphs } from './pixelfont.ts';
 import type { RunLevel } from '../catalog.ts';
 
-/** the small font of the skill panel (capitals and digits, plus some signs drawn in its style) */
+/** the text font: a pixel font with capitals and small letters (pixelfont.ts) */
 export const FONT = 'rl-small';
 /** the purple DOS font, white for tinting */
 export const FONT_BIG = 'rl-font';
@@ -65,12 +66,16 @@ export function bitmapToCanvas(bmp: Bitmap32, transform?: (c: number) => number)
   return canvas;
 }
 
+/**
+ * The white version of the purple font: solid letters, with only a little of the shading of the original left. (By
+ * luminance alone the dark middle of every stroke stays dark, and a tinted letter reads as an outline.)
+ */
 function luminanceToWhite(max: number): (c: number) => number {
   return (c) => {
     const r = (c >>> 16) & 0xff;
     const g = (c >>> 8) & 0xff;
     const b = c & 0xff;
-    const l = Math.min(255, Math.round(((0.3 * r + 0.59 * g + 0.11 * b) * 255) / max));
+    const l = Math.min(255, Math.round(205 + ((0.3 * r + 0.59 * g + 0.11 * b) * 50) / max));
     return (l << 16) | (l << 8) | l;
   };
 }
@@ -136,57 +141,15 @@ function addFonts(scene: Phaser.Scene, base: DosScreenBase): void {
   }
 }
 
-/** Signs that the skill panel font does not have, drawn in its style (7 x 15 pixels, 2 pixel strokes). */
-const EXTRA_GLYPHS: Record<string, string[]> = {
-  '.': ['', '', '', '', '', '', '', '', '', '', '', '', '###', '###', '###'],
-  ',': ['', '', '', '', '', '', '', '', '', '', '', '###', '###', '###', '.##', '##'],
-  ':': ['', '', '', '', '###', '###', '###', '', '', '', '', '###', '###', '###'],
-  ';': ['', '', '', '', '###', '###', '###', '', '', '', '', '###', '###', '###', '.##', '##'],
-  '!': ['###', '###', '###', '###', '###', '###', '###', '###', '###', '###', '', '', '###', '###', '###'],
-  '?': ['.#####', '#######', '##...##', '.....##', '....###', '...###', '..###', '..##', '..##', '..##', '', '', '.###', '.###', '.###'],
-  "'": ['###', '###', '.##', '##'],
-  '"': ['##.##', '##.##', '##.##'],
-  '(': ['...##', '..###', '.###', '.##', '###', '##', '##', '##', '##', '##', '###', '.##', '.###', '..###', '...##'],
-  ')': ['##', '###', '.###', '..##', '..###', '...##', '...##', '...##', '...##', '...##', '..###', '..##', '.###', '###', '##'],
-  '/': ['.....##', '.....##', '....###', '....##', '...###', '...##', '..###', '..##', '.###', '.##', '###', '##', '##'],
-  '+': ['', '', '', '', '..##', '..##', '######', '######', '..##', '..##'],
-  '=': ['', '', '', '', '', '######', '######', '', '', '######', '######'],
-  '<': ['', '', '', '....##', '...###', '..###', '.###', '###', '.###', '..###', '...###', '....##'],
-  '>': ['', '', '', '##', '###', '.###', '..###', '...###', '..###', '.###', '###', '##'],
-  '_': ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '#######'],
-  '$': ['...#', '.#####', '#######', '######', '##.#', '####', '#####', '.#####', '..#####', '...####', '...#.##', '##.####', '#######', '.#####', '...#'],
-  '\u00b7': ['', '', '', '', '', '', '.##', '.##'],
-  '#': ['', '.##.##', '.##.##', '#######', '.##.##', '.##.##', '#######', '.##.##', '.##.##'],
-  '*': ['', '', '', '##.#.##', '.#####', '..###', '.#####', '##.#.##'],
-  '&': ['.###', '#####', '##.##', '##.##', '.###', '.###', '#####.#', '##.####', '##..##', '#######', '.###.##'],
-};
-
-/** The skill panel font: '%', '0'..'9', '-', 'A'..'Z', 8 x 16, plus the extra signs; proportional, 1 pixel apart. */
-function addSmallFont(scene: Phaser.Scene, panel: SkillPanel): void {
+/** The text font (see pixelfont.ts) as a bitmap font: proportional, the letters 1 pixel apart. */
+function addSmallFont(scene: Phaser.Scene): void {
   if (scene.textures.exists(FONT)) return;
-  const own = '%0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const extra = Object.keys(EXTRA_GLYPHS);
-  const glyphs: { code: number; bits: (x: number, y: number) => boolean }[] = [];
-  const info = (panel as unknown as { infoFont: Bitmap32[] }).infoFont;
-  for (let i = 0; i < own.length; i++) glyphs.push({ code: own.charCodeAt(i), bits: (x, y) => (info[i].bits[y * 8 + x] & 0xffffff) !== 0 });
-  for (const ch of extra) {
-    const rows = EXTRA_GLYPHS[ch];
-    glyphs.push({ code: ch.charCodeAt(0), bits: (x, y) => rows[y]?.[x] === '#' });
-  }
-  const sheet = new Bitmap32(8 * glyphs.length, 16);
+  const glyphs = pixelGlyphs();
+  const cell = 10;
+  const sheet = new Bitmap32(cell * glyphs.length, PIXEL_FONT_HEIGHT);
   sheet.clear(0);
-  const spans: [number, number][] = [];
   glyphs.forEach((g, i) => {
-    let l = 8;
-    let r = -1;
-    for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 8; x++)
-        if (g.bits(x, y)) {
-          sheet.bits[y * sheet.width + i * 8 + x] = 0xffffffff;
-          if (x < l) l = x;
-          if (x > r) r = x;
-        }
-    spans.push(r < 0 ? [0, 0] : [l, r]);
+    for (let y = 0; y < PIXEL_FONT_HEIGHT; y++) for (let x = 0; x < g.width; x++) if (g.bit(x, y)) sheet.bits[y * sheet.width + i * cell + x] = 0xffffffff;
   });
   const canvas = bitmapToCanvas(sheet);
   scene.textures.addCanvas(FONT, canvas);
@@ -196,9 +159,9 @@ function addSmallFont(scene: Phaser.Scene, panel: SkillPanel): void {
     x,
     y: 0,
     width: w,
-    height: 16,
+    height: PIXEL_FONT_HEIGHT,
     centerX: Math.floor(w / 2),
-    centerY: 8,
+    centerY: PIXEL_FONT_HEIGHT / 2,
     xOffset: 0,
     yOffset: 0,
     xAdvance: adv,
@@ -209,14 +172,8 @@ function addSmallFont(scene: Phaser.Scene, panel: SkillPanel): void {
     u1: (x + w) / tw,
     v1: 0,
   });
-  glyphs.forEach((g, i) => {
-    const [l, r] = spans[i];
-    const c = glyph(i * 8 + l, r - l + 1, r - l + 2);
-    chars[g.code] = c;
-    // lower case letters are the capitals
-    if (g.code >= 65 && g.code <= 90) chars[g.code + 32] = c;
-  });
-  chars[32] = glyph(0, 1, 4);
+  glyphs.forEach((g, i) => (chars[g.code] = glyph(i * cell, g.width, g.width + 1)));
+  chars[32] = glyph(cell * glyphs.length - 1, 1, 4);
   scene.cache.bitmapFont.add(FONT, { data: { retroFont: true, font: FONT, size: 16, lineHeight: 17, chars }, frame: null, texture: FONT });
 }
 
@@ -249,7 +206,7 @@ export function ensureRunAssets(scene: Phaser.Scene, app: LemmixApp): void {
   for (const s of SKILLS) frames.push([s, 1 + 16 * (SKILL_BUTTONS[s] - 1), 16, 14, 23]);
   frames.push(['slower', 1, 16, 14, 23], ['faster', 17, 16, 14, 23], ['pause', 161, 16, 14, 23], ['nuke', 177, 16, 14, 23]);
   addFramedTexture(scene, SKILL_ICONS, panel.bitmap, frames);
-  addSmallFont(scene, panel);
+  addSmallFont(scene);
 
   // the lemmings
   animationSet ??= new LemmingAnimationSet(style);
