@@ -290,3 +290,86 @@ export function hoverTip(obj: Phaser.GameObjects.GameObject & { x: number; y: nu
       else showTip(tip, content(), obj);
     });
 }
+
+/**
+ * A slider, as in the settings of Balatro: a caption, a bar that fills in its colour, and the value in percent. Tap or
+ * drag along the bar. onChange is called while it moves (done false) and once more when the pointer comes up.
+ */
+export class Slider extends Phaser.GameObjects.Container {
+  private value: number;
+  private readonly g: Phaser.GameObjects.Graphics;
+  private readonly percent: Phaser.GameObjects.BitmapText;
+  private dragging = false;
+
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    private readonly sw: number,
+    caption: string,
+    value: number,
+    private readonly color: number,
+    private readonly onChange: (value: number, done: boolean) => void,
+  ) {
+    super(scene, x, y);
+    this.value = value;
+    this.add(label(scene, 0, 0, caption));
+    this.percent = label(scene, sw, 0, '', { originX: 1, color: COLORS.gold });
+    this.add(this.percent);
+    this.g = scene.add.graphics();
+    this.add(this.g);
+    const zone = scene.add.zone(0, 14, sw, 34).setOrigin(0, 0).setInteractive();
+    this.add(zone);
+    const at = (p: Phaser.Input.Pointer) => Math.round(Math.max(0, Math.min(1, (p.worldX - this.x) / this.sw)) * 20) / 20;
+    zone.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      this.dragging = true;
+      this.set(at(p), false);
+    });
+    const move = (p: Phaser.Input.Pointer) => {
+      if (this.dragging) this.set(at(p), false);
+    };
+    const up = () => {
+      if (!this.dragging) return;
+      this.dragging = false;
+      this.onChange(this.value, true);
+    };
+    scene.input.on('pointermove', move);
+    scene.input.on('pointerup', up);
+    scene.input.on('pointerupoutside', up);
+    this.once('destroy', () => {
+      scene.input.off('pointermove', move);
+      scene.input.off('pointerup', up);
+      scene.input.off('pointerupoutside', up);
+    });
+    scene.add.existing(this);
+    this.redraw();
+  }
+
+  private set(v: number, done: boolean): void {
+    if (v === this.value && !done) return;
+    this.value = v;
+    this.redraw();
+    this.onChange(v, done);
+  }
+
+  private redraw(): void {
+    const g = this.g;
+    const w = this.sw;
+    g.clear();
+    g.fillStyle(COLORS.dark, 1);
+    g.fillRoundedRect(0, 20, w, 22, 6);
+    if (this.value > 0) {
+      g.fillStyle(shade(this.color, 0.6), 1);
+      g.fillRoundedRect(0, 23, Math.max(12, w * this.value), 19, 6);
+      g.fillStyle(this.color, 1);
+      g.fillRoundedRect(0, 20, Math.max(12, w * this.value), 19, 6);
+    }
+    // the knob
+    const kx = Math.max(0, Math.min(w - 10, w * this.value - 5));
+    g.fillStyle(0x000000, 0.35);
+    g.fillRoundedRect(kx + 1, 17, 10, 30, 3);
+    g.fillStyle(COLORS.cream, 1);
+    g.fillRoundedRect(kx, 15, 10, 30, 3);
+    this.percent.setText(this.value > 0 ? `${Math.round(this.value * 100)}%` : 'Off');
+  }
+}

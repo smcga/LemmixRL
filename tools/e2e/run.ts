@@ -183,6 +183,26 @@ try {
   await dragSpot('joker:0', 840, 60);
   s = await state();
   if (s.jokers.map((j: any) => j.id).join() !== 'piggy' || s.money !== 13) fail(`joker sold: ${JSON.stringify(s.jokers)}, $${s.money}`);
+  // the options: the volume of the music down to nothing (its sound option goes off), the sounds at half
+  await clickSpot('options');
+  const music = await spot('slider:music');
+  await click(music.x + 1, music.y);
+  const sfx = await spot('slider:sfx');
+  await click(sfx.x + 136, sfx.y);
+  const cfg = await ev<{ music: boolean; sound: boolean; sfx: number }>(
+    `(() => { const c = globalThis.lemmix.config; return { music: [...c.soundOptions].length === 1, sound: c.sfxVolume === 0.5, sfx: c.sfxVolume }; })()`,
+  );
+  if (!cfg.music || !cfg.sound) fail('the volume sliders did not set the volumes: ' + JSON.stringify(cfg));
+  // the collection: the gadgets seen in this shop are turned over
+  await clickSpot('collection', 800);
+  const scenes = () => ev<string>(`globalThis.phaserGame.scene.getScenes(true).map((s) => s.sys.settings.key).join()`);
+  if (!(await scenes()).includes('collection')) fail('the collection did not open');
+  const seen = await ev<string[]>(`JSON.parse(localStorage.getItem('lemmixrl.meta')).seen`);
+  for (const k of ['joker:piggy', 'joker:guild', 'pack:lemmings']) if (!seen.includes(k)) fail(`the collection did not see ${k}: ${seen}`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(500);
+  if ((await scenes()) !== 'run' || (await state()).phase !== 'shop') fail('the collection did not go back to the run');
+
   // the tarot, dragged to the area above the colony: bought and used at once (The Hermit doubles the money)
   await dragSpot('offer:0', 917, 270);
   s = await state();

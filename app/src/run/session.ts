@@ -68,7 +68,7 @@ import {
 
 /** The level bands of the antes, as positions in the level system (0 = Fun 1 ... 119 = Mayhem 30). */
 export const ANTE_BANDS: readonly (readonly [number, number])[] = [
-  [0, 17],
+  [0, 23],
   [12, 32],
   [25, 47],
   [40, 62],
@@ -79,6 +79,16 @@ export const ANTE_BANDS: readonly (readonly [number, number])[] = [
 ];
 
 const KINDS: readonly BlindKind[] = ['small', 'big', 'boss'];
+
+/**
+ * The levels of a band a blind is drawn from: the easier half for Level 1, the middle half for Level 2, the harder half
+ * for Level 3. (They overlap, so a level has more than a handful of candidates: thirds gave Level 1 of the first
+ * round six levels to come from.) Level 1 stays easier than Level 3.
+ */
+function blindPart(band: RunLevel[], kind: number): RunLevel[] {
+  const q = band.length / 4;
+  return band.slice(Math.floor(q * kind), Math.floor(q * (kind + 2)));
+}
 
 /** What the blind screen shows about a blind. */
 export interface BlindPreview {
@@ -231,10 +241,9 @@ export class RunSession {
     const rng = this.random.stream('blinds');
     const [lo, hi] = ANTE_BANDS[Math.min(s.ante, ANTES) - 1];
     const band = this.catalog.levels.filter((l) => l.order >= lo && l.order <= hi);
-    const third = band.length / 3;
     const tagRng = this.random.stream('tags');
     s.blinds = KINDS.map((kind, k) => {
-      const part = band.slice(Math.floor(third * k), Math.floor(third * (k + 1)));
+      const part = blindPart(band, k);
       const level = this.pickLevel(rng, part, band);
       s.usedLevels.push(level.id);
       return { kind, levelId: level.id, tag: kind === 'boss' ? null : tagRng.pick(TAGS).id, status: 'upcoming' };
@@ -296,8 +305,7 @@ export class RunSession {
     s.bossRerolled = true;
     const [lo, hi] = ANTE_BANDS[Math.min(s.ante, ANTES) - 1];
     const band = this.catalog.levels.filter((l) => l.order >= lo && l.order <= hi);
-    const third = band.length / 3;
-    const part = band.slice(Math.floor(third * 2));
+    const part = blindPart(band, 2);
     const level = this.pickLevel(this.random.stream('boss'), part, band);
     s.usedLevels.push(level.id);
     s.blinds[2].levelId = level.id;
@@ -1251,6 +1259,29 @@ export class RunSession {
   recruit(n: number): void {
     const names = this.random.stream('names');
     for (let i = 0; i < n; i++) this.state.colony.push(this.newCard(names));
+  }
+
+  /** What the player can see of the run now, for the collection (see Meta.seen). */
+  visibleKeys(): string[] {
+    const s = this.state;
+    const keys: string[] = [];
+    for (const j of s.jokers) keys.push(`joker:${j.id}`);
+    for (const t of s.tarots) keys.push(`tarot:${t.id}`);
+    for (const o of s.shop?.offers ?? []) if (o.type === 'joker' || o.type === 'tarot') keys.push(`${o.type}:${o.id}`);
+    for (const o of s.shop?.packs ?? []) keys.push(`pack:${o.id}`);
+    for (const c of s.pack?.choices ?? []) {
+      if (c.type === 'joker' || c.type === 'tarot') keys.push(`${c.type}:${c.id}`);
+      else if (c.type === 'specials') keys.push(`lemming:${c.trait}`);
+    }
+    if (s.phase === 'blinds') for (const b of s.blinds) if (b.tag) keys.push(`tag:${b.tag}`);
+    for (const c of s.colony) {
+      if (c.edition !== 'plain') keys.push(`lemming:${c.edition}`);
+      if (c.climber && c.floater) keys.push('lemming:athlete');
+      else if (c.climber) keys.push('lemming:climber');
+      else if (c.floater) keys.push('lemming:floater');
+      if (c.insured) keys.push('lemming:insured');
+    }
+    return keys;
   }
 
   /** for saving */

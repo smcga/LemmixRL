@@ -4,13 +4,14 @@
  * 960 x 540 screen that is scaled to the window, like the run screens.
  */
 import * as Phaser from 'phaser';
-import { SoundEffect, SoundOption } from '../../../engine/src/index.ts';
+import { SoundEffect } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
 import { editConfig } from '../dialogs.ts';
 import { ScreenType } from '../screens/base.ts';
 import { ensureRunAssets, lemmingSprite } from '../run/ui/assets.ts';
 import { CardView } from '../run/ui/cards.ts';
 import { lematroLogo } from '../run/ui/logo.ts';
+import { soundSliders } from '../run/ui/settings.ts';
 import { Swirl, SWIRLS } from '../run/ui/swirl.ts';
 import { Button, COLORS, label, panel } from '../run/ui/widgets.ts';
 import { canFullscreen, isFullscreen, safeAreaInsets, toggleFullscreen } from '../touch.ts';
@@ -62,17 +63,19 @@ export class TitleScene extends Phaser.Scene {
     this.tweens.add({ targets: floater, y: H + 40, x: 560, duration: 16000, repeat: -1, ease: 'Linear', delay: 2000 });
 
     // the buttons, on a bar as in Balatro
-    panel(this, 190, 392, 580, 96, COLORS.panel, COLORS.panelLight, 14).setDepth(10);
-    this.button('settings', 206, 410, 160, 60, 'Settings', COLORS.orange, () => this.showSettings());
-    this.button('play', 380, 402, 200, 76, 'Play', COLORS.blue, () => this.play(), 48);
-    this.button('classic', 594, 410, 160, 60, 'Classic\nLemmings', COLORS.green, () => this.classic());
+    panel(this, 116, 392, 728, 96, COLORS.panel, COLORS.panelLight, 14).setDepth(10);
+    this.button('settings', 132, 410, 150, 60, 'Settings', COLORS.orange, () => this.showSettings());
+    this.button('play', 296, 402, 200, 76, 'Play', COLORS.blue, () => this.play(), 48);
+    this.button('collection', 510, 410, 150, 60, 'Collection', COLORS.green, () => this.collection());
+    this.button('classic', 674, 410, 154, 60, 'Classic\nLemmings', COLORS.purple, () => this.classic());
     label(this, W / 2, 520, 'Lemmings by DMA Design  ·  Lemmix by Eric Langedijk  ·  in the spirit of Balatro', { color: COLORS.dim, originX: 0.5, originY: 0.5 }).setDepth(10);
 
     this.layout();
     this.scale.on('resize', this.layout, this);
     this.events.once('shutdown', () => this.scale.off('resize', this.layout, this));
     listen(this, 'keydown', (e) => {
-      if (this.closed) return;
+      // (not while the collection is open over it)
+      if (this.closed || !this.sys.isActive()) return;
       if (e.key === 'Escape' && this.settings.length) this.closeSettings();
       else if (e.key === 'Enter' || e.key === 'F6' || e.key === ' ') this.play();
       else if (e.key === 'F5') this.showSettings();
@@ -104,6 +107,13 @@ export class TitleScene extends Phaser.Scene {
     gotoScreen(this, ScreenType.Run);
   }
 
+  /** the collection, over the title (which waits under it) */
+  private collection(): void {
+    if (this.closed) return;
+    this.scene.pause();
+    this.scene.launch('collection', { from: 'title' });
+  }
+
   private classic(): void {
     if (this.closed) return;
     this.closed = true;
@@ -125,22 +135,13 @@ export class TitleScene extends Phaser.Scene {
       return g;
     };
     o(this.add.rectangle(-W, -H, 3 * W, 3 * H, 0x000000, 0.6).setOrigin(0, 0).setInteractive());
-    o(panel(this, 300, 110, 360, 330, COLORS.panel, COLORS.panelLight, 14));
-    o(label(this, W / 2, 140, 'Settings', { size: 48, originX: 0.5, originY: 0.5 }));
-    const opts = this.app.config.soundOptions;
-    const soundName = () => (opts.has(SoundOption.Music) ? 'Music and sound' : opts.has(SoundOption.Sound) ? 'Sound only' : 'No sound');
-    const sound = o(
-      new Button(this, 330, 180, 300, 40, `Sound: ${soundName()}`, COLORS.blue, () => {
-        // as F3 in the menu of Lemmix: sound, sound and music, nothing
-        if (opts.size === 0) opts.add(SoundOption.Sound);
-        else if (opts.size === 1 && opts.has(SoundOption.Sound)) opts.add(SoundOption.Music);
-        else opts.clear();
-        this.app.config.save();
-        sound.setCaption(`Sound: ${soundName()}`);
-      }),
-    );
-    this.spots['settings:sound'] = { x: 480, y: 200 };
-    let y = 232;
+    o(panel(this, 300, 70, 360, 410, COLORS.panel, COLORS.panelLight, 14));
+    o(label(this, W / 2, 100, 'Settings', { size: 48, originX: 0.5, originY: 0.5 }));
+    // the volumes of the sounds and of the music
+    const [sfx, music] = soundSliders(this, this.app, 330, 136, 300).map((s) => o(s));
+    this.spots['settings:sfx'] = { x: sfx.x, y: sfx.y + 31 };
+    this.spots['settings:music'] = { x: music.x, y: music.y + 31 };
+    let y = 260;
     if (canFullscreen()) {
       const fs = o(
         new Button(this, 330, y, 300, 40, isFullscreen() ? 'Full screen: on' : 'Full screen: off', COLORS.blue, () => {
@@ -151,8 +152,8 @@ export class TitleScene extends Phaser.Scene {
       y += 52;
     }
     o(new Button(this, 330, y, 300, 40, 'Game options...', COLORS.blue, () => void editConfig(this.app.config)));
-    o(label(this, W / 2, y + 56, 'Lemmix options: game speed, the mechanics of the original, the voice', { color: COLORS.dim, originX: 0.5, maxWidth: 320, align: 1 }));
-    this.spots['settings:back'] = { x: 480, y: 410 };
-    o(new Button(this, 330, 392, 300, 36, 'Back', COLORS.orange, () => this.closeSettings()));
+    o(label(this, W / 2, y + 52, 'Lemmix options: game speed, the mechanics of the original, the voice', { color: COLORS.dim, originX: 0.5, maxWidth: 320, align: 1 }));
+    this.spots['settings:back'] = { x: 480, y: 448 };
+    o(new Button(this, 330, 430, 300, 36, 'Back', COLORS.orange, () => this.closeSettings()));
   }
 }
