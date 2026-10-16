@@ -79,6 +79,7 @@ export class TitleScene extends Phaser.Scene {
     this.button('classic', 674, 410, 154, 60, 'Classic\nLemmings', COLORS.purple, () => this.classic());
     // install it as an app (not when it already is one)
     this.installButton();
+    this.line(842, 24, [['Card designer', 'designer.html']]);
     const offInstall = onInstallChange(() => this.installButton());
     this.events.once('shutdown', offInstall);
     // who made what (the names are links), and that this is a fan remix

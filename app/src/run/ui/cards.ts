@@ -7,8 +7,11 @@ import * as Phaser from 'phaser';
 import { touch } from '../../touch.ts';
 import { type LemmingAnim, lemmingSprite, SKILL_ICONS } from './assets.ts';
 import { Button, COLORS, label, shade, type TipContent, type Tooltip } from './widgets.ts';
+import type { PowerCardDesign } from '../power-cards/schema.ts';
+import { powerCardSprite } from '../power-cards/phaser.ts';
+import { getApp } from '../../scenes/shared.ts';
 
-export type Art = { anim: LemmingAnim; tint?: number } | { icon: string } | { text: string; color: number };
+export type Art = { anim: LemmingAnim; tint?: number } | { icon: string } | { text: string; color: number } | { design: PowerCardDesign };
 
 export interface Rect {
   x: number;
@@ -78,7 +81,7 @@ export class CardView extends Phaser.GameObjects.Container {
       }
       g.fillStyle(COLORS.cream, 1);
       g.fillRect(l + 3, t + ch - 30, cw - 6, 16);
-    } else {
+    } else if (!face.art || !('design' in face.art)) {
       g.fillStyle(COLORS.cream, 1);
       g.fillRoundedRect(l, t, cw, ch, 6);
       g.fillStyle(shade(face.color, 0.4), 1);
@@ -89,7 +92,9 @@ export class CardView extends Phaser.GameObjects.Container {
     this.add(g);
     const art = face.art;
     if (art) {
-      if ('anim' in art) {
+      if ('design' in art) {
+        this.add(powerCardSprite(scene, art.design, getApp().data.provider, cw, ch));
+      } else if ('anim' in art) {
         const sp = lemmingSprite(scene, 0, 0, art.anim, 3);
         if (art.tint) sp.setTint(art.tint);
         this.add(sp);

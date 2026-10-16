@@ -88,6 +88,12 @@ export default defineConfig({
   base: './',
   plugins: [lemmixData()],
   build: {
+    rollupOptions: {
+      input: {
+        game: fileURLToPath(new URL('./app/index.html', import.meta.url)),
+        designer: fileURLToPath(new URL('./app/designer.html', import.meta.url)),
+      },
+    },
     outDir: '../dist',
     emptyOutDir: true,
     chunkSizeWarningLimit: 2000,
