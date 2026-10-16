@@ -13,11 +13,16 @@ TypeScript engine on hundreds of thousands of randomly generated game situations
 ```
 npm install
 npm run dev          # the game: http://localhost:5173
+npm run designer     # Power Card Designer: animations, palette, layout and JSON import/export
 npm run build        # the game as static files in dist/ (any web server can serve them)
 npm test             # unit tests and the regression cases
 npm run oracle:build # compile the original game units with Free Pascal (fpc 3.2.2)
 npm run difftest     # compare the TypeScript engine with the original on every level
 ```
+
+Use the [Power Card Designer](docs/power-card-designer.md) to create and edit card
+artwork and metadata. Exported JSON is the game's card presentation source; new
+designs stay out of gameplay until their effects are implemented.
 
 ## Layout
 

@@ -4,6 +4,10 @@
  * skill above the level's maximum, time on the clock, or start lemmings with an ability.
  */
 import type { SkillCounts } from './skills.ts';
+import { POWER_CARD_LIBRARY } from './power-cards/catalogue.ts';
+import type { Rarity } from './power-cards/schema.ts';
+import type { PowerCardLibrary } from './power-cards/schema.ts';
+export type { Rarity } from './power-cards/schema.ts';
 
 /* ---------------------------------------------------------------------------------------------- lemming cards */
 
@@ -56,15 +60,69 @@ export function isDeath(f: Fate): boolean {
 
 /** Names for lemming cards: the people of DMA Design and Psygnosis who made Lemmings, and some more. */
 export const LEMMING_NAMES = [
-  'Mike', 'Dave', 'Russell', 'Gary', 'Scott', 'Brian', 'Tim', 'Tony', 'Steve', 'Jim', 'Ian', 'Gordon', 'Eric', 'Volker',
-  'Mindy', 'Willy', 'Lemmy', 'Larry', 'Lola', 'Pip', 'Dot', 'Bob', 'Nora', 'Moss', 'Fern', 'Ivy', 'Rex', 'Max', 'Kit',
-  'Bo', 'Jo', 'Ned', 'Ted', 'Sid', 'Mo', 'Flo', 'Gus', 'Hal', 'Ida', 'Jem', 'Kay', 'Lou', 'Mac', 'Nat', 'Ozzy', 'Pat',
-  'Quin', 'Ray', 'Sam', 'Tess', 'Uma', 'Val', 'Wes', 'Xan', 'Yan', 'Zed', 'Ann', 'Bea', 'Cal', 'Dee',
+  'Mike',
+  'Dave',
+  'Russell',
+  'Gary',
+  'Scott',
+  'Brian',
+  'Tim',
+  'Tony',
+  'Steve',
+  'Jim',
+  'Ian',
+  'Gordon',
+  'Eric',
+  'Volker',
+  'Mindy',
+  'Willy',
+  'Lemmy',
+  'Larry',
+  'Lola',
+  'Pip',
+  'Dot',
+  'Bob',
+  'Nora',
+  'Moss',
+  'Fern',
+  'Ivy',
+  'Rex',
+  'Max',
+  'Kit',
+  'Bo',
+  'Jo',
+  'Ned',
+  'Ted',
+  'Sid',
+  'Mo',
+  'Flo',
+  'Gus',
+  'Hal',
+  'Ida',
+  'Jem',
+  'Kay',
+  'Lou',
+  'Mac',
+  'Nat',
+  'Ozzy',
+  'Pat',
+  'Quin',
+  'Ray',
+  'Sam',
+  'Tess',
+  'Uma',
+  'Val',
+  'Wes',
+  'Xan',
+  'Yan',
+  'Zed',
+  'Ann',
+  'Bea',
+  'Cal',
+  'Dee',
 ];
 
 /* ---------------------------------------------------------------------------------------------- jokers */
-
-export type Rarity = 'common' | 'uncommon' | 'rare';
 
 export const RARITY_WEIGHTS: Record<Rarity, number> = { common: 70, uncommon: 25, rare: 5 };
 
@@ -113,56 +171,39 @@ export interface JokerDef {
   recruitsAfterBlind?: number;
 }
 
-export const JOKERS: readonly JokerDef[] = [
-  // the rule breakers
-  { id: 'toolkit', name: 'Illegal Toolkit', rarity: 'rare', price: 8, text: '+1 Builder above the level maximum.', aboveMax: { builder: 1 } },
-  { id: 'smuggler', name: 'Smuggler', rarity: 'rare', price: 8, text: 'Every level: +1 of a random skill above the level maximum.', randomAboveMax: true },
-  { id: 'overtime', name: 'Overtime', rarity: 'uncommon', price: 6, text: '+1 minute on the clock.', extraMinutes: 1 },
-  { id: 'ladder', name: 'Rope Ladder', rarity: 'uncommon', price: 7, text: 'The first 3 lemmings of every level are Climbers.', startClimbers: 3 },
-  { id: 'umbrellas', name: 'Umbrella Stand', rarity: 'uncommon', price: 7, text: 'The first 3 lemmings of every level are Floaters.', startFloaters: 3 },
-  // the colony
-  { id: 'hardhat', name: 'Hard Hat', rarity: 'common', price: 5, text: 'The first lemming that dies in a level returns to the colony.', firstDeathReturns: true },
-  { id: 'disposal', name: 'Bomb Disposal', rarity: 'uncommon', price: 6, text: 'Lemmings you turn into Bombers return to the colony.', returns: ['bombed'] },
-  { id: 'shelter', name: 'Fallout Shelter', rarity: 'common', price: 4, text: 'Lemmings killed by the nuke return to the colony.', returns: ['nuked'] },
-  { id: 'lifeguard', name: 'Lifeguard', rarity: 'common', price: 4, text: 'Drowned lemmings return to the colony.', returns: ['drowned'] },
-  { id: 'crashmats', name: 'Crash Mats', rarity: 'uncommon', price: 6, text: 'Splatted lemmings return to the colony.', returns: ['splat'] },
-  { id: 'scout', name: 'Talent Scout', rarity: 'common', price: 4, text: '2 lemmings join the colony after every level.', recruitsAfterBlind: 2 },
-  // money
-  {
-    id: 'unionrep',
-    name: 'Union Rep',
-    rarity: 'common',
-    price: 5,
-    text: '+$1 for every 10% of the squad rescued above the requirement.',
-    payout: (c) => Math.floor(((c.rescued - c.required) * 10) / Math.max(1, c.hand)),
-  },
-  { id: 'nolem', name: 'Leave No Lem Behind', rarity: 'common', price: 4, text: '+$3 for a perfect rescue.', payout: (c) => (c.perfect ? 3 : 0) },
-  { id: 'piggy', name: 'Piggy Bank', rarity: 'common', price: 5, text: 'The interest cap is $5 higher.', interestCap: 5 },
-  {
-    id: 'speedrun',
-    name: 'Speedrunner',
-    rarity: 'common',
-    price: 5,
-    text: '+$1 for every full minute left on the clock.',
-    payout: (c) => Math.floor(c.secondsLeft / 60),
-  },
-  {
-    id: 'minimalist',
-    name: 'Minimalist',
-    rarity: 'uncommon',
-    price: 6,
-    text: '+$4 if you used at most half of the skills you had.',
-    payout: (c) => (c.skillsUsed * 2 <= c.skillsAvailable ? 4 : 0),
-  },
-  { id: 'headcount', name: 'Head Count', rarity: 'common', price: 5, text: '+$1 for every 20 lemmings in the colony.', payout: (c) => Math.floor(c.colonySize / 20) },
-  // abilities
-  { id: 'guild', name: "Builders' Guild", rarity: 'common', price: 4, text: '+2 Builder ability.', capacity: { builder: 2 } },
-  { id: 'demolition', name: 'Demolition Crew', rarity: 'common', price: 5, text: '+1 Basher, Miner and Digger ability.', capacity: { basher: 1, miner: 1, digger: 1 } },
-  { id: 'climbclub', name: 'Climbing Club', rarity: 'common', price: 4, text: '+2 Climber and Floater ability.', capacity: { climber: 2, floater: 2 } },
-  { id: 'bombsquad', name: 'Bomb Squad', rarity: 'common', price: 4, text: '+2 Bomber and Blocker ability.', capacity: { bomber: 2, blocker: 2 } },
-  { id: 'trainer', name: 'Personal Trainer', rarity: 'uncommon', price: 6, text: '+5 ability points to assign after every round.', pointsAfterBoss: 5 },
-  { id: 'advisor', name: 'Careers Advisor', rarity: 'common', price: 4, text: 'After every round, 5 more ability points can be moved.', reassignAfterBoss: 5 },
-];
+/** Gameplay stays in code. A JSON design enters the game only when its ID has an implemented effect here. */
+export const POWER_CARD_EFFECTS: Record<string, Omit<JokerDef, 'id' | 'name' | 'rarity' | 'price' | 'text'>> = {
+  toolkit: { aboveMax: { builder: 1 } },
+  smuggler: { randomAboveMax: true },
+  overtime: { extraMinutes: 1 },
+  ladder: { startClimbers: 3 },
+  umbrellas: { startFloaters: 3 },
+  hardhat: { firstDeathReturns: true },
+  disposal: { returns: ['bombed'] },
+  shelter: { returns: ['nuked'] },
+  lifeguard: { returns: ['drowned'] },
+  crashmats: { returns: ['splat'] },
+  scout: { recruitsAfterBlind: 2 },
+  unionrep: { payout: (c) => Math.floor(((c.rescued - c.required) * 10) / Math.max(1, c.hand)) },
+  nolem: { payout: (c) => (c.perfect ? 3 : 0) },
+  piggy: { interestCap: 5 },
+  speedrun: { payout: (c) => Math.floor(c.secondsLeft / 60) },
+  minimalist: { payout: (c) => (c.skillsUsed * 2 <= c.skillsAvailable ? 4 : 0) },
+  headcount: { payout: (c) => Math.floor(c.colonySize / 20) },
+  guild: { capacity: { builder: 2 } },
+  demolition: { capacity: { basher: 1, miner: 1, digger: 1 } },
+  climbclub: { capacity: { climber: 2, floater: 2 } },
+  bombsquad: { capacity: { bomber: 2, blocker: 2 } },
+  trainer: { pointsAfterBoss: 5 },
+  advisor: { reassignAfterBoss: 5 },
+};
+
+export function playablePowerCards(library: PowerCardLibrary): readonly JokerDef[] {
+  return library.cards
+    .filter((card) => Object.hasOwn(POWER_CARD_EFFECTS, card.id))
+    .map((card) => ({ id: card.id, name: card.name, rarity: card.rarity, price: card.price, text: card.description, ...POWER_CARD_EFFECTS[card.id] }));
+}
+export const JOKERS: readonly JokerDef[] = playablePowerCards(POWER_CARD_LIBRARY);
 
 export function jokerDef(id: string): JokerDef {
   const j = JOKERS.find((d) => d.id === id);

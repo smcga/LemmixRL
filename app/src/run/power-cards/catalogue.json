@@ -1,0 +1,521 @@
+{
+  "version": 2,
+  "cards": [
+    {
+      "id": "toolkit",
+      "name": "Illegal Toolkit",
+      "rarity": "rare",
+      "price": 8,
+      "description": "+1 Builder above the level maximum.",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "build",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "smuggler",
+      "name": "Smuggler",
+      "rarity": "rare",
+      "price": 8,
+      "description": "Every level: +1 of a random skill above the level maximum.",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "bash",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "overtime",
+      "name": "Overtime",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "+1 minute on the clock.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "text",
+            "text": "+1:00",
+            "color": "#f3b958",
+            "scale": 1.8571428571428572,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "ladder",
+      "name": "Rope Ladder",
+      "rarity": "uncommon",
+      "price": 7,
+      "description": "The first 3 lemmings of every level are Climbers.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "climb",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "umbrellas",
+      "name": "Umbrella Stand",
+      "rarity": "uncommon",
+      "price": 7,
+      "description": "The first 3 lemmings of every level are Floaters.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "float",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "hardhat",
+      "name": "Hard Hat",
+      "rarity": "common",
+      "price": 5,
+      "description": "The first lemming that dies in a level returns to the colony.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "block",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "disposal",
+      "name": "Bomb Disposal",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "Lemmings you turn into Bombers return to the colony.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "ohno",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "shelter",
+      "name": "Fallout Shelter",
+      "rarity": "common",
+      "price": 4,
+      "description": "Lemmings killed by the nuke return to the colony.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "nuke",
+            "scale": 2,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "lifeguard",
+      "name": "Lifeguard",
+      "rarity": "common",
+      "price": 4,
+      "description": "Drowned lemmings return to the colony.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "drown",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "crashmats",
+      "name": "Crash Mats",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "Splatted lemmings return to the colony.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "splat",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "scout",
+      "name": "Talent Scout",
+      "rarity": "common",
+      "price": 4,
+      "description": "2 lemmings join the colony after every level.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "unionrep",
+      "name": "Union Rep",
+      "rarity": "common",
+      "price": 5,
+      "description": "+$1 for every 10% of the squad rescued above the requirement.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "shrug",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "nolem",
+      "name": "Leave No Lem Behind",
+      "rarity": "common",
+      "price": 4,
+      "description": "+$3 for a perfect rescue.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "exit",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "piggy",
+      "name": "Piggy Bank",
+      "rarity": "common",
+      "price": 5,
+      "description": "The interest cap is $5 higher.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "text",
+            "text": "$$",
+            "color": "#f3b958",
+            "scale": 3,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "speedrun",
+      "name": "Speedrunner",
+      "rarity": "common",
+      "price": 5,
+      "description": "+$1 for every full minute left on the clock.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "fall",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "minimalist",
+      "name": "Minimalist",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "+$4 if you used at most half of the skills you had.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "shrug",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {
+              "#00b000": "#009a00",
+              "#f0d0d0": "#a5b6d0",
+              "#4040e0": "#2c38e0"
+            },
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "headcount",
+      "name": "Head Count",
+      "rarity": "common",
+      "price": 5,
+      "description": "+$1 for every 20 lemmings in the colony.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walkLeft",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "guild",
+      "name": "Builders' Guild",
+      "rarity": "common",
+      "price": 4,
+      "description": "+2 Builder ability.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "builder",
+            "scale": 2,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "demolition",
+      "name": "Demolition Crew",
+      "rarity": "common",
+      "price": 5,
+      "description": "+1 Basher, Miner and Digger ability.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "basher",
+            "scale": 2,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "climbclub",
+      "name": "Climbing Club",
+      "rarity": "common",
+      "price": 4,
+      "description": "+2 Climber and Floater ability.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "climber",
+            "scale": 2,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bombsquad",
+      "name": "Bomb Squad",
+      "rarity": "common",
+      "price": 4,
+      "description": "+2 Bomber and Blocker ability.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "bomber",
+            "scale": 2,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "trainer",
+      "name": "Personal Trainer",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "+5 ability points to assign after every round.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "text",
+            "text": "+5",
+            "color": "#39c5bb",
+            "scale": 3,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "advisor",
+      "name": "Careers Advisor",
+      "rarity": "common",
+      "price": 4,
+      "description": "After every round, 5 more ability points can be moved.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walkLeft",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {
+              "#00b000": "#008f00",
+              "#f0d0d0": "#95a9d0",
+              "#4040e0": "#2734e0"
+            },
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    }
+  ]
+}

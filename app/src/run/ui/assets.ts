@@ -20,26 +20,8 @@ export const FONT_PURPLE = 'rl-font-purple';
 export const SKILL_ICONS = 'rl-skills';
 export const BACKGROUND = 'rl-background';
 
-/** the lemming animations used in the screens: [texture key, animation index in main.dat, frames] */
-export const LEMMING_ANIMS = {
-  walk: [0, 8],
-  walkLeft: [2, 8],
-  dig: [4, 16],
-  climb: [5, 8],
-  drown: [7, 16],
-  build: [10, 16],
-  bash: [12, 32],
-  mine: [14, 24],
-  fall: [16, 4],
-  float: [18, 8],
-  splat: [20, 16],
-  exit: [21, 8],
-  fry: [22, 14],
-  block: [23, 16],
-  shrug: [24, 8],
-  ohno: [26, 16],
-} as const;
-export type LemmingAnim = keyof typeof LEMMING_ANIMS;
+import { LEMMING_ANIMS, type LemmingAnim } from '../power-cards/animations.ts';
+export { LEMMING_ANIMS, type LemmingAnim } from '../power-cards/animations.ts';
 
 const CHARS_FIRST = 33;
 const CHARS_LAST = 126;
