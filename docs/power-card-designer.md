@@ -9,23 +9,32 @@ build includes `designer.html` alongside the game, including branch previews.
 
 1. Choose an existing card, **Duplicate** it, or select **New card**.
 2. Set the name, rarity, price and description. The description is the game’s tooltip text.
-3. Choose any of the 28 original lemming animation variants. Both directions,
+3. In **Artwork layers**, select the element you want to edit, or use **+ Lemming**,
+   **+ Text** or **+ Icon** to add another. Each card can contain up to 16 elements.
+   The list shows the frontmost element first. **↑ Front** and **↓ Back** change
+   the drawing order; **Duplicate** and **Remove** work on the selected element.
+4. For a lemming, choose any of the 28 original animation variants. Both directions,
    jumping, hoisting and the single-frame explosion are included.
-4. Drag the artwork in the large preview, use the position fields, or focus the
+5. Drag an element in the large preview, use the position fields, or focus the
    preview and press arrow keys. Shift + arrows moves five card pixels. Scale
    ranges from 0.25× to 12×. **Centre artwork** resets its position.
-5. Replace any original sprite colour using its colour picker. The palette includes
+6. Replace any original sprite colour using its colour picker. Each lemming has
+   its own independent palette, including after duplicating a layer. The palette includes
    colours across _all_ frames. Replacements are applied directly to original
    pixels, including opaque black; transparent pixels remain transparent.
-6. Choose background and border colours independently of rarity. Check the
+7. Choose background and border colours independently of rarity. Check the
    actual-size preview. Artwork is cropped to the inner card field.
-7. Pause or scrub to a frame to inspect the pose. Playback/frame selection is an
-   editor aid; in-game animations loop at 12 fps.
+8. For each lemming, choose **Animated** or **Fixed frame**. Animated lemmings loop
+   independently at 12 fps. **Fixed frame** exposes a saved pose slider; **Freeze
+   current pose** captures the pose visible in the preview. These settings persist
+   in JSON and in-game. The preview's main Pause/scrub controls only inspect time;
+   they do not change the saved playback settings.
 
-Existing icon/text cards retain their artwork when opened and round-tripped.
-Selecting a lemming animation replaces that artwork. Duplicate the card first if
-you want to keep both versions. These legacy art types are supported in JSON;
-the tool’s artwork authoring controls focus on lemming sprites.
+Existing icon/text cards open as editable layers. Select a text layer to change
+its text (up to 16 characters) and colour, or an icon layer to choose any skill icon,
+slower/faster release, pause or nuke. All layer types have their own scale and
+position controls. **Selected layer type** replaces only that element with another
+type; the Add buttons preserve the other artwork on the card.
 
 ## Save and exchange designs
 
@@ -67,11 +76,15 @@ Keep the shipped IDs in the source catalogue so saved runs can still resolve
 their cards. The normal import workflow preserves them. The designer’s local
 library is deliberately separate from the source file used by the game.
 
-## JSON format (version 1)
+## JSON format (version 2)
+
+The designer imports both versions. Version 1 single-artwork exports and existing
+browser drafts migrate to one layer automatically, preserving their metadata,
+palette and layout. New exports use version 2. No manual conversion is needed.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "cards": [
     {
       "id": "night-shift",
@@ -82,19 +95,28 @@ library is deliberately separate from the source file used by the game.
       "appearance": {
         "background": "#162945",
         "border": "#e9bc77",
-        "art": {
-          "type": "lemming",
-          "animation": "buildLeft",
-          "scale": 3,
-          "x": 0,
-          "y": -2,
-          "colors": { "#00b000": "#dd88ff" }
-        }
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "buildLeft",
+            "scale": 3,
+            "x": 0,
+            "y": -2,
+            "colors": { "#00b000": "#dd88ff" },
+            "playback": "fixed",
+            "frame": 5
+          }
+        ]
       }
     }
   ]
 }
 ```
+
+Layers are stored back to front. Lemming `playback` is `animated` or `fixed`;
+`frame` is zero-based and must be within that animation (the UI shows one-based
+frame numbers). Text layers use `type: "text"`, `text` and `color`; icon layers
+use `type: "icon"` and `icon`. All types include `scale`, `x` and `y`.
 
 Positions are offsets from the centre of a 66 × 88 card, in card pixels. Scale
 multiplies source sprite pixels. Colour keys/values are six-digit hex colours;
@@ -108,8 +130,11 @@ are rejected rather than silently discarded.
 ## Verification
 
 `npm test` covers JSON validation, unchanged effect IDs, metadata integration,
-draft exclusion, palette mapping and all animation/frame indices.
+draft exclusion, version migration, layered JSON validation, independent fixed
+and animated frame resolution, palette mapping and all animation/frame indices.
 `npm run e2e:designer` checks the complete workflow in Chromium, including exported
-artwork rendered in a running Phaser game. Use `CHROMIUM` to point to a browser
+artwork rendered in a running Phaser game. It checks text/icon editing, independent
+palettes and poses, layer duplication/removal/order, old-draft recovery and pixel
+parity with the editor for mixed animation loop lengths. Use `CHROMIUM` to point to a browser
 executable, or run `npx playwright install chromium` first. The designer browser
 test also runs as part of `npm run e2e` and the existing verification workflow.

@@ -3,8 +3,19 @@ import { loadLemmixData } from '../data.ts';
 import { POWER_CARD_LIBRARY } from '../run/power-cards/catalogue.ts';
 import { POWER_CARD_EFFECTS } from '../run/content.ts';
 import { LEMMING_ANIMS, type LemmingAnim } from '../run/power-cards/animations.ts';
-import { drawPowerCard, powerCardAssets, powerCardFrameCount, type PowerCardAssets } from '../run/power-cards/render.ts';
-import { newPowerCard, parsePowerCardLibrary, type PowerCardDesign, type PowerCardLibrary, type Rarity } from '../run/power-cards/schema.ts';
+import { artBounds, drawPowerCard, powerCardAssets, powerCardFrameCount, type PowerCardAssets } from '../run/power-cards/render.ts';
+import {
+  ICONS,
+  MAX_ART_LAYERS,
+  POWER_CARD_VERSION,
+  lemmingFrame,
+  newArtwork,
+  newPowerCard,
+  parsePowerCardLibrary,
+  type PowerCardArt,
+  type PowerCardLibrary,
+  type Rarity,
+} from '../run/power-cards/schema.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const input = (id: string) => $<HTMLInputElement>(id);
@@ -13,12 +24,14 @@ const STORAGE = 'lemmatro-power-card-designer-v1';
 const rarityColors = { common: '#009dff', uncommon: '#4bc292', rare: '#fe5f55' };
 let library: PowerCardLibrary = structuredClone(POWER_CARD_LIBRARY);
 let selected = 0;
+let selectedLayer = 0;
 let assets: PowerCardAssets;
 let playing = true;
 let frame = 0;
 let valid = true;
 let storageAvailable = true;
 const card = () => library.cards[selected];
+const art = () => card().appearance.layers[selectedLayer];
 const preview = $<HTMLCanvasElement>('preview');
 const small = $<HTMLCanvasElement>('small-preview');
 const ctx = preview.getContext('2d')!;
@@ -37,7 +50,28 @@ function validate(): boolean {
     valid = false;
     status((e as Error).message, true);
   }
-  for (const id of ['export-card', 'export-library', 'new', 'duplicate']) $<HTMLButtonElement>(id).disabled = !valid;
+  for (const id of [
+    'export-card',
+    'export-library',
+    'new',
+    'duplicate',
+    'add-lemming',
+    'add-text',
+    'add-icon',
+    'duplicate-layer',
+    'remove-layer',
+    'layer-forward',
+    'layer-backward',
+    'art-type',
+  ]) {
+    $<HTMLButtonElement>(id).disabled =
+      !valid ||
+      (['new', 'duplicate'].includes(id) && library.cards.length >= 500) ||
+      (['add-lemming', 'add-text', 'add-icon', 'duplicate-layer'].includes(id) && card().appearance.layers.length >= MAX_ART_LAYERS) ||
+      (id === 'remove-layer' && card().appearance.layers.length === 1) ||
+      (id === 'layer-forward' && selectedLayer === card().appearance.layers.length - 1) ||
+      (id === 'layer-backward' && selectedLayer === 0);
+  }
   return valid;
 }
 function changed(): void {
@@ -56,6 +90,7 @@ function changed(): void {
     !storageAvailable,
   );
   renderList();
+  renderLayers();
 }
 function uniqueId(base = 'new-card'): string {
   let id = base,
@@ -80,6 +115,7 @@ function renderList(): void {
     button.addEventListener('click', () => {
       if (!validate()) return;
       selected = i;
+      selectedLayer = 0;
       showCard();
     });
     list.append(button);
@@ -101,10 +137,10 @@ function updatePreviewText(): void {
 function palette(): void {
   const host = $('palette');
   host.replaceChildren();
-  const art = card().appearance.art;
-  $<HTMLButtonElement>('reset-colors').disabled = art.type !== 'lemming';
-  if (art.type !== 'lemming') return;
-  for (const from of assets.palette(art.animation)) {
+  const current = art();
+  $<HTMLButtonElement>('reset-colors').disabled = current.type !== 'lemming';
+  if (current.type !== 'lemming') return;
+  for (const from of assets.palette(current.animation)) {
     const row = document.createElement('label');
     row.className = 'palette-row';
     const original = document.createElement('i');
@@ -114,10 +150,10 @@ function palette(): void {
     caption.textContent = from;
     const picker = document.createElement('input');
     picker.type = 'color';
-    picker.value = art.colors[from] ?? from;
+    picker.value = current.colors[from] ?? from;
     picker.setAttribute('aria-label', `Replace ${from}`);
     picker.addEventListener('input', () => {
-      art.colors[from] = picker.value;
+      current.colors[from] = picker.value;
       changed();
     });
     row.append(original, caption, picker);
@@ -125,13 +161,68 @@ function palette(): void {
   }
 }
 function syncTransform(): void {
-  const a = card().appearance.art;
+  const a = art();
   for (const key of ['x', 'y', 'scale'] as const) input(key).value = String(a[key]);
   input('scale-number').value = String(a.scale);
 }
+function layerName(layer: PowerCardArt): string {
+  if (layer.type === 'text') return `Text · ${layer.text || '(empty)'}`;
+  if (layer.type === 'icon') return `Icon · ${layer.icon}`;
+  return `${assets.animation(layer.animation).meta.description.replace('(rtl)', '(left)')} · ${layer.playback === 'fixed' ? `frame ${layer.frame + 1}` : 'animated'}`;
+}
+function renderLayers(): void {
+  const host = $('layer-list'),
+    scroll = host.scrollTop;
+  host.replaceChildren();
+  card()
+    .appearance.layers.map((layer, index) => ({ layer, index }))
+    .reverse()
+    .forEach(({ layer, index }) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.layer = String(index);
+      button.textContent = `${index + 1}. ${layerName(layer)}`;
+      button.setAttribute('aria-current', String(index === selectedLayer));
+      button.addEventListener('click', () => {
+        if (!validate()) return;
+        selectedLayer = index;
+        showLayer();
+      });
+      host.append(button);
+    });
+  host.scrollTop = scroll;
+}
+function showLayer(): void {
+  const a = art();
+  select('art-type').value = a.type;
+  for (const [id, type] of [
+    ['lemming-properties', 'lemming'],
+    ['text-properties', 'text'],
+    ['icon-properties', 'icon'],
+    ['sprite-colors', 'lemming'],
+  ]) {
+    const fieldset = $<HTMLFieldSetElement>(id);
+    fieldset.hidden = fieldset.disabled = a.type !== type;
+  }
+  if (a.type === 'lemming') {
+    select('animation').value = a.animation;
+    select('layer-playback').value = a.playback;
+    input('pose-frame').max = String(LEMMING_ANIMS[a.animation][1]);
+    input('pose-frame').value = String(a.frame + 1);
+    input('pose-frame').disabled = a.playback !== 'fixed';
+    $('pose-frame-label').textContent = `${a.frame + 1} / ${LEMMING_ANIMS[a.animation][1]}`;
+  } else if (a.type === 'text') {
+    input('art-text').value = a.text;
+    input('art-text-color').value = a.color;
+  } else select('art-icon').value = a.icon;
+  syncTransform();
+  palette();
+  renderLayers();
+  validate();
+}
 function showCard(): void {
-  const c = card(),
-    a = c.appearance.art;
+  const c = card();
+  selectedLayer = Math.min(selectedLayer, c.appearance.layers.length - 1);
   input('name').value = c.name;
   input('price').value = String(c.price);
   select('rarity').value = c.rarity;
@@ -141,16 +232,9 @@ function showCard(): void {
   $('id-hint').textContent = input('card-id').disabled
     ? 'This ID links the existing gameplay effect. Duplicate to create a new design.'
     : 'A stable, unique ID for this design. New cards stay out of shops until their effect is implemented.';
-  select('animation').querySelector('option[value="legacy"]')?.remove();
-  if (a.type !== 'lemming') {
-    select('animation').prepend(new Option(`Keep existing ${a.type} artwork`, 'legacy'));
-    select('animation').value = 'legacy';
-  } else select('animation').value = a.animation;
-  $('legacy-art').hidden = a.type === 'lemming';
   input('background').value = c.appearance.background;
   input('border').value = c.appearance.border;
-  syncTransform();
-  palette();
+  showLayer();
   renderList();
   updatePreviewText();
   frame = 0;
@@ -160,7 +244,7 @@ function showCard(): void {
 
 function exportJSON(all: boolean): void {
   if (!validate()) return;
-  const doc = parsePowerCardLibrary({ version: 1, cards: all ? library.cards : [card()] });
+  const doc = parsePowerCardLibrary({ version: POWER_CARD_VERSION, cards: all ? library.cards : [card()] });
   const url = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 2) + '\n'], { type: 'application/json' }));
   const link = document.createElement('a');
   link.href = url;
@@ -185,9 +269,10 @@ async function importFile(file: File): Promise<void> {
     const base = valid ? library : parsePowerCardLibrary(JSON.parse(localStorage.getItem(STORAGE) ?? JSON.stringify(POWER_CARD_LIBRARY)));
     const merged = new Map(base.cards.map((c) => [c.id, c]));
     for (const c of incoming.cards) merged.set(c.id, c);
-    const next = parsePowerCardLibrary({ version: 1, cards: [...merged.values()] });
+    const next = parsePowerCardLibrary({ version: POWER_CARD_VERSION, cards: [...merged.values()] });
     library = next;
     selected = library.cards.findIndex((c) => c.id === incoming.cards[0].id);
+    selectedLayer = 0;
     showCard();
     changed();
     status(`Imported ${incoming.cards.length} cards. Matching IDs replaced; other designs kept.`);
@@ -225,19 +310,101 @@ function bind(): void {
       changed();
     });
   select('animation').addEventListener('change', () => {
-    if (select('animation').value === 'legacy') return;
-    const a = card().appearance.art;
-    card().appearance.art = {
-      type: 'lemming',
-      animation: select('animation').value as LemmingAnim,
-      colors: a.type === 'lemming' ? a.colors : {},
-      scale: a.scale,
-      x: a.x,
-      y: a.y,
-    };
-    showCard();
+    const a = art();
+    if (a.type !== 'lemming') return;
+    a.animation = select('animation').value as LemmingAnim;
+    a.frame = Math.min(a.frame, LEMMING_ANIMS[a.animation][1] - 1);
+    showLayer();
     changed();
   });
+  select('layer-playback').addEventListener('change', () => {
+    const a = art();
+    if (a.type !== 'lemming') return;
+    a.playback = select('layer-playback').value as 'animated' | 'fixed';
+    showLayer();
+    changed();
+  });
+  input('pose-frame').addEventListener('input', () => {
+    const a = art();
+    if (a.type !== 'lemming') return;
+    a.frame = input('pose-frame').valueAsNumber - 1;
+    $('pose-frame-label').textContent = `${a.frame + 1} / ${LEMMING_ANIMS[a.animation][1]}`;
+    changed();
+  });
+  $('freeze-pose').addEventListener('click', () => {
+    const a = art();
+    if (a.type !== 'lemming') return;
+    a.frame = lemmingFrame(a, frame);
+    a.playback = 'fixed';
+    showLayer();
+    changed();
+  });
+  input('art-text').addEventListener('input', () => {
+    const a = art();
+    if (a.type === 'text') {
+      a.text = input('art-text').value;
+      changed();
+    }
+  });
+  input('art-text-color').addEventListener('input', () => {
+    const a = art();
+    if (a.type === 'text') {
+      a.color = input('art-text-color').value;
+      changed();
+    }
+  });
+  select('art-icon').addEventListener('change', () => {
+    const a = art();
+    if (a.type === 'icon') {
+      a.icon = select('art-icon').value as typeof a.icon;
+      changed();
+    }
+  });
+  select('art-type').addEventListener('change', () => {
+    if (!valid) return;
+    const a = art(),
+      replacement = newArtwork(select('art-type').value as PowerCardArt['type']);
+    Object.assign(replacement, { scale: a.scale, x: a.x, y: a.y });
+    card().appearance.layers[selectedLayer] = replacement;
+    showLayer();
+    changed();
+  });
+  for (const type of ['lemming', 'text', 'icon'] as const)
+    $('add-' + type).addEventListener('click', () => {
+      if (!validate() || card().appearance.layers.length >= MAX_ART_LAYERS) return;
+      card().appearance.layers.push(newArtwork(type));
+      selectedLayer = card().appearance.layers.length - 1;
+      showLayer();
+      changed();
+    });
+  $('duplicate-layer').addEventListener('click', () => {
+    if (!validate() || card().appearance.layers.length >= MAX_ART_LAYERS) return;
+    card().appearance.layers.splice(selectedLayer + 1, 0, structuredClone(art()));
+    selectedLayer++;
+    showLayer();
+    changed();
+  });
+  $('remove-layer').addEventListener('click', () => {
+    if (!validate() || card().appearance.layers.length === 1) return;
+    card().appearance.layers.splice(selectedLayer, 1);
+    selectedLayer = Math.max(0, selectedLayer - 1);
+    showLayer();
+    changed();
+  });
+  for (const [id, direction] of [
+    ['layer-forward', 1],
+    ['layer-backward', -1],
+  ] as const)
+    $(id).addEventListener('click', () => {
+      if (!validate()) return;
+      const layers = card().appearance.layers,
+        to = selectedLayer + direction;
+      if (to < 0 || to >= layers.length) return;
+      [layers[selectedLayer], layers[to]] = [layers[to], layers[selectedLayer]];
+      selectedLayer = to;
+      showLayer();
+      changed();
+    });
   for (const id of ['scale', 'scale-number', 'x', 'y'])
     input(id).addEventListener('input', () => {
       const field = input(id);
@@ -245,17 +412,17 @@ function bind(): void {
         validate();
         return;
       }
-      card().appearance.art[id === 'scale-number' ? 'scale' : (id as 'scale' | 'x' | 'y')] = field.valueAsNumber;
+      art()[id === 'scale-number' ? 'scale' : (id as 'scale' | 'x' | 'y')] = field.valueAsNumber;
       syncTransform();
       changed();
     });
   $('center').addEventListener('click', () => {
-    card().appearance.art.x = card().appearance.art.y = 0;
+    art().x = art().y = 0;
     syncTransform();
     changed();
   });
   $('reset-colors').addEventListener('click', () => {
-    const a = card().appearance.art;
+    const a = art();
     if (a.type === 'lemming') {
       a.colors = {};
       palette();
@@ -266,6 +433,7 @@ function bind(): void {
     if (!validate()) return;
     library.cards.push(newPowerCard(uniqueId()));
     selected = library.cards.length - 1;
+    selectedLayer = 0;
     showCard();
     changed();
     input('name').focus();
@@ -278,6 +446,7 @@ function bind(): void {
     copy.name = `${copy.name.slice(0, 73)} (copy)`;
     library.cards.push(copy);
     selected = library.cards.length - 1;
+    selectedLayer = 0;
     showCard();
     changed();
   });
@@ -285,6 +454,7 @@ function bind(): void {
     if (confirm('Replace this browser’s draft library with the shipped cards? Export any designs you want to keep first.')) {
       library = structuredClone(POWER_CARD_LIBRARY);
       selected = 0;
+      selectedLayer = 0;
       showCard();
       changed();
     }
@@ -308,18 +478,33 @@ function bind(): void {
     $('play').setAttribute('aria-pressed', 'false');
     frame = input('frame').valueAsNumber;
   });
-  let drag: { id: number; px: number; py: number; x: number; y: number } | null = null;
+  let drag: { id: number; px: number; py: number; x: number; y: number; layer: PowerCardArt } | null = null;
   preview.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
+    if (!validate()) return;
+    const rect = preview.getBoundingClientRect(),
+      px = ((e.clientX - rect.x) * 66) / rect.width,
+      py = ((e.clientY - rect.y) * 88) / rect.height;
+    if (px >= 4 && px < 62 && py >= 4 && py < 84) {
+      const layers = card().appearance.layers;
+      for (let i = layers.length - 1; i >= 0; i--) {
+        const bounds = artBounds(assets, layers[i]);
+        if (px >= bounds.x && px < bounds.x + bounds.w && py >= bounds.y && py < bounds.y + bounds.h) {
+          selectedLayer = i;
+          showLayer();
+          break;
+        }
+      }
+    }
     preview.focus();
     preview.setPointerCapture(e.pointerId);
-    const a = card().appearance.art;
-    drag = { id: e.pointerId, px: e.clientX, py: e.clientY, x: a.x, y: a.y };
+    const a = art();
+    drag = { id: e.pointerId, px: e.clientX, py: e.clientY, x: a.x, y: a.y, layer: a };
   });
   preview.addEventListener('pointermove', (e) => {
     if (!drag || drag.id !== e.pointerId) return;
     const rect = preview.getBoundingClientRect(),
-      a = card().appearance.art;
+      a = drag.layer;
     a.x = Math.max(-66, Math.min(66, Math.round((drag.x + ((e.clientX - drag.px) * 66) / rect.width) * 4) / 4));
     a.y = Math.max(-88, Math.min(88, Math.round((drag.y + ((e.clientY - drag.py) * 88) / rect.height) * 4) / 4));
     syncTransform();
@@ -332,7 +517,7 @@ function bind(): void {
   preview.addEventListener('keydown', (e) => {
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
     e.preventDefault();
-    const a = card().appearance.art,
+    const a = art(),
       n = e.shiftKey ? 5 : 1;
     a.x = Math.max(-66, Math.min(66, a.x + (e.key === 'ArrowLeft' ? -n : e.key === 'ArrowRight' ? n : 0)));
     a.y = Math.max(-88, Math.min(88, a.y + (e.key === 'ArrowUp' ? -n : e.key === 'ArrowDown' ? n : 0)));
@@ -354,6 +539,7 @@ async function start(): Promise<void> {
     const meta = assets.animation(name).meta;
     select('animation').add(new Option(meta.description.replace('(rtl)', '(left)') + ` · ${meta.frameCount} frame${meta.frameCount === 1 ? '' : 's'}`, name));
   }
+  for (const icon of ICONS) select('art-icon').add(new Option(icon[0].toUpperCase() + icon.slice(1), icon));
   let recovered = false;
   try {
     const saved = localStorage.getItem(STORAGE);
@@ -372,16 +558,22 @@ async function start(): Promise<void> {
   function draw(now: number): void {
     const count = powerCardFrameCount(card());
     if (playing && now - last >= 1000 / 12) {
-      frame = (frame + 1) % count;
+      frame++;
       last = now;
     }
     ctx.save();
     ctx.scale(4, 4);
     drawPowerCard(ctx, card(), assets, frame);
+    const bounds = artBounds(assets, art());
+    ctx.strokeStyle = '#f3ba62';
+    ctx.lineWidth = 0.35;
+    ctx.setLineDash([1, 1]);
+    ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
     ctx.restore();
     drawPowerCard(smallCtx, card(), assets, frame);
-    input('frame').value = String(frame);
-    $('frame-label').textContent = `${frame + 1} / ${count}`;
+    input('frame').max = String(count - 1);
+    input('frame').value = String(frame % count);
+    $('frame-label').textContent = `${(frame % count) + 1} / ${count}`;
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);

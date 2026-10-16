@@ -19,6 +19,40 @@ try {
   await page.goto(url + 'designer.html');
   await page.waitForFunction(() => !document.getElementById('workspace')!.inert);
   assert.equal(await page.locator('#card-list button').count(), 23);
+  // Existing artwork types are editable, without converting them into a lemming.
+  await page.locator('#card-list button').filter({ hasText: 'Overtime' }).click();
+  assert.equal(await page.inputValue('#art-text'), '+1:00');
+  await page.fill('#art-text', '+2:00');
+  await page.locator('#art-text-color').evaluate((el) => {
+    (el as HTMLInputElement).value = '#33ccff';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.locator('#card-list button').filter({ hasText: "Builders' Guild" }).click();
+  assert.equal(await page.inputValue('#art-icon'), 'builder');
+  await page.selectOption('#art-icon', 'nuke');
+  assert.equal(await page.locator('#art-icon option').count(), 12);
+  // Simulate a draft saved by the first release, then recover it through the upgraded editor.
+  await page.evaluate(() => {
+    const key = 'lemmatro-power-card-designer-v1';
+    const doc = JSON.parse(localStorage.getItem(key)!);
+    doc.version = 1;
+    for (const card of doc.cards) {
+      const art = card.appearance.layers[0];
+      delete art.playback;
+      delete art.frame;
+      delete card.appearance.layers;
+      card.appearance.art = art;
+    }
+    localStorage.setItem(key, JSON.stringify(doc));
+  });
+  await page.reload();
+  await page.waitForFunction(() => !document.getElementById('workspace')!.inert);
+  await page.locator('#card-list button').filter({ hasText: 'Overtime' }).click();
+  assert.equal(await page.inputValue('#art-text'), '+2:00');
+  assert.equal(await page.inputValue('#art-text-color'), '#33ccff');
+  await page.locator('#card-list button').filter({ hasText: "Builders' Guild" }).click();
+  assert.equal(await page.inputValue('#art-icon'), 'nuke');
+  await page.locator('#card-list button').filter({ hasText: 'Illegal Toolkit' }).click();
   assert.equal(await page.locator('#animation option').count(), 28);
   const animations = await page.locator('#animation option').evaluateAll((options) => options.map((o) => (o as HTMLOptionElement).value));
   for (const animation of animations) {
@@ -74,7 +108,58 @@ try {
     true,
     'palette edit must change actual sprite pixels',
   );
-  if (process.env.DESIGNER_SCREENSHOT) await page.screenshot({ path: process.env.DESIGNER_SCREENSHOT, fullPage: true });
+  // Second lemming: a different pose, palette and persistent fixed frame.
+  await page.click('#add-lemming');
+  await page.selectOption('#animation', 'climbLeft');
+  await page.selectOption('#layer-playback', 'fixed');
+  await page.locator('#pose-frame').evaluate((el) => {
+    (el as HTMLInputElement).value = '6';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.fill('#scale-number', '2');
+  await page.fill('#x', '-16');
+  await page.fill('#y', '-12');
+  await page
+    .locator('#palette input')
+    .first()
+    .evaluate((el) => {
+      (el as HTMLInputElement).value = '#00ffff';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  await page.click('#duplicate-layer');
+  await page
+    .locator('#palette input')
+    .first()
+    .evaluate((el) => {
+      (el as HTMLInputElement).value = '#ffcc00';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  await page.locator('#layer-list button[data-layer="1"]').click();
+  assert.equal(await page.locator('#palette input').first().inputValue(), '#00ffff', 'duplicated palettes must be independent');
+  await page.locator('#layer-list button[data-layer="2"]').click();
+  await page.click('#remove-layer');
+  assert.equal(await page.inputValue('#pose-frame'), '6');
+  await page.click('#add-text');
+  await page.fill('#art-text', '+7');
+  await page.fill('#scale-number', '2');
+  await page.fill('#x', '0');
+  await page.fill('#y', '23');
+  await page.click('#add-icon');
+  await page.selectOption('#art-icon', 'pause');
+  await page.fill('#scale-number', '1');
+  await page.fill('#x', '17');
+  await page.fill('#y', '-23');
+  await page.click('#layer-backward');
+  assert.equal(await page.locator('#layer-list button[aria-current="true"]').getAttribute('data-layer'), '2');
+  await page.click('#layer-forward');
+  assert.equal(await page.locator('#layer-list button[aria-current="true"]').getAttribute('data-layer'), '3');
+  await page.click('#play'); // Resume preview: the second lemming must remain on its saved pose.
+  await page.waitForTimeout(120);
+  assert.equal(await page.locator('#layer-list button').count(), 4);
+  if (process.env.DESIGNER_SCREENSHOT) {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: process.env.DESIGNER_SCREENSHOT, fullPage: true });
+  }
   const downloadPromise = page.waitForEvent('download');
   await page.click('#export-card');
   const download = await downloadPromise;
@@ -86,7 +171,15 @@ try {
   assert.equal(exported.cards[0].name, 'Midnight Mason');
   assert.equal(exported.cards[0].price, 9);
   assert.equal(exported.cards[0].rarity, 'rare');
-  assert.deepEqual({ x: exported.cards[0].appearance.art.x, y: exported.cards[0].appearance.art.y }, { x: 5, y: -1 });
+  const layers = exported.cards[0].appearance.layers;
+  assert.equal(exported.version, 2);
+  assert.equal(layers.length, 4);
+  assert.deepEqual({ x: layers[0].x, y: layers[0].y }, { x: 5, y: -1 });
+  assert.equal(layers[0].playback, 'animated');
+  assert.equal(layers[1].playback, 'fixed');
+  assert.equal(layers[1].frame, 5);
+  assert.equal(layers[2].text, '+7');
+  assert.equal(layers[3].icon, 'pause');
   await page.reload();
   await page.waitForFunction(() => !document.getElementById('workspace')!.inert);
   assert.equal(await page.locator('#card-list button').count(), 24, 'draft survives reload');
@@ -94,6 +187,10 @@ try {
   await page.waitForFunction(() => document.getElementById('status')!.textContent!.startsWith('Imported'));
   assert.equal(await page.inputValue('#name'), 'Midnight Mason');
   assert.equal(await page.inputValue('#x'), '5');
+  await page.locator('#layer-list button[data-layer="1"]').click();
+  assert.equal(await page.inputValue('#pose-frame'), '6');
+  assert.equal(await page.inputValue('#layer-playback'), 'fixed');
+  assert.equal(await page.locator('#palette input').first().inputValue(), '#00ffff');
   const before = await page.evaluate(() => localStorage.getItem('lemmatro-power-card-designer-v1'));
   await page.locator('#file').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{"version":42,"cards":[]}') });
   await page.waitForFunction(() => document.getElementById('status')!.textContent!.startsWith('Import failed'));
@@ -115,20 +212,58 @@ try {
     const { CardView } = await import(/* @vite-ignore */ path);
     const { POWER_CARD_LIBRARY } = await import(/* @vite-ignore */ cataloguePath);
     const scene = (globalThis as any).phaserGame.scene.getScene('title');
-    const designs = [...POWER_CARD_LIBRARY.cards, design];
+    const mixed = structuredClone(design);
+    mixed.id = 'mixed-timing-test';
+    mixed.appearance.layers.push(
+      { ...mixed.appearance.layers[0], animation: 'fry', playback: 'animated', frame: 0 },
+      { ...mixed.appearance.layers[0], animation: 'mine', playback: 'animated', frame: 0 },
+    );
+    const designs = [...POWER_CARD_LIBRARY.cards, design, mixed];
+    const renderPath = '/src/run/power-cards/render.ts';
+    const { drawPowerCard, powerCardAssets } = await import(/* @vite-ignore */ renderPath);
     for (const item of designs) {
       const card = new CardView(scene, 400, 250, { color: 0xffffff, art: { design: item } });
-      const image = card.list.find((child: any) => child.type === 'Sprite');
-      if (!image || image.texture.key.startsWith('__')) throw new Error(`Missing card texture: ${item.id}`);
-      if (image.texture.getSourceImage().height !== 88) throw new Error('Unexpected texture height');
+      const group = card.list.find((child: any) => child.getData?.('powerCardArtwork'));
+      if (!group || group.list.length !== item.appearance.layers.length + 1) throw new Error(`Missing card layers: ${item.id}`);
+      item.appearance.layers.forEach((art: any, index: number) => {
+        const sprite = group.list[index + 1];
+        if (sprite.texture.key.startsWith('__') || sprite.texture.getSourceImage().height !== 88) throw new Error('Missing layer texture');
+        if (sprite.anims.isPlaying !== (art.type === 'lemming' && art.playback === 'animated' && sprite.texture.frameTotal > 2))
+          throw new Error('Incorrect layer playback');
+      });
+      if (item.id === 'mixed-timing-test') {
+        const expected = document.createElement('canvas'),
+          composed = document.createElement('canvas');
+        expected.width = composed.width = 66;
+        expected.height = composed.height = 88;
+        const a = expected.getContext('2d')!,
+          b = composed.getContext('2d')!;
+        const assets = powerCardAssets((globalThis as any).lemmix.data.provider);
+        for (const tick of [0, 13, 14, 23, 24, 32, 333]) {
+          drawPowerCard(a, item, assets, tick);
+          b.clearRect(0, 0, 66, 88);
+          b.drawImage(group.list[0].texture.getSourceImage(), 0, 0);
+          item.appearance.layers.forEach((art: any, index: number) => {
+            const sprite = group.list[index + 1];
+            const count = art.type === 'lemming' && art.playback === 'animated' ? sprite.anims.currentAnim.frames.length : 1;
+            sprite.anims.stop();
+            sprite.setFrame(String(tick % count));
+            b.drawImage(sprite.texture.getSourceImage(), (tick % count) * 66, 0, 66, 88, 0, 0, 66, 88);
+          });
+          const pixels = a.getImageData(0, 0, 66, 88).data,
+            other = b.getImageData(0, 0, 66, 88).data;
+          for (let i = 0; i < pixels.length; i++)
+            if (Math.abs(pixels[i] - other[i]) > 2) throw new Error(`Editor/game pixel mismatch at tick ${tick}, byte ${i}`);
+        }
+      }
       card.destroy();
     }
     return designs.length;
   }, exported.cards[0]);
-  assert.equal(checked, 24);
+  assert.equal(checked, 25);
   assert.deepEqual(errors, []);
   console.log(
-    'designer e2e ok: 28 animations, palette pixels, drag/nudge, metadata, JSON export/import, invalid input, draft recovery, mobile layout, 24 in-game card renders',
+    'designer e2e ok: editable text/icons, version 1 migration, 28 animations, independent palettes/fixed poses, layer controls, JSON round trip, mobile layout, 25 in-game renders and mixed-loop pixel parity',
   );
 } finally {
   await browser.close();

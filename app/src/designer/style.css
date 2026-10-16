@@ -14,6 +14,39 @@
   --muted: #9bb5af;
   --accent: #f3ba62;
 }
+[hidden] {
+  display: none !important;
+}
+#layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+  margin: 12px 0;
+}
+#layer-list button {
+  text-align: left;
+  white-space: normal;
+  font-size: 12px;
+}
+#layer-list button[aria-current='true'] {
+  border-color: var(--accent);
+  background: #315048;
+}
+.layer-actions {
+  margin-top: 8px;
+  gap: 6px;
+}
+.layer-actions button {
+  font-size: 11px;
+  padding: 7px 9px;
+  flex: 1;
+}
+#freeze-pose {
+  font-size: 12px;
+  margin-top: 10px;
+}
 * {
   box-sizing: border-box;
 }
@@ -410,9 +443,6 @@ input[type='color'] {
   width: 34px;
   height: 28px;
   min-height: 28px;
-}
-#legacy-art[hidden] {
-  display: none;
 }
 @media (min-width: 1500px) {
   main {

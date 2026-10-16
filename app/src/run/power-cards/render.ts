@@ -4,7 +4,10 @@ import { SkillPanel } from '../../screens/skillpanel.ts';
 import { SKILL_BUTTONS, type Skill } from '../skills.ts';
 import { pixelGlyphs, PIXEL_FONT_HEIGHT } from '../ui/pixelfont.ts';
 import { LEMMING_ANIMS, type LemmingAnim } from './animations.ts';
-import { POWER_CARD_WIDTH as W, POWER_CARD_HEIGHT as H, type PowerCardDesign, type PowerCardArt } from './schema.ts';
+import { lemmingFrame, POWER_CARD_WIDTH as W, POWER_CARD_HEIGHT as H, type PowerCardDesign, type PowerCardArt } from './schema.ts';
+
+const GLYPHS = pixelGlyphs();
+const textWidth = (text: string) => [...text].reduce((n, c) => n + (GLYPHS.find((g) => g.code === c.charCodeAt(0))?.width ?? 3) + 1, -1);
 
 export function hexColor(c: number): string {
   return '#' + (c & 0xffffff).toString(16).padStart(6, '0');
@@ -92,7 +95,7 @@ export class PowerCardAssets {
       ctx.drawImage(
         this.sheet(art.animation, art.colors),
         0,
-        (frame % meta.frameCount) * meta.height,
+        lemmingFrame(art, frame) * meta.height,
         meta.width,
         meta.height,
         -meta.width / 2,
@@ -101,11 +104,11 @@ export class PowerCardAssets {
         meta.height,
       );
     } else if (art.type === 'icon') {
-      const x = art.icon === 'nuke' ? 177 : 1 + 16 * (SKILL_BUTTONS[art.icon as Skill] - 1);
+      const extra = { slower: 1, faster: 17, pause: 161, nuke: 177 };
+      const x = Object.hasOwn(extra, art.icon) ? extra[art.icon as keyof typeof extra] : 1 + 16 * (SKILL_BUTTONS[art.icon as Skill] - 1);
       ctx.drawImage(this.icons, x, 16, 14, 23, -7, -11.5, 14, 23);
     } else {
-      const glyphs = pixelGlyphs();
-      const chars = [...art.text].map((c) => glyphs.find((g) => g.code === c.charCodeAt(0)));
+      const chars = [...art.text].map((c) => GLYPHS.find((g) => g.code === c.charCodeAt(0)));
       let x = -chars.reduce((n, g) => n + (g ? g.width + 1 : 4), -1) / 2;
       ctx.fillStyle = art.color;
       for (const g of chars) {
@@ -119,6 +122,18 @@ export class PowerCardAssets {
   }
 }
 
+export function artBounds(assets: PowerCardAssets, art: PowerCardArt): { x: number; y: number; w: number; h: number } {
+  const size =
+    art.type === 'lemming'
+      ? assets.animation(art.animation).meta
+      : art.type === 'icon'
+        ? { width: 14, height: 23 }
+        : { width: textWidth(art.text), height: PIXEL_FONT_HEIGHT };
+  const w = size.width * art.scale,
+    h = size.height * art.scale;
+  return { x: W / 2 + art.x - w / 2, y: H / 2 + art.y - h / 2, w, h };
+}
+
 const loaded = new WeakMap<DataProvider, PowerCardAssets>();
 export function powerCardAssets(data: DataProvider): PowerCardAssets {
   let a = loaded.get(data);
@@ -129,7 +144,13 @@ export function powerCardAssets(data: DataProvider): PowerCardAssets {
   return a;
 }
 
-export function drawPowerCard(ctx: CanvasRenderingContext2D, design: PowerCardDesign, assets: PowerCardAssets, frame = 0): void {
+function innerClip(ctx: CanvasRenderingContext2D): void {
+  ctx.beginPath();
+  ctx.roundRect(4, 4, W - 8, H - 8, 4);
+  ctx.clip();
+}
+
+export function drawPowerCardBackground(ctx: CanvasRenderingContext2D, design: PowerCardDesign): void {
   ctx.save();
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = design.appearance.border;
@@ -140,25 +161,38 @@ export function drawPowerCard(ctx: CanvasRenderingContext2D, design: PowerCardDe
   ctx.roundRect(4, 4, W - 8, H - 8, 4);
   ctx.fillStyle = design.appearance.background;
   ctx.fill();
-  // Oversized/moved art is cropped to the card's inner field, including during dragging.
-  ctx.clip();
-  assets.drawArt(ctx, design.appearance.art, frame);
   ctx.restore();
 }
 
-export function powerCardFrameCount(design: PowerCardDesign): number {
-  const a = design.appearance.art;
-  return a.type === 'lemming' ? LEMMING_ANIMS[a.animation][1] : 1;
+export function drawPowerCard(ctx: CanvasRenderingContext2D, design: PowerCardDesign, assets: PowerCardAssets, tick = 0): void {
+  drawPowerCardBackground(ctx, design);
+  ctx.save();
+  innerClip(ctx);
+  for (const layer of design.appearance.layers) assets.drawArt(ctx, layer, tick);
+  ctx.restore();
 }
 
-export function powerCardSheet(design: PowerCardDesign, assets: PowerCardAssets): HTMLCanvasElement {
-  const count = powerCardFrameCount(design);
+/** Preview scrubbing range only. Rendering uses an absolute tick so different loop lengths never reset each other. */
+export function powerCardFrameCount(design: PowerCardDesign): number {
+  return Math.max(1, ...design.appearance.layers.map((a) => (a.type === 'lemming' && a.playback === 'animated' ? LEMMING_ANIMS[a.animation][1] : 1)));
+}
+
+export function powerCardBackground(design: PowerCardDesign): HTMLCanvasElement {
+  const image = canvas(W, H);
+  drawPowerCardBackground(image.getContext('2d')!, design);
+  return image;
+}
+
+/** Each layer gets its own short strip; no huge least-common-multiple sheet for mixed animation lengths. */
+export function powerCardLayerSheet(art: PowerCardArt, assets: PowerCardAssets): HTMLCanvasElement {
+  const count = art.type === 'lemming' && art.playback === 'animated' ? LEMMING_ANIMS[art.animation][1] : 1;
   const sheet = canvas(W * count, H);
   const ctx = sheet.getContext('2d')!;
   for (let i = 0; i < count; i++) {
     ctx.save();
     ctx.translate(i * W, 0);
-    drawPowerCard(ctx, design, assets, i);
+    innerClip(ctx);
+    assets.drawArt(ctx, art, i);
     ctx.restore();
   }
   return sheet;
