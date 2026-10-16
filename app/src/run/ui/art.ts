@@ -14,7 +14,7 @@ export const PACK_LOOKS: Record<PackKind, { color: number; art: Art; band: strin
   lemmings: { color: 0x3fae4f, art: { anim: 'walk' }, band: 'LEMMINGS' },
   training: { color: COLORS.teal, art: { icon: 'builder' }, band: 'TRAINING' },
   boost: { color: COLORS.purple, art: { anim: 'float' }, band: 'BOOST' },
-  gadget: { color: COLORS.orange, art: { anim: 'build' }, band: 'GADGET' },
+  gadget: { color: COLORS.orange, art: { anim: 'build' }, band: 'POWER' },
 };
 
 export const JOKER_ART: Record<string, Art> = {
@@ -53,7 +53,7 @@ export const TAROT_ART: Record<string, Art> = {
   manual: { icon: 'builder' },
   conscription: { anim: 'walkLeft', tint: 0xff9090 },
   vat: { anim: 'walk', tint: 0xd0a0ff },
-  hermit: { text: 'x2', color: COLORS.gold },
+  hermit: { anim: 'exit', tint: COLORS.gold },
   laurel: { anim: 'exit', tint: 0xd090ff },
   recruiter: { anim: 'walk' },
   bootcamp: { anim: 'climb', tint: 0x7dd0ff },

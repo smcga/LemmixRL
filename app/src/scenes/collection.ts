@@ -1,5 +1,6 @@
 /**
- * The collection, as in Balatro: every gadget, boost, pack, bonus and kind of lemming the game has, a tab each. What
+ * The collection, as in Balatro: every Power Card, boost, pack, Skip Bonus and kind of Super Lemming the game has, a tab
+ * each. What
  * the player has not come across yet (in a shop, a pack, the colony, the bonuses of the levels) is a face-down card
  * with a question mark; it turns over once it has been seen. Opened from the title and from the options of a run, over
  * the screen it was opened from.
@@ -36,7 +37,7 @@ const TRAITS: SpecialTrait[] = ['gold', 'lucky', 'mentor', 'champion', 'climber'
 
 const TABS: { name: string; color: number; entries: () => Entry[] }[] = [
   {
-    name: 'Gadgets',
+    name: 'Power Cards',
     color: COLORS.orange,
     entries: () =>
       JOKERS.map((d) => ({ key: `joker:${d.id}`, title: d.name, lines: [d.text], color: RARITY_COLORS[d.rarity], art: JOKER_ART[d.id], badge: RARITY_NAMES[d.rarity] })),
@@ -53,14 +54,14 @@ const TABS: { name: string; color: number; entries: () => Entry[] }[] = [
       (Object.keys(PACKS) as PackKind[]).map((k) => ({ key: `pack:${k}`, title: PACKS[k].name, lines: [PACKS[k].text], color: PACK_LOOKS[k].color, art: PACK_LOOKS[k].art, badge: 'Pack', pack: PACK_LOOKS[k].band })),
   },
   {
-    name: 'Bonuses',
+    name: 'Skip Bonuses',
     color: COLORS.red,
-    entries: () => TAGS.map((d) => ({ key: `tag:${d.id}`, title: d.name, lines: [d.text, '', 'For skipping a level.'], color: COLORS.red, art: TAG_ART[d.id], badge: 'Bonus' })),
+    entries: () => TAGS.map((d) => ({ key: `tag:${d.id}`, title: d.name, lines: [d.text], color: COLORS.red, art: TAG_ART[d.id], badge: 'Skip Bonus' })),
   },
   {
-    name: 'Lemmings',
+    name: 'Super Lemmings',
     color: COLORS.blue,
-    entries: () => TRAITS.map((t) => ({ key: `lemming:${t}`, title: TRAIT_LOOKS[t].name, lines: [TRAIT_LOOKS[t].text], color: COLORS.blue, art: TRAIT_LOOKS[t].art, badge: 'Lemming' })),
+    entries: () => TRAITS.map((t) => ({ key: `lemming:${t}`, title: TRAIT_LOOKS[t].name, lines: [TRAIT_LOOKS[t].text], color: COLORS.blue, art: TRAIT_LOOKS[t].art, badge: 'Super Lemming' })),
   },
 ];
 

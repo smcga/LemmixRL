@@ -201,7 +201,7 @@ export const TAROTS: readonly TarotDef[] = [
   },
   { id: 'conscription', name: 'Conscription', price: 3, text: '5 random plain lemmings leave; 3 random special lemmings join.', select: 0 },
   { id: 'vat', name: 'The Cloning Vat', price: 3, text: '1 selected lemming is duplicated.', select: 1 },
-  { id: 'hermit', name: 'The Hermit', price: 3, text: 'Doubles your money (max +$20).', select: 0 },
+  { id: 'hermit', name: 'The Golden Handshake', price: 3, text: 'Up to 3 selected lemmings retire from the colony: +$4 for each.', select: 3 },
   { id: 'recruiter', name: 'The Recruiter', price: 3, text: '5 plain lemmings join the colony.', select: 0 },
   { id: 'bootcamp', name: 'Boot Camp', price: 3, text: '+5 ability points: assign them now.', select: 0 },
   { id: 'rethink', name: 'The Rethink', price: 3, text: 'Move up to 10 ability points to other skills now.', select: 0 },
@@ -230,7 +230,7 @@ export const PACKS: Record<PackKind, PackDef> = {
   lemmings: { kind: 'lemmings', name: 'Lemmings Pack', price: 4, size: 3, text: 'Choose 1 of 3 groups of lemmings to join your colony.' },
   training: { kind: 'training', name: 'Training Pack', price: 4, size: 3, text: 'Choose 1 of 3 changes to your abilities.' },
   boost: { kind: 'boost', name: 'Boost Pack', price: 4, size: 3, text: 'Choose 1 of 3 boosts, used at once.' },
-  gadget: { kind: 'gadget', name: 'Gadget Pack', price: 6, size: 2, text: 'Choose 1 of 2 gadgets.' },
+  gadget: { kind: 'gadget', name: 'Power Pack', price: 6, size: 2, text: 'Choose 1 of 2 Power Cards.' },
 };
 
 /* ---------------------------------------------------------------------------------------------- tags */
@@ -250,7 +250,7 @@ export const TAGS: readonly TagDef[] = [
   { id: 'investment', name: 'Investment Bonus', text: '+$10 after the next Level 3.' },
   { id: 'coupon', name: 'Coupon Bonus', text: 'The offers in the next shop are free.' },
   { id: 'training', name: 'Training Bonus', text: '+3 ability in a random skill.' },
-  { id: 'economy', name: 'Economy Bonus', text: 'Doubles your money (max +$15).' },
+  { id: 'economy', name: 'Economy Bonus', text: '+$1 for every 10 lemmings in your colony.' },
 ];
 
 export function tagDef(id: string): TagDef {

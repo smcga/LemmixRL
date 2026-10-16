@@ -348,6 +348,22 @@ describe('roguelike run', () => {
     expect(run.visibleKeys().some((k) => k.startsWith('tag:'))).toBe(true);
   });
 
+  it('The Golden Handshake retires lemmings for money; the Economy Bonus pays for the colony', () => {
+    const run = started('HANDSHAKE');
+    const s = run.state;
+    s.money = 0;
+    s.tarots = [{ uid: 7000, id: 'hermit' }];
+    const n = s.colony.length;
+    const [a, b] = s.colony;
+    expect(run.useTarot(7000, [a.id, b.id])).not.toBeNull();
+    expect(s.colony.length).toBe(n - 2);
+    expect(s.money).toBe(8);
+    // the Economy Bonus, for skipping Level 1
+    s.blinds[0].tag = 'economy';
+    run.skipBlind();
+    expect(s.money).toBe(8 + Math.floor((n - 2) / 10));
+  });
+
   it('tarots change the selected lemmings', () => {
     const run = started('TAROT');
     const [a, b] = run.state.colony;
@@ -370,23 +386,24 @@ describe('roguelike run', () => {
       { uid: 6000, id: 'recruiter' },
       { uid: 6001, id: 'recruiter' },
     ];
-    s.shop!.offers[0] = { uid: 5000, type: 'tarot', id: 'hermit', price: 3, sold: false };
+    s.shop!.offers[0] = { uid: 5000, type: 'tarot', id: 'recruiter', price: 3, sold: false };
     s.shop!.offers[1] = { uid: 5001, type: 'tarot', id: 'midas', price: 3, sold: false };
     expect(run.canBuy(s.shop!.offers[0])).toBe(false); // no room
     expect(run.canBuyAndUse(s.shop!.offers[0])).toBe(true);
-    // The Hermit doubles what is left after paying for it
+    const colony = s.colony.length;
     expect(run.buyAndUse(5000)).not.toBeNull();
-    expect(s.money).toBe(14);
+    expect(s.money).toBe(7);
+    expect(s.colony.length).toBe(colony + 5);
     expect(s.shop!.offers[0].sold).toBe(true);
     expect(s.tarots.map((t) => t.uid)).toEqual([6000, 6001]);
     // a tarot that needs a lemming: without one nothing is bought
     expect(run.buyAndUse(5001)).toBeNull();
-    expect(s.money).toBe(14);
+    expect(s.money).toBe(7);
     expect(s.shop!.offers[1].sold).toBe(false);
     expect(s.tarots.length).toBe(2);
     expect(run.buyAndUse(5001, [s.colony[0].id])).not.toBeNull();
     expect(s.colony[0].edition).toBe('gold');
-    expect(s.money).toBe(11);
+    expect(s.money).toBe(4);
     // not twice, and not a joker
     expect(run.buyAndUse(5001, [s.colony[1].id])).toBeNull();
     s.shop!.offers[2] = { uid: 5002, type: 'joker', id: 'piggy', price: 5, sold: false };
