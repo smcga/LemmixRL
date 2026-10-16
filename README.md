@@ -91,9 +91,9 @@ screen, the sideways lock, the wake lock, the audio); `?diag=0` hides it again.
   what a finger was doing, and a second tap that was asked for. The screen stays on while a level is played. With
   WALKER on, a tap on a worker with nobody else under the finger does nothing (with the right mouse button Lemmix
   raises an exception there, see below).
-* Run screens: the cards are handled as in Balatro on a phone. A tap on a card (a gadget, a boost, a card of the
+* Run screens: the cards are handled as in Balatro on a phone. A tap on a card (a Power Card, a boost, a card of the
   shop) selects it: it shows what it is and its buttons (Buy, Sell, Use). A card can also be dragged: the areas it can
-  be dropped on light up (Buy over the gadgets, Sell over the other row, Use above the colony). A tap on anything else
+  be dropped on light up (Buy over the Power Cards, Sell over the other row, Use above the colony). A tap on anything else
   shows what it is; hiring a skill wants a second tap. A tap on an empty spot closes the information.
 
 ## Deployment
@@ -109,9 +109,12 @@ needs access to this repository. Pull requests should target `main`; `master` is
 
 ## The roguelike run
 
+The title credits Lemmings (David Jones and DMA Design; the lemmings began as an animation by Mike Dailly), Lemmix (Eric
+Langedijk) and Balatro (LocalThunk), with links, and says what Lematro is: an unofficial fan remix, made for fun.
+
 The program starts with the title of Lematro: *Play* (or Enter) starts or continues a run, *Settings* has the volumes
 of the sounds and of the music (a slider each; at 0 it is off, as F3 turns it off in the menu of Lemmix), full screen
-and the options of Lemmix, *Collection* shows every gadget, boost, pack, bonus and kind of lemming of the game, face
+and the options of Lemmix, *Collection* shows every Power Card, boost, pack, Skip Bonus and Super Lemming of the game, face
 down until you first come across it in a run (as Balatro's collection), and *Classic Lemmings* (or C) opens the menu of
 Lemmix, the original game as it was (Escape goes back to the title). In a run, Options has the volumes and the
 collection too (and, for now, an *Unlock all* button for development). A run wraps the original game; it does not
@@ -129,16 +132,16 @@ that is open), and their large text is in the pixel font of the run screens; the
 of the lemmings is kept for the levels.
 
 The screens use Lemmings names for Balatro's things: a *round* (Balatro's ante) has three levels, *Level 1, 2 and 3*
-(the small, big and boss blind), and the *Game* counter is Balatro's round; jokers are *gadgets*, tarots *boosts* and
-the tags for skipping a level *bonuses*. Below, the Balatro names are used for the design.
+(the small, big and boss blind), and the *Game* counter is Balatro's round; jokers are *Power Cards*, tarots *boosts*
+and the tags for skipping a level *Skip Bonuses*. Below, the Balatro names are used for the design.
 
 The screen is laid out like Balatro's: on the left what is going on, the colony, the abilities, Run Info and Options,
-the money, the round and the game; along the top the gadgets and the boosts; in the corner the colony as the deck
-(click it to see every lemming); in the middle the levels, the cash out or the shop, coming up from below. It fills the
+the money, the round and the game; along the top the Power Cards and the boosts; in the corner the colony as the deck
+(click it to see every lemming of it walking about a little level of its own); in the middle the levels, the cash out or the shop, coming up from below. It fills the
 window, as the screens of Lemmix do. The cards work as in Balatro, with its mobile way of dragging on every device:
-click a card for its buttons, or drag it. A card of the shop dragged up to the gadgets is bought; a boost of the shop
-dragged to the area above the colony is bought and used at once (it needs no free slot); a gadget dragged to the boosts
-is sold (a boost to the gadgets), a boost dragged above the colony is used, and a gadget dragged along its row goes to
+click a card for its buttons, or drag it. A card of the shop dragged up to the Power Cards is bought; a boost of the shop
+dragged to the area above the colony is bought and used at once (it needs no free slot); a Power Card dragged to the boosts
+is sold (a boost to the Power Cards), a boost dragged above the colony is used, and a Power Card dragged along its row goes to
 another place. Where a boost asks for lemmings, one drag across them selects them (or takes them out of the selection,
 when it starts on a selected one). Next to the name of every level, *Wiki* opens its page on the
 [Lemmings Wiki](https://lemmings.fandom.com) (how it goes, how others solved it). Once a blind starts, it is the original
@@ -155,12 +158,12 @@ skill.
 | Hand levels | Abilities: 60 points you spread over the eight skills at the start (at most 20 in one); a level gets **min(your ability, the level's allocation)** of every skill |
 | Destroyed cards | Lemmings that die in an accepted result leave the colony for good; survivors and rescued lemmings stay |
 | Card editions | Gold ($2 when it exits), Lucky (chance of $4 or a tarot), Mentor (+1 ability when it exits), Champion (multiplies the rescue bonus when it exits), Insured (comes back once), permanent Climbers and Floaters |
-| Jokers (5) | Passive gadgets: protection against kinds of deaths, money for performance, abilities (also more points to place or move after every boss), and a few rule breakers (+1 Builder above the level maximum, +1 minute, starting climbers or floaters) |
+| Jokers (5) | Passive Power Cards: protection against kinds of deaths, money for performance, abilities (also more points to place or move after every boss), and a few rule breakers (+1 Builder above the level maximum, +1 minute, starting climbers or floaters) |
 | Tarots (2) | Consumables that change selected lemmings (floaters, climbers, gold, lucky, mentor, champion, insured, clones, retraining into abilities) or the abilities (5 new points, moving 10) |
 | Skip | The small and big blind can be skipped for a tag (recruits, floaters, a doubled boss payout, a free shop, ...) |
 | Director's Cut | The boss of an ante can be rerolled once ($6), for a level your colony cannot do |
 | Hands | A level is played once: in it, Restart starts it again as often as you like, but a level that is not won ends the run |
-| Booster packs | Every shop has two packs: a Lemmings Pack and a Training, Boost or Gadget Pack. Opened, a pack shows 3 cards (a Gadget Pack 2) to choose one from (or skip): lemmings for the colony (plain ones, floaters, climbers, gold, lucky, ...), abilities (+3, a trade +5/-3, +1 in every skill), boosts (used at once) or gadgets |
+| Booster packs | Every shop has two packs: a Lemmings Pack and a Training, Boost or Power Pack. Opened, a pack shows 3 cards (a Power Pack 2) to choose one from (or skip): lemmings for the colony (plain ones, floaters, climbers, gold, lucky, ...), abilities (+3, a trade +5/-3, +1 in every skill), boosts (used at once) or Power Cards |
 
 A run starts with the ability assignment: 60 points to spread over the skills, at most 20 in one, with the three
 levels of the first ante in view (their allocation, and below it what your team would bring, as you assign).

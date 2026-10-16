@@ -60,6 +60,14 @@ try {
   await page.waitForFunction(() => (globalThis as Record<string, unknown>).lemmix, null, { timeout: 30000 });
   await page.evaluate(() => localStorage.clear());
   await page.waitForTimeout(500);
+  // the credits on the title are links (opened in a new tab)
+  await ev(`window.open = (url) => { globalThis.openedUrl = url; return null; }`);
+  const balatro = await ev<{ x: number; y: number; zoom: number; left: number; top: number; sx: number; sy: number }>(
+    `(() => { const sc = globalThis.phaserGame.scene.getScene('title'); const c = sc.cameras.main; const s = sc.spots['link:Balatro']; return { x: c.worldView.x, y: c.worldView.y, zoom: c.zoom, left: c.x, top: c.y, sx: s.x, sy: s.y }; })()`,
+  );
+  await page.mouse.click(balatro.left + (balatro.sx - balatro.x) * balatro.zoom, balatro.top + (balatro.sy - balatro.y) * balatro.zoom);
+  await page.waitForTimeout(200);
+  if ((await ev<string>('globalThis.openedUrl')) !== 'https://www.playbalatro.com/') fail('the Balatro credit did not link to its site');
   await page.keyboard.press('F6'); // the title of Lematro -> run
   await page.waitForTimeout(600);
   const camera = () =>
@@ -183,7 +191,7 @@ try {
   if (s.phase !== 'shop' || s.colony.length <= colony0) fail(`a card of the pack was not taken: ${s.phase}, ${s.colony.length} lemmings`);
   // a joker and a tarot on offer: a click selects a card and shows its Buy button
   await ev(
-    `(() => { const s = globalThis.lemmix.run.state; s.money = 20; s.shop.offers = [{ uid: 9001, type: 'joker', id: 'piggy', price: 5, sold: false }, { uid: 9002, type: 'joker', id: 'guild', price: 4, sold: false }, { uid: 9003, type: 'tarot', id: 'hermit', price: 3, sold: false }]; ${scene}.render(); })()`,
+    `(() => { const s = globalThis.lemmix.run.state; s.money = 20; s.shop.offers = [{ uid: 9001, type: 'joker', id: 'piggy', price: 5, sold: false }, { uid: 9002, type: 'joker', id: 'guild', price: 4, sold: false }, { uid: 9003, type: 'tarot', id: 'recruiter', price: 3, sold: false }]; ${scene}.render(); })()`,
   );
   await page.waitForTimeout(200);
   await clickSpot('offer:0');
@@ -219,10 +227,19 @@ try {
   await page.waitForTimeout(500);
   if ((await scenes()) !== 'run' || (await state()).phase !== 'shop') fail('the collection did not go back to the run');
 
-  // the tarot, dragged to the area above the colony: bought and used at once (The Hermit doubles the money)
+  // the colony at home: every lemming of it walking about (and Escape closes it)
+  await clickSpot('deck', 800);
+  const walkers = await ev<number>(`${scene}.overlay.filter((o) => o.type === 'Sprite').length`);
+  if (walkers < (await state()).colony.length) fail(`the colony shows ${walkers} lemmings of ${(await state()).colony.length}`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  if ((await ev<number>(`${scene}.overlay.length`)) !== 0) fail('Escape did not close the colony');
+
+  // the boost, dragged to the area above the colony: bought and used at once (The Recruiter: 5 lemmings join)
+  const before = (await state()).colony.length;
   await dragSpot('offer:0', 917, 270);
   s = await state();
-  if (s.money !== 20 || s.tarots.length !== 0 || !s.shop.offers[2].sold) fail(`tarot bought and used: $${s.money}, ${JSON.stringify(s.shop.offers[2])}`);
+  if (s.money !== 10 || s.tarots.length !== 0 || !s.shop.offers[2].sold || s.colony.length !== before + 5) fail(`boost bought and used: $${s.money}, ${JSON.stringify(s.shop.offers[2])}`);
 
   await clickSpot('nextRound');
   s = await state();

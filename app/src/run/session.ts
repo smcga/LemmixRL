@@ -1033,7 +1033,7 @@ export class RunSession {
       case 'joker':
         if (s.jokers.length >= JOKER_SLOTS) return null;
         s.jokers.push({ uid: this.uid(), id: c.id });
-        return [`${jokerDef(c.id).name} joined your gadgets.`];
+        return [`${jokerDef(c.id).name} joined your Power Cards.`];
       case 'tarot': {
         const tarot: TarotInstance = { uid: this.uid(), id: c.id, skill: c.skill };
         s.tarots.push(tarot);
@@ -1092,7 +1092,7 @@ export class RunSession {
     const offer = s.shop?.offers.find((o) => o.uid === uid);
     if (!offer || !this.canBuyAndUse(offer)) return null;
     const tarot: TarotInstance = { uid: this.uid(), id: offer.id, skill: offer.skill };
-    // paid first: The Hermit doubles what is left
+    // paid first (a boost that pays can not pay for itself)
     s.money -= offer.price;
     s.tarots.push(tarot);
     const notes = this.useTarot(tarot.uid, selected);
@@ -1118,7 +1118,7 @@ export class RunSession {
     if (cards.length > d.select || (d.select > 0 && cards.length === 0)) return null;
     // the squad of a blind that has started is fixed: its lemmings cannot leave the colony
     const squad = new Set(s.setup?.hand ?? []);
-    if (t.id === 'manual' && cards.some((c) => squad.has(c.id))) return null;
+    if ((t.id === 'manual' || t.id === 'hermit') && cards.some((c) => squad.has(c.id))) return null;
     const rng = this.random.stream('tarot');
     const notes: string[] = [];
     switch (t.id) {
@@ -1174,9 +1174,11 @@ export class RunSession {
         break;
       }
       case 'hermit': {
-        const gain = Math.min(s.money, 20);
-        s.money += gain;
-        notes.push(`+$${gain}.`);
+        // (id of old: The Golden Handshake was The Hermit) lemmings retire for money
+        const ids = new Set(cards.map((c) => c.id));
+        s.colony = s.colony.filter((c) => !ids.has(c.id));
+        s.money += 4 * cards.length;
+        notes.push(`${names(cards)} retired: +$${4 * cards.length}.`);
         break;
       }
       case 'recruiter':
@@ -1231,7 +1233,7 @@ export class RunSession {
         return [`${d.name}: +3 ${SKILL_NAMES[skill]} ability.`];
       }
       case 'economy': {
-        const gain = Math.min(s.money, 15);
+        const gain = Math.floor(s.colony.length / 10);
         s.money += gain;
         return [`${d.name}: +$${gain}.`];
       }

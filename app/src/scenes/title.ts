@@ -21,6 +21,13 @@ import { getApp, gotoScreen, listen } from './shared.ts';
 const W = 960;
 const H = 540;
 
+/** where the credits link to */
+const LINKS = {
+  lemmings: 'https://en.wikipedia.org/wiki/Lemmings_(video_game)',
+  lemmix: 'https://github.com/ericlangedijk/Lemmix',
+  balatro: 'https://www.playbalatro.com/',
+};
+
 export class TitleScene extends Phaser.Scene {
   private app!: LemmixApp;
   private swirl!: Swirl;
@@ -74,7 +81,19 @@ export class TitleScene extends Phaser.Scene {
     this.installButton();
     const offInstall = onInstallChange(() => this.installButton());
     this.events.once('shutdown', offInstall);
-    label(this, W / 2, 520, 'Lemmings by DMA Design  ·  Lemmix by Eric Langedijk  ·  in the spirit of Balatro', { color: COLORS.dim, originX: 0.5, originY: 0.5 }).setDepth(10);
+    // who made what (the names are links), and that this is a fan remix
+    this.line(W / 2, 506, [
+      ['Lemmings', LINKS.lemmings],
+      [' by David Jones & DMA Design   ·   ', null],
+      ['Lemmix', LINKS.lemmix],
+      [' by Eric Langedijk   ·   ', null],
+      ['Balatro', LINKS.balatro],
+      [' by LocalThunk', null],
+    ]);
+    this.line(W / 2, 526, [
+      ['Lemmings is awesome. Balatro is awesome. Remixing games is awesome. An unofficial fan remix: plz don\'t sue me <3   ', null],
+      ['About', 'about'],
+    ]);
 
     this.layout();
     this.scale.on('resize', this.layout, this);
@@ -87,6 +106,70 @@ export class TitleScene extends Phaser.Scene {
       else if (e.key === 'F5') this.showSettings();
       else if (e.key === 'c' || e.key === 'C') this.classic();
     });
+  }
+
+  /**
+   * A line of text with links in it, centred on x: [text, url] parts; a url of null is plain text, 'about' opens the
+   * credits. A link is underlined, lights up under the pointer, and opens in a new tab.
+   */
+  private line(x: number, y: number, parts: [string, string | null][]): void {
+    const texts = parts.map(([t, url]) => label(this, 0, y, t, { color: url ? COLORS.gold : COLORS.dim, originY: 0.5 }).setDepth(10));
+    let lx = x - texts.reduce((n, t) => n + t.width, 0) / 2;
+    texts.forEach((t, i) => {
+      t.setX(lx);
+      lx += t.width;
+      const url = parts[i][1];
+      if (!url) return;
+      const under = this.add.rectangle(t.x, y + 8, t.width, 1, COLORS.gold).setOrigin(0, 0).setDepth(10);
+      t.setInteractive({ useHandCursor: true });
+      t.on('pointerover', () => {
+        t.setTint(COLORS.cream);
+        under.setFillStyle(COLORS.cream);
+      });
+      t.on('pointerout', () => {
+        t.setTint(COLORS.gold);
+        under.setFillStyle(COLORS.gold);
+      });
+      t.on('pointerup', () => (url === 'about' ? this.showAbout() : window.open(url, '_blank', 'noopener')));
+      this.spots[`link:${parts[i][0]}`] = { x: t.x + t.width / 2, y };
+    });
+  }
+
+  /** About: who made Lemmings, Lemmix and Balatro, and that this is a fan thing, not theirs */
+  private showAbout(): void {
+    this.closeSettings();
+    const o = <T extends Phaser.GameObjects.GameObject>(g: T): T => {
+      this.settings.push(g);
+      (g as unknown as Phaser.GameObjects.Components.Depth).setDepth?.(100);
+      return g;
+    };
+    o(this.add.rectangle(-W, -H, 3 * W, 3 * H, 0x000000, 0.65).setOrigin(0, 0).setInteractive());
+    o(panel(this, 160, 24, 640, 492, COLORS.panel, COLORS.gold, 14));
+    o(label(this, W / 2, 56, 'About Lematro', { size: 48, originX: 0.5, originY: 0.5 }));
+    const rows: [string, string, string, string][] = [
+      ['Lemmings', '(1991) designed by David Jones at DMA Design, published by Psygnosis. It began as a little animation of walking lemmings by Mike Dailly.', 'Lemmings on Wikipedia', LINKS.lemmings],
+      ['Lemmix', 'the Lemmings clone by Eric Langedijk, ported to TypeScript here, every quirk of the original included.', 'Lemmix on GitHub', LINKS.lemmix],
+      ['Balatro', '(2024) by LocalThunk, published by Playstack: the roguelike this one wants to be when it grows up.', 'playbalatro.com', LINKS.balatro],
+    ];
+    rows.forEach(([name, text, linkText, url], i) => {
+      const y = 90 + i * 80;
+      o(label(this, 188, y, name, { size: 24, color: COLORS.gold }));
+      o(label(this, 188, y + 28, text, { color: COLORS.text, maxWidth: 584 }));
+      const link = o(label(this, 772, y + 6, `${linkText} >`, { color: COLORS.teal, originX: 1 }));
+      link.setInteractive({ useHandCursor: true }).on('pointerup', () => window.open(url, '_blank', 'noopener'));
+    });
+    o(label(this, W / 2, 342, 'Lemmings is awesome. Balatro is awesome. Remixing games is awesome.', { color: COLORS.gold, originX: 0.5, originY: 0.5 }));
+    o(
+      label(
+        this,
+        W / 2,
+        360,
+        "Lematro is a fan-made remix, made for fun and given away for free. It is not affiliated with, or endorsed by, any of the people or companies above (or anyone, really), and the lemmings belong to their owners. Please don't sue me: it's just a fun little thing. Thank you <3",
+        { color: COLORS.dim, originX: 0.5, align: 1, maxWidth: 584 },
+      ),
+    );
+    this.spots['about:back'] = { x: 480, y: 486 };
+    o(new Button(this, 380, 470, 200, 32, 'Back', COLORS.orange, () => this.closeSettings()));
   }
 
   private install: Phaser.GameObjects.GameObject[] = [];

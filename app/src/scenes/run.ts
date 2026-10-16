@@ -21,6 +21,7 @@ import { loadMeta, loadRun, markSeen, recordLevel, saveMeta, saveRun } from '../
 import { ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
 import { type Art, CARD_H, CARD_W, type CardBehaviour, CardTable, CardView, type DropTarget, inRect, type Rect } from '../run/ui/cards.ts';
 import { EDITION_TINTS, JOKER_ART, PACK_LOOKS, RARITY_COLORS, RARITY_NAMES, TAROT_ART } from '../run/ui/art.ts';
+import { Habitat } from '../run/ui/habitat.ts';
 import { lematroLogo } from '../run/ui/logo.ts';
 import { soundSliders } from '../run/ui/settings.ts';
 import { Swirl, type SwirlColors, SWIRLS } from '../run/ui/swirl.ts';
@@ -366,7 +367,7 @@ export class RunScene extends Phaser.Scene {
     const text = [
       'Eight rounds of three levels: the original levels, from Fun to Mayhem.',
       'Your lemmings are your deck: the ones that die are gone for good.',
-      'Rescue lemmings for money; spend it on gadgets, boosts and packs.',
+      'Rescue lemmings for money; spend it on Power Cards, boosts and packs.',
     ];
     this.well(224, 196, 512, 84);
     k(label(this, W / 2, 238, text.join('\n'), { color: COLORS.text, originX: 0.5, originY: 0.5, align: 1, maxWidth: 490 }));
@@ -477,7 +478,7 @@ export class RunScene extends Phaser.Scene {
         lines: [
           `You can bring up to ${cap[sk]} ${SKILL_PLURALS[sk].toLowerCase()} to a level`,
           '(never more than the level allows).',
-          ...(cap[sk] > s.capacity[sk] ? [`${s.capacity[sk]} of your own, +${cap[sk] - s.capacity[sk]} from gadgets.`] : []),
+          ...(cap[sk] > s.capacity[sk] ? [`${s.capacity[sk]} of your own, +${cap[sk] - s.capacity[sk]} from Power Cards.`] : []),
         ],
         x: x + w + 6,
         y: cy,
@@ -573,7 +574,7 @@ export class RunScene extends Phaser.Scene {
       `Levels won ${st.blindsWon}, skipped ${st.skipped}, attempts ${st.attempts}`,
       `Lemmings saved ${st.saved}, lost ${st.lost}, colony ${s.colony.length}`,
       `Money earned $${st.earned}`,
-      ...(tags.length ? [`Bonuses waiting: ${tags.join(', ')}`] : []),
+      ...(tags.length ? [`Skip Bonuses waiting: ${tags.join(', ')}`] : []),
       `Seed ${s.seed}`,
     ];
     o(label(this, 224, 336, lines.join('\n'), { color: COLORS.text, maxWidth: 512 }));
@@ -783,7 +784,7 @@ export class RunScene extends Phaser.Scene {
         color: COLORS.teal,
         lines: [
           `A level gets up to ${cap[sk]} ${SKILL_PLURALS[sk].toLowerCase()} (never more than it allows).`,
-          ...(cap[sk] > cur ? [`${cap[sk] - cur} of them come from gadgets.`] : []),
+          ...(cap[sk] > cur ? [`${cap[sk] - cur} of them come from Power Cards.`] : []),
           ...(cur !== before ? [`It had ${before} before.`] : []),
         ],
         x: x + 40,
@@ -850,7 +851,7 @@ export class RunScene extends Phaser.Scene {
       hoverTip(icon, this.tip, () => ({
         title: SKILL_PLURALS[sk],
         color: COLORS.teal,
-        lines: [`The level has ${p.allocation[sk]}${p.aboveMax[sk] ? ` (+${p.aboveMax[sk]} from gadgets)` : ''}, you would bring ${u}.`],
+        lines: [`The level has ${p.allocation[sk]}${p.aboveMax[sk] ? ` (+${p.aboveMax[sk]} from Power Cards)` : ''}, you would bring ${u}.`],
         x: tipX,
         y: y + 36,
       }));
@@ -1046,7 +1047,7 @@ export class RunScene extends Phaser.Scene {
         title: SKILL_PLURALS[sk],
         color: COLORS.teal,
         lines: [
-          `The level has ${p.allocation[sk]}${p.aboveMax[sk] ? ` (+${p.aboveMax[sk]} from gadgets)` : ''}, you bring ${u}.`,
+          `The level has ${p.allocation[sk]}${p.aboveMax[sk] ? ` (+${p.aboveMax[sk]} from Power Cards)` : ''}, you bring ${u}.`,
           ...(canHire && !touch.active ? [`Click: hire one for this level ($${HIRE_PRICE}).`] : []),
         ],
         x: cx - 100,
@@ -1378,7 +1379,7 @@ export class RunScene extends Phaser.Scene {
       const can = run.canChoose(i);
       const take = () => this.choose(run, i);
       this.table.add(card, {
-        tip: () => ({ title: info.title, color: info.color, lines: [...info.lines, ...(can ? [] : ['', 'No room for another gadget (sell one).'])], badge: info.badge }),
+        tip: () => ({ title: info.title, color: info.color, lines: [...info.lines, ...(can ? [] : ['', 'No room for another Power Card (sell one).'])], badge: info.badge }),
         buttons: () => [{ label: verb, color: c.type === 'tarot' ? COLORS.red : COLORS.green, side: 'below', enabled: can, run: take }],
         targets: () => [{ rect: BUY_ZONE, color: COLORS.green, lines: [verb], active: can, release: take }],
       });
@@ -1482,7 +1483,7 @@ export class RunScene extends Phaser.Scene {
   private whyNot(run: RunSession, o: ShopOffer): string {
     const s = run.state;
     if (s.money < o.price) return 'Not enough money.';
-    if (o.type === 'joker' && s.jokers.length >= JOKER_SLOTS) return 'No room for another gadget (sell one).';
+    if (o.type === 'joker' && s.jokers.length >= JOKER_SLOTS) return 'No room for another Power Card (sell one).';
     if (o.type === 'tarot' && s.tarots.length >= TAROT_SLOTS) return 'No room for another boost (use one).';
     return '';
   }
@@ -1598,6 +1599,10 @@ export class RunScene extends Phaser.Scene {
   private showColony(tarot: TarotUse | null): void {
     const run = this.run;
     if (!run) return;
+    if (!tarot) {
+      this.showTribe(run);
+      return;
+    }
     const o = this.openOverlay(0.6);
     const selected = new Set<number>();
     const colony = run.state.colony;
@@ -1715,6 +1720,30 @@ export class RunScene extends Phaser.Scene {
     o(new Button(this, 740, 466, 130, 32, tarot ? 'Cancel' : 'Back', COLORS.orange, () => this.closeOverlay()));
   }
 
+  /** The colony at home: every lemming of it, walking about a little level (see Habitat). */
+  private showTribe(run: RunSession): void {
+    const o = this.openOverlay(0.6);
+    const colony = run.state.colony;
+    const squad = new Set(run.state.setup?.hand ?? []);
+    o(panel(this, 40, 20, 880, 500, COLORS.panel, COLORS.purple, 12));
+    o(label(this, 64, 34, `Your colony: ${colony.length} lemmings`, { size: 32, color: COLORS.gold }));
+    const specials = this.specialCounts(colony);
+    o(label(this, 64, 72, specials ? `Special: ${specials}` : 'All of them plain lemmings.', { color: COLORS.dim, maxWidth: 820 }));
+    // (a crowd of at most 150: more would cover the level)
+    const shown = colony.length > 150 ? Phaser.Utils.Array.Shuffle([...colony]).slice(0, 150) : colony;
+    const habitat = new Habitat(this, { x: 56, y: 96, w: 848, h: 370 }, shown, o, EDITION_TINTS, (c, x, y) =>
+      showTip(this.tip, { title: cardTitle(c), color: EDITION_TINTS[c.edition] === 0xffffff ? COLORS.text : EDITION_TINTS[c.edition], lines: this.cardLines(c, squad.has(c.id)), x: x - 150, y: y + 12, width: 300 }),
+    );
+    this.overlayCleanup.push(() => {
+      habitat.destroy();
+      this.tip.hide();
+    });
+    if (shown.length < colony.length) o(label(this, 64, 478, `and ${colony.length - shown.length} more at home`, { color: COLORS.dim }));
+    o(label(this, 480, 494, touch.active ? 'Tap a lemming to see who it is' : 'Point at a lemming to see who it is', { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
+    this.spot('back', 820, 494);
+    o(new Button(this, 750, 478, 140, 32, 'Back', COLORS.orange, () => this.closeOverlay()));
+  }
+
   private cardLines(c: LemmingCard, inSquad: boolean): string[] {
     const lines = [EDITION_TEXTS[c.edition]];
     if (c.climber) lines.push('Climber: climbs walls from the start of every level.');
@@ -1745,7 +1774,7 @@ export class RunScene extends Phaser.Scene {
       `Levels won ${st.blindsWon}, skipped ${st.skipped}`,
       `Lemmings saved ${st.saved}, lost ${st.lost}, colony ${s.colony.length}`,
       `Money earned $${st.earned}`,
-      `Gadgets: ${s.jokers.map((j) => jokerDef(j.id).name).join(', ') || 'none'}`,
+      `Power Cards: ${s.jokers.map((j) => jokerDef(j.id).name).join(', ') || 'none'}`,
       `Seed ${s.seed}`,
     ];
     this.well(x + 40, y + 122, w - 80, 126);
