@@ -22,9 +22,10 @@ const errors: string[] = [];
 const fail = (msg: string): never => {
   throw new Error(msg);
 };
-// the run screens are 960 x 540, at zoom 1 centered in the 1280 x 720 page
-const vx = (x: number) => (1280 - 960) / 2 + x;
-const vy = (y: number) => (720 - 540) / 2 + y;
+// the run screens are 960 x 540, scaled to fill the 1280 x 720 page (the camera says where a point of them is)
+let cam = { x: 0, y: 0, zoom: 1, left: 0, top: 0 };
+const vx = (x: number) => cam.left + (x - cam.x) * cam.zoom;
+const vy = (y: number) => cam.top + (y - cam.y) * cam.zoom;
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on('pageerror', (e) => errors.push(e.message));
@@ -60,6 +61,10 @@ try {
   await page.evaluate(() => localStorage.clear());
   await page.keyboard.press('F6'); // menu -> run
   await page.waitForTimeout(600);
+  const camera = () =>
+    ev<typeof cam>(`(() => { const c = globalThis.phaserGame.scene.getScene('run').cameras.main; return { x: c.worldView.x, y: c.worldView.y, zoom: c.zoom, left: c.x, top: c.y }; })()`);
+  cam = await camera();
+  if (Math.abs(cam.zoom - 1280 / 960) > 0.01) fail('the run screens do not fill the page: zoom ' + cam.zoom);
   await clickSpot('newRun');
   let s = await state();
   if (s.ante !== 1 || s.colony.length !== 80 || s.money !== 4) fail('unexpected new run ' + JSON.stringify({ ante: s.ante, money: s.money }));
@@ -78,9 +83,22 @@ try {
   await ability('basher', 20);
   s = await state();
   if (s.capacity.digger !== 20 || s.capacity.builder !== 20 || s.capacity.basher !== 20) fail('unexpected abilities ' + JSON.stringify(s.capacity));
-  // the preview of a level of the ante (the big blind, a wide level here): it opens, scrolls and closes
+  // the preview of a level of the round (Level 2, a wide level here): it opens, scrolls and closes
   await ev(`(() => { globalThis.lemmix.run.state.blinds[1].levelId = 'Orig-1-08'; globalThis.phaserGame.scene.getScene('run').render(); })()`);
   await page.waitForTimeout(200);
+  // the Wiki button of a level opens its page on the Lemmings Wiki
+  await ev(`window.open = (url) => { globalThis.openedUrl = url; return null; }`);
+  await clickSpot('wiki:0');
+  const wiki = await ev<string>('globalThis.openedUrl');
+  if (!/^https:\/\/lemmings\.fandom\.com\/wiki\/Special:Search\?query=.+&go=Go$/.test(wiki ?? '')) fail('the Wiki button did not open the Lemmings Wiki: ' + wiki);
+  // Auto pick places every point
+  await clickSpot('reset');
+  await clickSpot('autoPick');
+  if (Object.values((await state()).capacity as Record<string, number>).reduce((a, b) => a + b, 0) !== 60) fail('Auto pick did not place the 60 points');
+  await clickSpot('reset');
+  await ability('digger', 20);
+  await ability('builder', 20);
+  await ability('basher', 20);
   await clickSpot('preview:1');
   if ((await ev<number>(`${scene}.overlay.length`)) === 0) fail('Preview did not open the level preview');
   const sx0 = await ev<number>(`${scene}.previewSx`);

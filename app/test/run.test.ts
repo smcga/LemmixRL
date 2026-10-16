@@ -134,7 +134,7 @@ describe('roguelike run', () => {
     const cash = run.accept();
     expect(run.state.colony.length).toBe(START_COLONY - 7);
     expect(cash.lines).toEqual([
-      { label: 'Small Blind defeated', amount: 3 },
+      { label: 'Level 1 done', amount: 3 },
       { label: `Unused attempts (${ATTEMPTS - 1})`, amount: ATTEMPTS - 1 },
     ]);
     run.cashOut();
@@ -183,7 +183,7 @@ describe('roguelike run', () => {
     expect(outcome.rescued).toBe(10);
     const cash = run.accept();
     expect(cash.lines).toEqual([
-      { label: 'Small Blind defeated', amount: 3 },
+      { label: 'Level 1 done', amount: 3 },
       { label: 'Unused attempts (2)', amount: 2 },
       { label: 'Rescue bonus (100%)', amount: 4 },
       { label: 'Perfect rescue', amount: 2 },
@@ -323,6 +323,43 @@ describe('roguelike run', () => {
     s.tarots = [{ uid: 6001, id: 'recruiter' }];
     s.phase = 'assign';
     expect(run.sellTarot(6001)).toBe(false);
+  });
+
+  it('auto pick places every point, first on what the levels of the round ask for', () => {
+    const run = RunSession.newRun(catalog, 'AUTO');
+    expect(run.autoAssign()).toBe(true);
+    expect(run.canFinishAssignment()).toBe(true);
+    expect(run.assignment()!.left).toBe(0);
+    const s = run.state;
+    expect(totalSkills(s.capacity)).toBe(START_ABILITY_POINTS);
+    for (const sk of SKILLS) expect(s.capacity[sk]).toBeLessThanOrEqual(ABILITY_CAP);
+    // a skill the levels ask for gets what they ask (up to the cap) before a skill no level of the round has
+    const asked = (sk: (typeof SKILLS)[number]) => Math.min(ABILITY_CAP, Math.max(...s.blinds.map((b) => catalog.get(b.levelId).skills[sk])));
+    const total = SKILLS.reduce((n, sk) => n + asked(sk), 0);
+    if (total <= START_ABILITY_POINTS) for (const sk of SKILLS) expect(s.capacity[sk]).toBeGreaterThanOrEqual(asked(sk));
+    // the same again: nothing changes
+    const first = { ...s.capacity };
+    run.autoAssign();
+    expect(s.capacity).toEqual(first);
+    expect(run.finishAssignment()).toBe(true);
+    expect(run.autoAssign()).toBe(false); // not outside the assignment
+  });
+
+  it('auto pick after a round moves points to the skills of the next round, within what may be moved', () => {
+    const run = started('REASSIGN');
+    for (let k = 0; k < 2; k++) {
+      winCurrentBlind(run);
+      run.nextRound();
+    }
+    winCurrentBlind(run, false); // Level 3
+    expect(run.state.assign!.reason).toBe('boss');
+    const before = { ...run.state.capacity };
+    expect(run.autoAssign()).toBe(true);
+    const st = run.assignment()!;
+    expect(st.moved).toBeLessThanOrEqual(BOSS_REASSIGN_POINTS);
+    expect(st.left).toBe(0);
+    expect(totalSkills(run.state.capacity)).toBe(totalSkills(before));
+    expect(run.finishAssignment()).toBe(true);
   });
 
   it('starts with the ability assignment: 60 points, at most 20 in a skill, all placed before the first blind', () => {

@@ -82,7 +82,7 @@ export class PreviewScreen extends DosScreenBase {
     const replayString = app.replayFile && this.initialLevelInfo === info ? 'Replay' : '';
     // LemmixRL: the blind of the run, in the empty line under the title
     const blind = app.inRun ? app.run?.currentBlind : null;
-    const blindString = blind ? `${BLIND_NAMES[blind.kind]} - Ante ${app.run!.state.ante}` : '';
+    const blindString = blind ? `Round ${app.run!.state.ante} - ${BLIND_NAMES[blind.kind]}` : '';
     let styleDescriptor = info.style.description;
     if (styleDescriptor.length > 24) styleDescriptor = info.style.name;
     const percStr = app.config.miscOptions.has(MiscOption.LemmingsPercentages)

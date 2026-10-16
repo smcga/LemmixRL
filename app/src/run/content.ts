@@ -15,7 +15,7 @@ export const EDITION_NAMES: Record<Edition, string> = { plain: 'Lemming', gold: 
 export const EDITION_TEXTS: Record<Edition, string> = {
   plain: 'An ordinary lemming.',
   gold: 'Earns $2 when it reaches the exit.',
-  lucky: 'When it reaches the exit: 1 in 3 chance of $4, 1 in 5 chance of a Tarot.',
+  lucky: 'When it reaches the exit: 1 in 3 chance of $4, 1 in 5 chance of a Boost.',
   mentor: 'When it reaches the exit: +1 ability in the skill you used most in that level.',
   champion: 'When it reaches the exit, the rescue bonus of the level is multiplied (x2 for one champion, x3 for two, ...).',
 };
@@ -116,7 +116,7 @@ export interface JokerDef {
 export const JOKERS: readonly JokerDef[] = [
   // the rule breakers
   { id: 'toolkit', name: 'Illegal Toolkit', rarity: 'rare', price: 8, text: '+1 Builder above the level maximum.', aboveMax: { builder: 1 } },
-  { id: 'smuggler', name: 'Smuggler', rarity: 'rare', price: 8, text: 'Every blind: +1 of a random skill above the level maximum.', randomAboveMax: true },
+  { id: 'smuggler', name: 'Smuggler', rarity: 'rare', price: 8, text: 'Every level: +1 of a random skill above the level maximum.', randomAboveMax: true },
   { id: 'overtime', name: 'Overtime', rarity: 'uncommon', price: 6, text: '+1 minute on the clock.', extraMinutes: 1 },
   { id: 'ladder', name: 'Rope Ladder', rarity: 'uncommon', price: 7, text: 'The first 3 lemmings of every level are Climbers.', startClimbers: 3 },
   { id: 'umbrellas', name: 'Umbrella Stand', rarity: 'uncommon', price: 7, text: 'The first 3 lemmings of every level are Floaters.', startFloaters: 3 },
@@ -126,7 +126,7 @@ export const JOKERS: readonly JokerDef[] = [
   { id: 'shelter', name: 'Fallout Shelter', rarity: 'common', price: 4, text: 'Lemmings killed by the nuke return to the colony.', returns: ['nuked'] },
   { id: 'lifeguard', name: 'Lifeguard', rarity: 'common', price: 4, text: 'Drowned lemmings return to the colony.', returns: ['drowned'] },
   { id: 'crashmats', name: 'Crash Mats', rarity: 'uncommon', price: 6, text: 'Splatted lemmings return to the colony.', returns: ['splat'] },
-  { id: 'scout', name: 'Talent Scout', rarity: 'common', price: 4, text: '2 lemmings join the colony after every blind.', recruitsAfterBlind: 2 },
+  { id: 'scout', name: 'Talent Scout', rarity: 'common', price: 4, text: '2 lemmings join the colony after every level.', recruitsAfterBlind: 2 },
   // money
   {
     id: 'unionrep',
@@ -160,8 +160,8 @@ export const JOKERS: readonly JokerDef[] = [
   { id: 'demolition', name: 'Demolition Crew', rarity: 'common', price: 5, text: '+1 Basher, Miner and Digger ability.', capacity: { basher: 1, miner: 1, digger: 1 } },
   { id: 'climbclub', name: 'Climbing Club', rarity: 'common', price: 4, text: '+2 Climber and Floater ability.', capacity: { climber: 2, floater: 2 } },
   { id: 'bombsquad', name: 'Bomb Squad', rarity: 'common', price: 4, text: '+2 Bomber and Blocker ability.', capacity: { bomber: 2, blocker: 2 } },
-  { id: 'trainer', name: 'Personal Trainer', rarity: 'uncommon', price: 6, text: '+5 ability points to assign after every Boss Blind.', pointsAfterBoss: 5 },
-  { id: 'advisor', name: 'Careers Advisor', rarity: 'common', price: 4, text: 'After every Boss Blind, 5 more ability points can be moved.', reassignAfterBoss: 5 },
+  { id: 'trainer', name: 'Personal Trainer', rarity: 'uncommon', price: 6, text: '+5 ability points to assign after every round.', pointsAfterBoss: 5 },
+  { id: 'advisor', name: 'Careers Advisor', rarity: 'common', price: 4, text: 'After every round, 5 more ability points can be moved.', reassignAfterBoss: 5 },
 ];
 
 export function jokerDef(id: string): JokerDef {
@@ -223,14 +223,14 @@ export interface TagDef {
 
 export const TAGS: readonly TagDef[] = [
   { id: 'recruits', name: 'Recruitment Drive', text: '8 plain lemmings join the colony.' },
-  { id: 'umbrellas', name: 'Umbrella Tag', text: '5 random lemmings become Floaters.' },
-  { id: 'golden', name: 'Golden Exit', text: 'Doubles the payout of the next Boss Blind.' },
+  { id: 'umbrellas', name: 'Umbrella Bonus', text: '5 random lemmings become Floaters.' },
+  { id: 'golden', name: 'Golden Exit', text: 'Doubles the payout of the next Level 3.' },
   { id: 'supply', name: 'Supply Drop', text: 'The next shop has 2 more training offers.' },
-  { id: 'clone', name: 'Clone Tag', text: 'A random special lemming is duplicated (or a plain one).' },
-  { id: 'investment', name: 'Investment Tag', text: '+$10 after the next Boss Blind.' },
-  { id: 'coupon', name: 'Coupon Tag', text: 'The offers in the next shop are free.' },
-  { id: 'training', name: 'Training Tag', text: '+3 ability in a random skill.' },
-  { id: 'economy', name: 'Economy Tag', text: 'Doubles your money (max +$15).' },
+  { id: 'clone', name: 'Clone Bonus', text: 'A random special lemming is duplicated (or a plain one).' },
+  { id: 'investment', name: 'Investment Bonus', text: '+$10 after the next Level 3.' },
+  { id: 'coupon', name: 'Coupon Bonus', text: 'The offers in the next shop are free.' },
+  { id: 'training', name: 'Training Bonus', text: '+3 ability in a random skill.' },
+  { id: 'economy', name: 'Economy Bonus', text: 'Doubles your money (max +$15).' },
 ];
 
 export function tagDef(id: string): TagDef {
