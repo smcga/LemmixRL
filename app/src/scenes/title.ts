@@ -14,6 +14,7 @@ import { lematroLogo } from '../run/ui/logo.ts';
 import { soundSliders } from '../run/ui/settings.ts';
 import { Swirl, SWIRLS } from '../run/ui/swirl.ts';
 import { Button, COLORS, label, panel } from '../run/ui/widgets.ts';
+import { canInstallNow, installNow, installPlatform, installSteps, isInstalled, onInstallChange } from '../install.ts';
 import { canFullscreen, isFullscreen, safeAreaInsets, toggleFullscreen } from '../touch.ts';
 import { getApp, gotoScreen, listen } from './shared.ts';
 
@@ -36,6 +37,7 @@ export class TitleScene extends Phaser.Scene {
     this.app = getApp();
     this.closed = false;
     this.settings = [];
+    this.install = [];
     this.spots = {};
     ensureRunAssets(this, this.app);
     // (a run is played in the original style; the title is not a part of it)
@@ -68,6 +70,10 @@ export class TitleScene extends Phaser.Scene {
     this.button('play', 296, 402, 200, 76, 'Play', COLORS.blue, () => this.play(), 48);
     this.button('collection', 510, 410, 150, 60, 'Collection', COLORS.green, () => this.collection());
     this.button('classic', 674, 410, 154, 60, 'Classic\nLemmings', COLORS.purple, () => this.classic());
+    // install it as an app (not when it already is one)
+    this.installButton();
+    const offInstall = onInstallChange(() => this.installButton());
+    this.events.once('shutdown', offInstall);
     label(this, W / 2, 520, 'Lemmings by DMA Design  ·  Lemmix by Eric Langedijk  ·  in the spirit of Balatro', { color: COLORS.dim, originX: 0.5, originY: 0.5 }).setDepth(10);
 
     this.layout();
@@ -81,6 +87,49 @@ export class TitleScene extends Phaser.Scene {
       else if (e.key === 'F5') this.showSettings();
       else if (e.key === 'c' || e.key === 'C') this.classic();
     });
+  }
+
+  private install: Phaser.GameObjects.GameObject[] = [];
+
+  /** Install, in the corner: one click where the browser can install it, else how to (iPhone, Android, ...) */
+  private installButton(): void {
+    this.tweens.killTweensOf(this.install);
+    for (const o of this.install) o.destroy();
+    this.install = [];
+    if (isInstalled()) return;
+    const now = canInstallNow();
+    const b = this.button('install', 724, 16, 220, 46, now ? 'Install Lematro' : 'Install as an app', COLORS.green, () => this.installApp());
+    const sub = label(this, 834, 70, 'for the best experience', { color: COLORS.cream, originX: 0.5, originY: 0.5 }).setDepth(11);
+    this.install = [b, sub];
+    this.tweens.add({ targets: b, scale: 1.04, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  private installApp(): void {
+    if (canInstallNow()) {
+      void installNow().then(() => this.installButton());
+      return;
+    }
+    // how to install it on this platform
+    this.closeSettings();
+    const o = <T extends Phaser.GameObjects.GameObject>(g: T): T => {
+      this.settings.push(g);
+      (g as unknown as Phaser.GameObjects.Components.Depth).setDepth?.(100);
+      return g;
+    };
+    o(this.add.rectangle(-W, -H, 3 * W, 3 * H, 0x000000, 0.6).setOrigin(0, 0).setInteractive());
+    o(panel(this, 230, 110, 500, 320, COLORS.panel, COLORS.green, 14));
+    o(label(this, W / 2, 144, 'Install Lematro', { size: 48, originX: 0.5, originY: 0.5 }));
+    o(label(this, W / 2, 184, 'As an app it starts full screen, without the browser around it.', { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
+    installSteps(installPlatform()).forEach((step, i) => {
+      const y = 222 + i * 48;
+      const g = o(this.add.graphics());
+      g.fillStyle(COLORS.green, 1);
+      g.fillCircle(272, y + 10, 13);
+      o(label(this, 272, y + 10, String(i + 1), { originX: 0.5, originY: 0.5 }));
+      o(label(this, 296, y, step, { color: COLORS.text, maxWidth: 410 }));
+    });
+    this.spots['install:back'] = { x: 480, y: 400 };
+    o(new Button(this, 380, 382, 200, 36, 'Back', COLORS.orange, () => this.closeSettings()));
   }
 
   private button(name: string, x: number, y: number, w: number, h: number, caption: string, color: number, fn: () => void, size = 24): Button {

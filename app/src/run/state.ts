@@ -11,7 +11,8 @@ export const ATTEMPTS = 3;
 export const START_MONEY = 4;
 export const START_COLONY = 80;
 export const MAX_INTEREST = 5;
-export const BLIND_REWARDS = { small: 3, big: 4, boss: 5 } as const;
+/** what a level pays (a level is played once: there are no attempts left over to pay for) */
+export const BLIND_REWARDS = { small: 4, big: 5, boss: 6 } as const;
 export const HIRE_PRICE = 1;
 export const BOSS_REROLL_PRICE = 6;
 /** the ability points a run starts with, spread by the player over the eight skills */

@@ -7,10 +7,13 @@ import { PlayerScene } from './scenes/player.ts';
 import { RunScene } from './scenes/run.ts';
 import { TitleScene } from './scenes/title.ts';
 import { CollectionScene } from './scenes/collection.ts';
+import { RunPreviewScene } from './scenes/runpreview.ts';
 import { initDiagnostics } from './diagnostics.ts';
+import { initInstall } from './install.ts';
 import { initTouchDetection, pixelRatio, safeAreaInsets } from './touch.ts';
 
 initTouchDetection();
+initInstall();
 initDiagnostics();
 
 /**
@@ -33,7 +36,7 @@ const game = new Phaser.Game({
   disableContextMenu: true,
   audio: { noAudio: true },
   banner: false,
-  scene: [BootScene, DosScene, PlayerScene, RunScene, TitleScene, CollectionScene],
+  scene: [BootScene, DosScene, PlayerScene, RunScene, TitleScene, CollectionScene, RunPreviewScene],
 });
 
 /**

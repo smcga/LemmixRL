@@ -303,8 +303,8 @@ export class PlayerScreen implements GameView {
     }
     if (this.alwaysRegainControlOnMouseClick || mods.ctrl) game.regainControl();
     this.setAdjustedGameCursorPoint(this.controlToBitmap(x, y));
-    // normal
-    game.rightMouseButtonHeldDown = rightDown;
+    // normal (LemmixRL: no selecting of the walker with the right mouse button in a run)
+    game.rightMouseButtonHeldDown = rightDown && !this.app.inRun;
     if (button === 0) {
       const handleClick = (!game.isPaused || game.gameOptions.has(GameOption.SkillAssignmentsEnabledWhenPaused)) && !game.fastForward;
       if (handleClick) game.processSkillAssignment(!this.alwaysRegainControlOnMouseClick);
@@ -316,7 +316,7 @@ export class PlayerScreen implements GameView {
     this.mouseY = y;
     const game = this.game;
     if (!game.playing || game.hyperSpeed) return;
-    game.rightMouseButtonHeldDown = rightDown;
+    game.rightMouseButtonHeldDown = rightDown && !this.app.inRun;
     this.mouseScroll = false;
     if (this.draggingMap) {
       this.dragMap(x);
@@ -336,7 +336,7 @@ export class PlayerScreen implements GameView {
   imgMouseUp(rightDown: boolean): void {
     if (this.draggingMap) this.draggingMap = false;
     this.mouseScroll = false;
-    this.game.rightMouseButtonHeldDown = rightDown;
+    this.game.rightMouseButtonHeldDown = rightDown && !this.app.inRun;
   }
 
   // touch (LemmixRL): a tap is a click with the left mouse button, a drag scrolls the level
@@ -553,7 +553,8 @@ export class PlayerScreen implements GameView {
     }
     switch (key) {
       case 'Enter':
-        this.saveStateIteration = game.currentIteration;
+        // (LemmixRL: no going back in time in a run)
+        if (!this.app.inRun) this.saveStateIteration = game.currentIteration;
         return true;
       case 'Backspace':
         if (this.saveStateIteration >= 0) game.gotoIteration(this.saveStateIteration);
@@ -604,6 +605,7 @@ export class PlayerScreen implements GameView {
   keyPress(ch: string): void {
     const game = this.game;
     if (game.hyperSpeed || !game.playing) return;
+    if (this.app.inRun && this.runKeyPress(ch)) return;
     switch (ch) {
       case '1': // skip one second
         game.gotoIteration(game.currentIteration + SECOND);
@@ -681,6 +683,43 @@ export class PlayerScreen implements GameView {
         game.gotoIteration(game.currentIteration + MINUTE);
         break;
     }
+  }
+
+  /**
+   * LemmixRL: the keys of a level in a run: [F]ast, [P]ause, [R]eset (the level from the start) and [E]nd; no going
+   * back or forward in time, no replays. Returns true when the key is done with (else it is a key of Lemmix).
+   */
+  private runKeyPress(ch: string): boolean {
+    const game = this.game;
+    switch (ch) {
+      case 'F':
+        this.keyPress('f');
+        return true;
+      case 'p':
+      case 'P':
+        this.clickPanelButton(SkillPanelButton.Pause);
+        return true;
+      case 'r':
+      case 'R':
+        if (this.keyIsDown < 2) this.startNoReplay();
+        return true;
+      case 'e':
+      case 'E':
+        game.finish();
+        return true;
+      // the time and the replays of Lemmix
+      case '1':
+      case '!':
+      case ' ':
+      case 'b':
+      case 'n':
+      case 'z':
+      case 'D':
+      case 'l':
+      case 'L':
+        return true;
+    }
+    return false;
   }
 
   // replays

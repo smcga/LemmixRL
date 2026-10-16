@@ -9,7 +9,7 @@ import { SoundEffect } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
 import { JOKERS, PACKS, type PackKind, TAGS, TAROTS } from '../run/content.ts';
 import type { SpecialTrait } from '../run/state.ts';
-import { seenSet } from '../run/storage.ts';
+import { markSeen, seenSet } from '../run/storage.ts';
 import { JOKER_ART, PACK_LOOKS, RARITY_COLORS, RARITY_NAMES, TAG_ART, TAROT_ART, TRAIT_LOOKS } from '../run/ui/art.ts';
 import { ensureRunAssets } from '../run/ui/assets.ts';
 import { type Art, CARD_H, CARD_W, CardTable, CardView } from '../run/ui/cards.ts';
@@ -185,6 +185,14 @@ export class CollectionScene extends Phaser.Scene {
       this.tweens.add({ targets: card, alpha: 1, duration: 140, delay: i * 18 });
     });
 
+    // (for development: everything turned over)
+    this.spots.unlock = { x: 838, y: 494 };
+    k(
+      new Button(this, 776, 480, 124, 28, 'Unlock all', COLORS.gray, () => {
+        markSeen(TABS.flatMap((t) => t.entries().map((e) => e.key)));
+        this.show(this.tab);
+      }),
+    );
     this.spots.back = { x: W / 2, y: 494 };
     k(new Button(this, W / 2 - 110, 476, 220, 36, 'Back', COLORS.orange, () => this.close(), { big: true }));
   }

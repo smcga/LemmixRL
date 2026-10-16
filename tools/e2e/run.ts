@@ -117,6 +117,9 @@ try {
   // the small blind becomes "Just dig!"
   await ev(`(() => { const s = globalThis.lemmix.run.state; s.blinds[0].levelId = 'Orig-1-01'; s.setup = null; globalThis.phaserGame.scene.getScene('run').render(); })()`);
   await clickSpot('play', 800); // Select
+  // the level before it is played: the screen of a run (a click anywhere goes on, as in Lemmings)
+  const active = () => ev<string>(`globalThis.phaserGame.scene.getScenes(true).map((s) => s.sys.settings.key).join()`);
+  if ((await active()) !== 'runpreview') fail('Select did not show the level before it is played: ' + (await active()));
   await page.mouse.click(640, 400); // preview -> game
   await page.waitForFunction(
     () => {
@@ -127,6 +130,18 @@ try {
     { timeout: 30000 },
   );
   if ((await ev<number>('globalThis.lemmix.game.currDiggerCount')) !== 10) fail('the level does not have min(abilities, allocation) = 10 diggers');
+  // a level of a run: no walker selection, frame steps or rewinding (touch buttons or keys); its keys are shown
+  const player = `globalThis.phaserGame.scene.getScene('player')`;
+  const labels = await ev<string[]>(`${player}.touchBar.buttons.map((b) => b.def.label)`);
+  if (labels.some((l) => ['WALKER', 'STEP', '-1 SEC'].includes(l))) fail('a run has the touch buttons of time and the walker: ' + labels.join());
+  if (!(await ev<boolean>(`${player}.keysHint.visible`))) fail('the keys of a run are not shown under the game');
+  await page.keyboard.press('p');
+  if (!(await ev<boolean>('globalThis.lemmix.game.isPaused'))) fail('P did not pause the level of a run');
+  const it0 = await ev<number>('globalThis.lemmix.game.currentIteration');
+  await page.keyboard.press('!'); // (rewind one second, in Lemmix)
+  await page.keyboard.press('1'); // (skip one second)
+  if ((await ev<number>('globalThis.lemmix.game.currentIteration')) !== it0) fail('the time of a level of a run can be moved');
+  await page.keyboard.press('p');
   await page.keyboard.press('F10');
   const l = await ev<{ x: number; y: number; scroll: number }>(
     `(() => { const g = globalThis.lemmix.game; const lem = g.lemmingList.find((x) => !x.isRemoved && x.action === 1); return { x: lem.xPos, y: lem.yPos, scroll: g.level.info.screenPosition }; })()`,
@@ -136,7 +151,8 @@ try {
   await page.mouse.down();
   await page.mouse.up();
   await page.waitForTimeout(300);
-  await page.keyboard.press('z'); // to the end
+  // to the end (z does that in Lemmix, not in a run: the test moves the clock itself)
+  await ev(`(() => { const g = globalThis.lemmix.game; g.gotoIteration(g.currentIteration + 17 * 60 * 10); })()`);
   await page.waitForFunction(() => (globalThis as any).lemmix.run.state.phase === 'result', null, { timeout: 30000 });
   await page.waitForTimeout(500);
   await page.mouse.click(640, 400); // postview -> result
@@ -146,10 +162,10 @@ try {
 
   // a won level is cashed out: no going back to it
   s = await state();
-  if (s.phase !== 'cashout' || s.cashout.total !== 11) fail('unexpected cash out ' + JSON.stringify(s.cashout));
+  if (s.phase !== 'cashout' || s.cashout.total !== 10) fail('unexpected cash out ' + JSON.stringify(s.cashout));
   await clickSpot('cashout');
   s = await state();
-  if (s.phase !== 'shop' || s.money !== 15) fail(`not in the shop with $15: ${s.phase} $${s.money}`);
+  if (s.phase !== 'shop' || s.money !== 14) fail(`not in the shop with $14: ${s.phase} $${s.money}`);
 
   // the shop, as in Balatro: a pack dropped anywhere but Open goes back; dragged up to the gadgets it is opened
   const colony0 = s.colony.length;
@@ -158,7 +174,7 @@ try {
   await dragSpot('pack:0', 500, 60);
   await page.waitForTimeout(400);
   s = await state();
-  if (s.phase !== 'pack' || s.pack.kind !== 'lemmings' || s.money !== 11) fail(`the Lemmings Pack was not opened: ${s.phase} $${s.money}`);
+  if (s.phase !== 'pack' || s.pack.kind !== 'lemmings' || s.money !== 10) fail(`the Lemmings Pack was not opened: ${s.phase} $${s.money}`);
   // its cards are dealt; one is taken (a click shows it with its Take button)
   await page.waitForTimeout(900);
   await clickSpot('choice:0');
@@ -225,7 +241,17 @@ try {
   if (t.money !== s.money || t.colony.length !== s.colony.length || t.blinds[2].status !== 'current') fail('the saved run did not continue');
   await page.screenshot({ path: `${REPO_ROOT}/tools/e2e/run.png` });
   if (errors.length) fail('errors in the page:\n' + errors.join('\n'));
-  console.log('e2e ok: a run: from the title, abilities assigned, a level previewed, played and cashed out, shop (a pack opened and a card of it taken, cards dragged to buy, sell and use), skip, continued after a reload');
+  // giving up is asked in the game (Keep playing goes back, Give up ends the run)
+  await clickSpot('options');
+  await clickSpot('giveUpRun');
+  await clickSpot('keepPlaying');
+  if ((await state()).phase === 'over') fail('Keep playing gave up the run');
+  await clickSpot('options');
+  await clickSpot('giveUpRun');
+  await clickSpot('giveUp');
+  if ((await state()).phase !== 'over') fail('Give up did not end the run');
+
+  console.log('e2e ok: a run: from the title, abilities assigned, a level previewed, played (its own screen before it, the keys of a run) and cashed out, shop (a pack opened and a card of it taken, cards dragged to buy, sell and use), skip, continued after a reload, given up in the game');
 } finally {
   await browser.close();
   await server.close();

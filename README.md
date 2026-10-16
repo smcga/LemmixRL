@@ -72,8 +72,10 @@ screen, the sideways lock, the wake lock, the audio); `?diag=0` hides it again.
 * Hold the phone sideways: the level is drawn at the resolution of the screen, scaled by whole device pixels, with
   the touch buttons next to it. Upright, it is smaller (the run screens ask you to turn the phone). Every screen
   stays out of the notch, the rounded corners and the home indicator.
-* Full screen: the FULLSCREEN button in the menu (Android browsers), or *Add to Home Screen*, which installs the game
-  as a full screen app with a lemming icon (iPhone too; Android wants the page served over HTTPS for that).
+* Full screen: the FULLSCREEN button in the menu (Android browsers), or install it as an app: *Install* on the title
+  of Lematro installs it with one click where the browser can (Chrome, Edge, Android), and says how elsewhere (on an
+  iPhone: Share > *Add to Home Screen*). Installed, it starts full screen with a lemming icon (the page has to be
+  served over HTTPS for that).
 * Menu of Classic Lemmings: tap a sign to do what its key does (1 Player, New Level, music, the style, the arrows of
   the difficulty sign; Exit goes back to the title of Lematro). LEMATRO, OPTIONS and STYLE are buttons next to the
   menu. The level
@@ -112,7 +114,15 @@ of the sounds and of the music (a slider each; at 0 it is off, as F3 turns it of
 and the options of Lemmix, *Collection* shows every gadget, boost, pack, bonus and kind of lemming of the game, face
 down until you first come across it in a run (as Balatro's collection), and *Classic Lemmings* (or C) opens the menu of
 Lemmix, the original game as it was (Escape goes back to the title). In a run, Options has the volumes and the
-collection too. A run wraps the original game; it does not replace it.
+collection too (and, for now, an *Unlock all* button for development). A run wraps the original game; it does not
+replace it.
+
+Before a level of a run, its own screen shows what the preview of Lemmings shows (the whole level, its name, the
+lemmings, how many to save, the release rate, the time) with the skills you bring, laid out like a blind of Balatro.
+A level of a run is played as it goes: [F]ast, [P]ause, [R]eset (the level from the start) and [E]nd are its keys (shown
+under the game with a mouse); the keys that move the time (rewinding, skipping, frame steps), the replays and the
+selection of the walker with the right mouse button are for Classic Lemmings only, and so are the WALKER, STEP and
+-1 SEC buttons on a phone.
 
 The Lematro screens are drawn over a swirl of paint in the colours of what is going on (the level, the shop, the pack
 that is open), and their large text is in the pixel font of the run screens; the buttons click, and the "Let's go!"
@@ -149,7 +159,7 @@ skill.
 | Tarots (2) | Consumables that change selected lemmings (floaters, climbers, gold, lucky, mentor, champion, insured, clones, retraining into abilities) or the abilities (5 new points, moving 10) |
 | Skip | The small and big blind can be skipped for a tag (recruits, floaters, a doubled boss payout, a free shop, ...) |
 | Director's Cut | The boss of an ante can be rerolled once ($6), for a level your colony cannot do |
-| Hands left | Three attempts per blind are paid ($1 each unused); a failed attempt can be retried, nothing counts until a level is won |
+| Hands | A level is played once: in it, Restart starts it again as often as you like, but a level that is not won ends the run |
 | Booster packs | Every shop has two packs: a Lemmings Pack and a Training, Boost or Gadget Pack. Opened, a pack shows 3 cards (a Gadget Pack 2) to choose one from (or skip): lemmings for the colony (plain ones, floaters, climbers, gold, lucky, ...), abilities (+3, a trade +5/-3, +1 in every skill), boosts (used at once) or gadgets |
 
 A run starts with the ability assignment: 60 points to spread over the skills, at most 20 in one, with the three
@@ -171,14 +181,14 @@ find another way. Clicking a skill (with a finger: tapping it twice) hires one m
 shown as well.
 
 A won level goes straight to the cash out, which shows how the level went (rescued, lost, the special lemmings) and
-pays: the blind ($3, $4, $5), unused attempts, a rescue bonus that grows from the requirement to 100% (not the number
+pays: the blind ($4, $5, $6), a rescue bonus that grows from the requirement to 100% (not the number
 of lemmings, so big levels are not worth more), a perfect rescue bonus, gold lemmings, jokers and interest ($1 per $5,
-up to $5). A level that was not won can be retried. The shop sells training (abilities), recruitment drives, jokers,
+up to $5). A level that was not won is the end of the run. The shop sells training (abilities), recruitment drives, jokers,
 tarots and two packs: a pack is opened when it is bought (drag it up, or tap it and Open), the shop makes way for its
 cards, and one of them is taken by a tap and Take, or by dragging it up.
 
-In a level, special lemmings of the squad carry a small mark in the colour of their card. Pressing Escape ends a
-level as in Lemmix: the lemmings that are still out survive (no need to nuke your blockers). The run is saved after
+In a level, special lemmings of the squad carry a small mark in the colour of their card. Pressing Escape (or E) ends
+a level as in Lemmix: the lemmings that are still out survive (no need to nuke your blockers). The run is saved after
 every step (in the browser), the seed decides every random choice.
 
 The only change to the engine for the run is opt-in: a callback for every released lemming and a method that makes

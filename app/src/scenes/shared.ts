@@ -16,7 +16,9 @@ export function getApp(): LemmixApp {
 
 /** TFormMain: shows the next screen. */
 export function gotoScreen(scene: Phaser.Scene, next: ScreenType): void {
-  if (next === ScreenType.Play) scene.scene.start('player');
+  // LemmixRL: the level before it is played in a run has its own screen
+  if (next === ScreenType.Preview && getApp().inRun) scene.scene.start('runpreview');
+  else if (next === ScreenType.Play) scene.scene.start('player');
   else if (next === ScreenType.Run) scene.scene.start('run');
   else if (next === ScreenType.Title) scene.scene.start('title');
   else scene.scene.start('dos', { type: next });
