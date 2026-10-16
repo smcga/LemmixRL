@@ -1,8 +1,8 @@
 /**
- * Browser test of a roguelike run: start a run, play the small blind ("Just dig!", solved with a digger), accept the
- * result, cash out, the shop (recruits dragged up to buy them, a joker bought with its Buy button, put in another
- * place and sold by dragging it, a tarot bought and used), skip the big blind, and continue the saved run after a
- * reload.
+ * Browser test of a roguelike run: from the title of Lematro, start a run, play Level 1 ("Just dig!", solved with a
+ * digger), cash out (a won level goes straight there), the shop (a Lemmings Pack dragged up to open it and one of its
+ * cards taken, a gadget bought with its Buy button, put in another place and sold by dragging it, a boost bought and
+ * used), skip Level 2, and continue the saved run after a reload.
  *
  *   npm run e2e         (CHROMIUM=/path/to/chromium to use a specific browser; otherwise Playwright's)
  */
@@ -59,7 +59,8 @@ try {
   await page.goto(url);
   await page.waitForFunction(() => (globalThis as Record<string, unknown>).lemmix, null, { timeout: 30000 });
   await page.evaluate(() => localStorage.clear());
-  await page.keyboard.press('F6'); // menu -> run
+  await page.waitForTimeout(500);
+  await page.keyboard.press('F6'); // the title of Lematro -> run
   await page.waitForTimeout(600);
   const camera = () =>
     ev<typeof cam>(`(() => { const c = globalThis.phaserGame.scene.getScene('run').cameras.main; return { x: c.worldView.x, y: c.worldView.y, zoom: c.zoom, left: c.x, top: c.y }; })()`);
@@ -143,20 +144,27 @@ try {
   s = await state();
   if (!s.outcome?.success || s.outcome.rescued !== 10) fail('unexpected outcome ' + JSON.stringify(s.outcome));
 
-  await clickSpot('accept');
+  // a won level is cashed out: no going back to it
   s = await state();
   if (s.phase !== 'cashout' || s.cashout.total !== 11) fail('unexpected cash out ' + JSON.stringify(s.cashout));
   await clickSpot('cashout');
   s = await state();
   if (s.phase !== 'shop' || s.money !== 15) fail(`not in the shop with $15: ${s.phase} $${s.money}`);
 
-  // the shop, as in Balatro: the recruits are dragged up to the jokers to buy them
-  await dragSpot('recruits', 500, 60);
+  // the shop, as in Balatro: a pack dropped anywhere but Open goes back; dragged up to the gadgets it is opened
+  const colony0 = s.colony.length;
+  await dragSpot('pack:0', 500, 400);
+  if ((await state()).phase !== 'shop') fail('a pack was opened by a drag that did not end on Open');
+  await dragSpot('pack:0', 500, 60);
+  await page.waitForTimeout(400);
   s = await state();
-  if (s.colony.length !== 85 || s.money !== 12) fail(`recruits dragged: ${s.colony.length} lemmings, $${s.money}`);
-  // dropped anywhere else, a card goes back
-  await dragSpot('recruits', 500, 400);
-  if ((await state()).colony.length !== 85) fail('recruits were bought by a drag that did not end on Buy');
+  if (s.phase !== 'pack' || s.pack.kind !== 'lemmings' || s.money !== 11) fail(`the Lemmings Pack was not opened: ${s.phase} $${s.money}`);
+  // its cards are dealt; one is taken (a click shows it with its Take button)
+  await page.waitForTimeout(900);
+  await clickSpot('choice:0');
+  await clickSpot('card:TAKE');
+  s = await state();
+  if (s.phase !== 'shop' || s.colony.length <= colony0) fail(`a card of the pack was not taken: ${s.phase}, ${s.colony.length} lemmings`);
   // a joker and a tarot on offer: a click selects a card and shows its Buy button
   await ev(
     `(() => { const s = globalThis.lemmix.run.state; s.money = 20; s.shop.offers = [{ uid: 9001, type: 'joker', id: 'piggy', price: 5, sold: false }, { uid: 9002, type: 'joker', id: 'guild', price: 4, sold: false }, { uid: 9003, type: 'tarot', id: 'hermit', price: 3, sold: false }]; ${scene}.render(); })()`,
@@ -197,7 +205,7 @@ try {
   if (t.money !== s.money || t.colony.length !== s.colony.length || t.blinds[2].status !== 'current') fail('the saved run did not continue');
   await page.screenshot({ path: `${REPO_ROOT}/tools/e2e/run.png` });
   if (errors.length) fail('errors in the page:\n' + errors.join('\n'));
-  console.log('e2e ok: a run: abilities assigned, a level previewed, blind played and accepted, cash out, shop (cards dragged to buy, sell and use), skip, continued after a reload');
+  console.log('e2e ok: a run: from the title, abilities assigned, a level previewed, played and cashed out, shop (a pack opened and a card of it taken, cards dragged to buy, sell and use), skip, continued after a reload');
 } finally {
   await browser.close();
   await server.close();

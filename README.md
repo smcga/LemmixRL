@@ -1,6 +1,6 @@
-# LemmixRL
+# LemmixRL (Lematro)
 
-A faithful copy of Lemmings, with a roguelike run around it. The base: **Lemmix, the Delphi Lemmings clone by Eric
+A faithful copy of Lemmings, with a roguelike run around it: **Lematro**, Lemmings x Balatro. The base: **Lemmix, the Delphi Lemmings clone by Eric
 Langedijk (in `src/`), ported to TypeScript and Phaser, with the same game behaviour.** Around it: a run in the spirit
 of Balatro, where the original levels are the blinds and your lemmings are the deck (see [The roguelike
 run](#the-roguelike-run)).
@@ -74,8 +74,9 @@ screen, the sideways lock, the wake lock, the audio); `?diag=0` hides it again.
   stays out of the notch, the rounded corners and the home indicator.
 * Full screen: the FULLSCREEN button in the menu (Android browsers), or *Add to Home Screen*, which installs the game
   as a full screen app with a lemming icon (iPhone too; Android wants the page served over HTTPS for that).
-* Menu: tap a sign to do what its key does (1 Player, New Level, music, the style, the arrows of the difficulty
-  sign, the ROGUELIKE RUN sign). OPTIONS and STYLE are buttons next to the menu. The level
+* Menu of Classic Lemmings: tap a sign to do what its key does (1 Player, New Level, music, the style, the arrows of
+  the difficulty sign; Exit goes back to the title of Lematro). LEMATRO, OPTIONS and STYLE are buttons next to the
+  menu. The level
   code screen gets a text box for the phone's keyboard.
 * Preview and result screens: a tap is a click; BACK and MENU do what Escape and the right mouse button do.
 * In a level: tap a skill in the panel, then tap a lemming. The skill is assigned when the finger comes up; while
@@ -106,8 +107,13 @@ needs access to this repository. Pull requests should target `main`; `master` is
 
 ## The roguelike run
 
-Click the ROGUELIKE RUN sign in the menu, or press F6. A run wraps the original game; it does
-not replace it.
+The program starts with the title of Lematro: *Play* (or Enter) starts or continues a run, *Settings* has the sound,
+full screen and the options of Lemmix, and *Classic Lemmings* (or C) opens the menu of Lemmix, the original game as it
+was (Escape goes back to the title). A run wraps the original game; it does not replace it.
+
+The Lematro screens are drawn over a swirl of paint in the colours of what is going on (the level, the shop, the pack
+that is open), and their large text is in the pixel font of the run screens; the buttons click, and the "Let's go!"
+of the lemmings is kept for the levels.
 
 The screens use Lemmings names for Balatro's things: a *round* (Balatro's ante) has three levels, *Level 1, 2 and 3*
 (the small, big and boss blind), and the *Game* counter is Balatro's round; jokers are *gadgets*, tarots *boosts* and
@@ -140,7 +146,8 @@ skill.
 | Tarots (2) | Consumables that change selected lemmings (floaters, climbers, gold, lucky, mentor, champion, insured, clones, retraining into abilities) or the abilities (5 new points, moving 10) |
 | Skip | The small and big blind can be skipped for a tag (recruits, floaters, a doubled boss payout, a free shop, ...) |
 | Director's Cut | The boss of an ante can be rerolled once ($6), for a level your colony cannot do |
-| Hands left | Three attempts per blind are paid ($1 each unused); you can always retry, nothing counts until you accept |
+| Hands left | Three attempts per blind are paid ($1 each unused); a failed attempt can be retried, nothing counts until a level is won |
+| Booster packs | Every shop has two packs: a Lemmings Pack and a Training, Boost or Gadget Pack. Opened, a pack shows 3 cards (a Gadget Pack 2) to choose one from (or skip): lemmings for the colony (plain ones, floaters, climbers, gold, lucky, ...), abilities (+3, a trade +5/-3, +1 in every skill), boosts (used at once) or gadgets |
 
 A run starts with the ability assignment: 60 points to spread over the skills, at most 20 in one, with the three
 levels of the first ante in view (their allocation, and below it what your team would bring, as you assign).
@@ -160,10 +167,12 @@ allocation works like Balatro's score requirement: it tells you whether your col
 find another way. Clicking a skill (with a finger: tapping it twice) hires one more for this level ($1). Your best result on a level (over all runs) is
 shown as well.
 
-Accepting a successful result pays: the blind ($3, $4, $5), unused attempts, a rescue bonus that grows from the
-requirement to 100% (not the number of lemmings, so big levels are not worth more), a perfect rescue bonus, gold
-lemmings, jokers and interest ($1 per $5, up to $5). The shop sells training (abilities), recruitment drives,
-jokers and tarots, and always 5 recruits for $3.
+A won level goes straight to the cash out, which shows how the level went (rescued, lost, the special lemmings) and
+pays: the blind ($3, $4, $5), unused attempts, a rescue bonus that grows from the requirement to 100% (not the number
+of lemmings, so big levels are not worth more), a perfect rescue bonus, gold lemmings, jokers and interest ($1 per $5,
+up to $5). A level that was not won can be retried. The shop sells training (abilities), recruitment drives, jokers,
+tarots and two packs: a pack is opened when it is bought (drag it up, or tap it and Open), the shop makes way for its
+cards, and one of them is taken by a tap and Take, or by dragging it up.
 
 In a level, special lemmings of the squad carry a small mark in the colour of their card. Pressing Escape ends a
 level as in Lemmix: the lemmings that are still out survive (no need to nuke your blockers). The run is saved after
@@ -264,7 +273,7 @@ is compared as well. Lemmix itself shows the error and terminates; the browser v
 to the menu.)
 
 `npm run e2e` is a browser smoke test of the front-end (menu, preview, a level solved with a digger, postview, and
-the game speed) and of a roguelike run (a blind played and accepted, the cash out, the shop, a skip, and continuing
+the game speed) and of a roguelike run (from the title, a blind played and cashed out, the shop and a pack, a skip, and continuing
 the saved run after a reload). The GitHub workflow in `.github/workflows/verify.yml` runs the type check, the unit tests, the build,
 the browser test, and the differential test with an oracle built from `src/` (on pull requests and manually).
 

@@ -1,7 +1,7 @@
 /** A small UI toolkit for the run screens: labels in the DOS font, panels, buttons, cards and tooltips. */
 import * as Phaser from 'phaser';
 import { touch } from '../../touch.ts';
-import { FONT, FONT_BIG, FONT_PURPLE } from './assets.ts';
+import { FONT, FONT_PURPLE } from './assets.ts';
 
 /** The colours of Balatro's interface (its G.C table), for the panels, buttons and texts of the run screens. */
 export const COLORS = {
@@ -40,10 +40,11 @@ export interface LabelOptions {
 }
 
 export function label(scene: Phaser.Scene, x: number, y: number, text: string, o: LabelOptions = {}): Phaser.GameObjects.BitmapText {
-  const size = o.size ?? 16;
-  // the purple of the original font is for titles; smaller, on a panel, it is the same letters in a lighter purple
-  const original = !!o.purple && size >= 48;
-  const t = scene.add.bitmapText(x, y, original ? FONT_PURPLE : o.purple || o.big ? FONT_BIG : FONT, text, size, o.align ?? 0);
+  // large text is the pixel font of the run screens, half as big again (as Balatro has its pixel font everywhere); the
+  // purple DOS font of Lemmings is left for a title of its own (48 pixels or more)
+  const original = !!o.purple && (o.size ?? 16) >= 48;
+  const size = original ? (o.size ?? 16) : o.big ? Math.round((o.size ?? 16) * 1.5) : o.purple ? 24 : (o.size ?? 16);
+  const t = scene.add.bitmapText(x, y, original ? FONT_PURPLE : FONT, text, size, o.align ?? 0);
   if (o.maxWidth) t.setMaxWidth(o.maxWidth);
   t.setOrigin(o.originX ?? 0, o.originY ?? 0);
   if (!original) t.setTint(o.purple ? COLORS.lilac : (o.color ?? COLORS.text));
@@ -90,6 +91,9 @@ export function containerHitArea(w: number, h: number): Phaser.Geom.Rectangle {
 
 /** A Balatro-ish button: a coloured slab with a darker edge that goes down when it is pressed. */
 export class Button extends Phaser.GameObjects.Container {
+  /** the sound of every button that is pressed (a scene sets it) */
+  static clickSound: (() => void) | null = null;
+
   private readonly g: Phaser.GameObjects.Graphics;
   private readonly text: Phaser.GameObjects.BitmapText;
   private readonly subText: Phaser.GameObjects.BitmapText | null = null;
@@ -137,7 +141,10 @@ export class Button extends Phaser.GameObjects.Container {
       const click = this.down;
       this.down = false;
       this.redraw();
-      if (click && this.enabled) this.onClick();
+      if (click && this.enabled) {
+        Button.clickSound?.();
+        this.onClick();
+      }
     });
     scene.add.existing(this);
     this.redraw();

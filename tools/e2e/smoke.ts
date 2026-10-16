@@ -31,6 +31,9 @@ try {
   // runs f(lemmix) in the page (f must not use variables from outside)
   const game = <T>(f: (g: G['lemmix']) => T) => page.evaluate(`(${f.toString()})(globalThis.lemmix)`) as Promise<T>;
 
+  await page.waitForTimeout(500);
+  await page.keyboard.press('c'); // the title of Lematro -> Classic Lemmings (the menu of Lemmix)
+  await page.waitForTimeout(500);
   await page.keyboard.press('Enter'); // menu -> preview
   await page.waitForTimeout(500);
   await page.mouse.click(640, 400); // preview -> game

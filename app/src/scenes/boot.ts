@@ -1,4 +1,4 @@
-/** Loads the Lemmix data and starts the menu. */
+/** Loads the Lemmix data and starts the title screen of Lematro. */
 import * as Phaser from 'phaser';
 import { MiscOption } from '../../../engine/src/index.ts';
 import { LemmixApp } from '../app.ts';
@@ -33,7 +33,7 @@ export class BootScene extends Phaser.Scene {
         setApp(app);
         // for debugging and browser tests
         if (import.meta.env.DEV) (globalThis as Record<string, unknown>).lemmix = app;
-        gotoScreen(this, ScreenType.Menu);
+        gotoScreen(this, ScreenType.Title);
       } catch (e) {
         text.setText('Error: ' + String((e as Error).message ?? e));
         console.error(e);

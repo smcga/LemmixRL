@@ -213,6 +213,26 @@ export function tarotDef(id: string): TarotDef {
   return t;
 }
 
+/* ---------------------------------------------------------------------------------------------- packs */
+
+export type PackKind = 'lemmings' | 'training' | 'boost' | 'gadget';
+
+export interface PackDef {
+  kind: PackKind;
+  name: string;
+  price: number;
+  /** how many cards it shows (one is chosen) */
+  size: number;
+  text: string;
+}
+
+export const PACKS: Record<PackKind, PackDef> = {
+  lemmings: { kind: 'lemmings', name: 'Lemmings Pack', price: 4, size: 3, text: 'Choose 1 of 3 groups of lemmings to join your colony.' },
+  training: { kind: 'training', name: 'Training Pack', price: 4, size: 3, text: 'Choose 1 of 3 changes to your abilities.' },
+  boost: { kind: 'boost', name: 'Boost Pack', price: 4, size: 3, text: 'Choose 1 of 3 boosts, used at once.' },
+  gadget: { kind: 'gadget', name: 'Gadget Pack', price: 6, size: 2, text: 'Choose 1 of 2 gadgets.' },
+};
+
 /* ---------------------------------------------------------------------------------------------- tags */
 
 export interface TagDef {

@@ -5,6 +5,7 @@ import { BootScene } from './scenes/boot.ts';
 import { DosScene } from './scenes/dos.ts';
 import { PlayerScene } from './scenes/player.ts';
 import { RunScene } from './scenes/run.ts';
+import { TitleScene } from './scenes/title.ts';
 import { initDiagnostics } from './diagnostics.ts';
 import { initTouchDetection, pixelRatio, safeAreaInsets } from './touch.ts';
 
@@ -31,7 +32,7 @@ const game = new Phaser.Game({
   disableContextMenu: true,
   audio: { noAudio: true },
   banner: false,
-  scene: [BootScene, DosScene, PlayerScene, RunScene],
+  scene: [BootScene, DosScene, PlayerScene, RunScene, TitleScene],
 });
 
 /**
