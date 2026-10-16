@@ -49,8 +49,8 @@ const USE_ZONE: Rect = { x: 880, y: 130, w: 74, h: 280 };
 const ASSIGN_BAR_X = 134;
 const ASSIGN_SEG = 8;
 /** the first row of the assignment screen (from the top of the panel), and the height of a row */
-const ASSIGN_ROW_Y = 104;
-const ASSIGN_ROW_H = 29;
+const ASSIGN_ROW_Y = 58;
+const ASSIGN_ROW_H = 36;
 
 const BLIND_COLORS: Record<BlindKind, number> = { small: COLORS.blue, big: COLORS.orange, boss: COLORS.red };
 const RARITY_COLORS: Record<Rarity, number> = { common: COLORS.blue, uncommon: COLORS.green, rare: COLORS.red };
@@ -119,17 +119,22 @@ const FATE_ANIMS: Partial<Record<Fate, LemmingAnim>> = {
 /** a tarot that is used: one of the player's, or one of the shop that is bought for it */
 type TarotUse = { uid?: number; offer?: number; max: number; name: string };
 
-/** What the team lacks for a level: the skills it brings fewer of than the level has, the biggest gap named. */
-function shortSummary(p: BlindPreview): { text: string; color: number } {
-  const short: { gap: number; text: string }[] = [];
-  for (const sk of SKILLS) {
-    const gap = p.allocation[sk] + p.aboveMax[sk] - p.usable[sk];
-    if (gap > 0) short.push({ gap, text: `${gap} ${gap === 1 ? SKILL_NAMES[sk] : SKILL_PLURALS[sk]}` });
-  }
-  short.sort((a, b) => b.gap - a.gap);
-  if (short.length === 0) return { text: 'You bring every skill it has', color: COLORS.green };
-  return { text: short.length === 1 ? `Short of ${short[0].text}` : `Short in ${short.length} skills, most: ${short[0].text}`, color: COLORS.orange };
+/** "Rescue 72/80 (90%)": the requirement of a level, of the squad you bring to it */
+function rescueText(p: BlindPreview): string {
+  return `Rescue ${p.required}/${p.squad} (${percent(p.required, p.squad)}%)`;
 }
+
+function percent(n: number, of: number): number {
+  return of > 0 ? Math.round((n * 100) / of) : 0;
+}
+
+/** The page of a level on the Lemmings Wiki: its search jumps to the page of a title (without the dots some end with). */
+export function wikiUrl(level: RunLevel): string {
+  return `https://lemmings.fandom.com/wiki/Special:Search?query=${encodeURIComponent(level.title.replace(/[.\s]+$/, ''))}&go=Go`;
+}
+
+/** the width of the button that opens the page of a level on the Lemmings Wiki */
+const WIKI_W = 36;
 
 /** The level band names of an ante. */
 function bandName(run: RunSession): string {
@@ -210,11 +215,10 @@ export class RunScene extends Phaser.Scene {
     const w = this.scale.width - ins.left - ins.right;
     const h = this.scale.height - ins.top - ins.bottom;
     const f = Math.min(w / W, h / H);
-    // whole pixels on a desktop screen; on a phone the screen is filled (its pixels are too small to see the difference)
-    const z = f >= 1 && !touch.active ? Math.floor(f) : f;
+    // the screen is filled, as the menu and the screens of Lemmix are (not only by whole pixels)
     const cam = this.cameras.main;
     cam.setViewport(ins.left, ins.top, w, h);
-    cam.setZoom(z);
+    cam.setZoom(f);
     cam.centerOn(W / 2, H / 2);
     this.updatePortraitCover();
   }
@@ -318,10 +322,11 @@ export class RunScene extends Phaser.Scene {
     const run = this.run;
     const phase = this.choosing || !run ? 'start' : run.state.phase === 'playing' ? 'blinds' : run.state.phase;
     // background: the brown rock of the DOS screens, in the colour of the phase, drifting slowly
-    const rock = this.k(this.add.tileSprite(0, 0, W, H, BACKGROUND).setOrigin(0, 0).setTint(BACKDROPS[phase] ?? 0x8a7a8a));
+    // (it reaches past the 960 x 540 of the screens: a window of another shape shows more of it at the sides)
+    const rock = this.k(this.add.tileSprite(-W, -H, 3 * W, 3 * H, BACKGROUND).setOrigin(0, 0).setTint(BACKDROPS[phase] ?? 0x8a7a8a));
     rock.tilePositionX = (this.time.now / 90) % 4096;
     this.tweens.add({ targets: rock, tilePositionX: rock.tilePositionX + 4096, tilePositionY: 1024, duration: 360000, repeat: -1 });
-    this.k(this.add.rectangle(0, 0, W, H, 0x101820, 0.3).setOrigin(0, 0));
+    this.k(this.add.rectangle(-W, -H, 3 * W, 3 * H, 0x101820, 0.3).setOrigin(0, 0));
     if (this.choosing || !run) {
       this.renderStart();
       this.shown = 'start';
@@ -374,7 +379,7 @@ export class RunScene extends Phaser.Scene {
     k(label(this, W / 2, 72, 'Lemmings', { size: 48, purple: true, originX: 0.5 }));
     k(label(this, W / 2, 128, 'the roguelike run', { size: 16, color: COLORS.gold, originX: 0.5 }));
     const text = [
-      'Eight antes of three blinds each: original levels from Fun to Mayhem. Your lemmings are your deck: the ones that die are gone for good, the ones that survive come with you. Rescue lemmings to earn money, then spend it on recruits, training, jokers and tarots.',
+      'Eight rounds of three levels each: original levels from Fun to Mayhem. Your lemmings are your deck: the ones that die are gone for good, the ones that survive come with you. Rescue lemmings to earn money, then spend it on recruits, training, gadgets and boosts.',
       '',
       'Your abilities: 60 points to spread over the eight skills (at most 20 in one), some of them moved after every boss. In a level you have min(your ability, the allocation of the level) of every skill. The level itself is the original: the same terrain, traps, release rate, timer and rescue requirement.',
     ];
@@ -384,12 +389,12 @@ export class RunScene extends Phaser.Scene {
     const y = 410;
     if (saved) {
       const s = saved;
-      this.btn('continue', 210, y, 260, 52, 'Continue run', COLORS.blue, () => this.continueRun(s), { sub: `Ante ${s.ante}, $${s.money}, ${s.colony.length} lemmings` });
+      this.btn('continue', 210, y, 260, 52, 'Continue run', COLORS.blue, () => this.continueRun(s), { sub: `Round ${s.ante}, $${s.money}, ${s.colony.length} lemmings` });
       this.btn('newRun', 490, y, 260, 52, 'New run', COLORS.red, () => this.newRun(seed), { sub: `seed ${seed}` });
     } else this.btn('newRun', 350, y, 260, 52, 'New run', COLORS.red, () => this.newRun(seed), { sub: `seed ${seed}` });
     this.btn('seed', 210, 470, 120, 24, 'Seed...', COLORS.gray, () => this.askSeed());
     this.btn('menu', 630, 470, 120, 24, 'Menu', COLORS.gray, () => this.toMenu());
-    if (meta.runs > 0) k(label(this, W / 2, 476, `Runs ${meta.runs}  Won ${meta.wins}  Best ante ${meta.bestAnte}`, { color: COLORS.dim, originX: 0.5 }));
+    if (meta.runs > 0) k(label(this, W / 2, 476, `Runs ${meta.runs}  Won ${meta.wins}  Best round ${meta.bestAnte}`, { color: COLORS.dim, originX: 0.5 }));
   }
 
   private askSeed(): void {
@@ -434,18 +439,19 @@ export class RunScene extends Phaser.Scene {
     if (played && setup) {
       const l = run.level(setup.levelId);
       k(panel(this, x + 6, 12, w - 12, 84, BLIND_COLORS[played.kind], 0x000000, 8));
-      k(label(this, x + w / 2, 30, BLIND_NAMES[played.kind], { big: true, originX: 0.5, originY: 0.5 }));
+      k(label(this, x + w / 2, 32, BLIND_NAMES[played.kind], { size: 32, originX: 0.5, originY: 0.5 }));
       k(label(this, x + w / 2, 54, levelName(l), { originX: 0.5, originY: 0.5 }));
       k(label(this, x + w / 2, 76, `Attempt ${setup.attempts}`, { originX: 0.5, originY: 0.5 }));
     } else if (s.phase === 'shop') {
       this.well(x + 6, 12, w - 12, 84);
-      k(label(this, x + w / 2, 42, 'SHOP', { size: 32, big: true, color: COLORS.red, originX: 0.5, originY: 0.5 }));
+      k(label(this, x + w / 2, 42, 'Shop', { size: 48, color: COLORS.red, originX: 0.5, originY: 0.5 }));
       k(label(this, x + w / 2, 76, 'Improve your colony!', { color: COLORS.gold, originX: 0.5, originY: 0.5 }));
     } else {
-      const title: Record<string, string> = { assign: 'Assign your\nabilities', blinds: 'Choose your\nnext Blind', playing: 'Choose your\nnext Blind', over: s.won ? 'You won!' : 'Run over' };
+      const title: Record<string, string> = { assign: 'Assign your\nabilities', blinds: 'Choose your\nnext level', playing: 'Choose your\nnext level', over: s.won ? 'You won!' : 'Run over' };
       const color = s.phase === 'assign' ? COLORS.teal : s.phase === 'over' ? (s.won ? COLORS.gold : COLORS.red) : COLORS.text;
       this.well(x + 6, 12, w - 12, 84);
-      k(label(this, x + w / 2, 54, title[s.phase] ?? '', { big: true, color, originX: 0.5, originY: 0.5, align: 1 }));
+      // (in the text font, twice its size: the headings of Balatro are in its pixel font too)
+      k(label(this, x + w / 2, 54, title[s.phase] ?? '', { size: 32, color, originX: 0.5, originY: 0.5, align: 1 }));
     }
 
     // the colony, where Balatro has the score of the round
@@ -480,7 +486,7 @@ export class RunScene extends Phaser.Scene {
         lines: [
           `You can bring up to ${cap[sk]} ${SKILL_PLURALS[sk].toLowerCase()} to a level`,
           '(never more than the level allows).',
-          ...(cap[sk] > s.capacity[sk] ? [`${s.capacity[sk]} of your own, +${cap[sk] - s.capacity[sk]} from jokers.`] : []),
+          ...(cap[sk] > s.capacity[sk] ? [`${s.capacity[sk]} of your own, +${cap[sk] - s.capacity[sk]} from gadgets.`] : []),
         ],
         x: x + w + 6,
         y: cy,
@@ -505,7 +511,7 @@ export class RunScene extends Phaser.Scene {
     hoverTip(triesBox, this.tip, () => ({
       title: 'Attempts',
       color: COLORS.blue,
-      lines: [`Three attempts per blind are paid: $1 for each one you do not need. You can always retry.`],
+      lines: [`Three attempts per level are paid: $1 for each one you do not need. You can always retry.`],
       x: x + w + 6,
       y: 298,
     }));
@@ -520,8 +526,8 @@ export class RunScene extends Phaser.Scene {
       this.tweens.add({ targets: money, scale: to, duration: 260, ease: 'Back.easeOut' });
     }
     this.shownMoney = s.money;
-    box(rx, 454, 48, 74, 'Ante', `${Math.min(s.ante, ANTES)}/${ANTES}`, COLORS.orange, false);
-    box(rx + 52, 454, 48, 74, 'Round', String(s.stats.blindsWon + (s.phase === 'over' || s.phase === 'cashout' || s.phase === 'shop' ? 0 : 1)), COLORS.orange);
+    box(rx, 454, 48, 74, 'Round', `${Math.min(s.ante, ANTES)}/${ANTES}`, COLORS.orange, false);
+    box(rx + 52, 454, 48, 74, 'Game', String(s.stats.blindsWon + (s.phase === 'over' || s.phase === 'cashout' || s.phase === 'shop' ? 0 : 1)), COLORS.orange);
   }
 
   private specialCounts(colony: LemmingCard[]): string {
@@ -549,7 +555,7 @@ export class RunScene extends Phaser.Scene {
     const s = run.state;
     o(panel(this, 200, 50, 560, 440, COLORS.panel, COLORS.panelLight, 12));
     o(label(this, 480, 74, 'Run Info', { size: 32, big: true, originX: 0.5, originY: 0.5 }));
-    o(label(this, 224, 104, `Ante ${Math.min(s.ante, ANTES)} of ${ANTES}: ${bandName(run)}`, { color: COLORS.orange }));
+    o(label(this, 224, 104, `Round ${Math.min(s.ante, ANTES)} of ${ANTES}: ${bandName(run)}`, { color: COLORS.orange }));
     s.blinds.forEach((b, i) => {
       const l = run.level(b.levelId);
       const y = 128 + i * 40;
@@ -574,10 +580,10 @@ export class RunScene extends Phaser.Scene {
     const st = s.stats;
     const tags = s.pendingTags.map((t) => tagDef(t).name);
     const lines = [
-      `Blinds won ${st.blindsWon}, skipped ${st.skipped}, attempts ${st.attempts}`,
+      `Levels won ${st.blindsWon}, skipped ${st.skipped}, attempts ${st.attempts}`,
       `Lemmings saved ${st.saved}, lost ${st.lost}, colony ${s.colony.length}`,
       `Money earned $${st.earned}`,
-      ...(tags.length ? [`Tags waiting: ${tags.join(', ')}`] : []),
+      ...(tags.length ? [`Bonuses waiting: ${tags.join(', ')}`] : []),
       `Seed ${s.seed}`,
     ];
     o(label(this, 224, 336, lines.join('\n'), { color: COLORS.text, maxWidth: 512 }));
@@ -669,7 +675,7 @@ export class RunScene extends Phaser.Scene {
       const card = k(new CardView(this, tx[i], cy, { color: COLORS.purple, art }));
       this.spot(`tarot:${i}`, tx[i], cy);
       this.table.add(card, {
-        tip: () => ({ title: d.name, color: COLORS.purple, lines: [t.skill && d.skillText ? d.skillText(SKILL_NAMES[t.skill]) : d.text], badge: { text: 'Tarot', color: COLORS.purple } }),
+        tip: () => ({ title: d.name, color: COLORS.purple, lines: [t.skill && d.skillText ? d.skillText(SKILL_NAMES[t.skill]) : d.text], badge: { text: 'Boost', color: COLORS.purple } }),
         buttons: () => [
           { label: 'USE', color: COLORS.red, side: 'below', enabled: canUse, run: use },
           { label: 'SELL', sub: `$${tarotSellPrice(t.id)}`, color: COLORS.green, side: 'right', enabled: run.canSellTarot(), run: sell },
@@ -718,15 +724,6 @@ export class RunScene extends Phaser.Scene {
     // the counters, next to the title
     k(label(this, x + w - 16, y + 12, st.left > 0 ? `To place ${st.left}` : 'All placed', { color: st.left > 0 ? COLORS.gold : COLORS.green, originX: 1 }));
     if (a.reassign > 0) k(label(this, x + w - 16, y + 30, `Moved ${st.moved}/${a.reassign}`, { color: st.moved >= a.reassign ? COLORS.orange : COLORS.dim, originX: 1 }));
-    // (the sources are "Personal Trainer: +5 points": the names are enough here)
-    const from = a.sources.map((t) => t.split(':')[0]);
-    const intro =
-      a.reason === 'start'
-        ? `Spread ${a.newPoints} points over the skills, at most ${ABILITY_CAP} in one. Below every skill of the levels on the right: what your team would bring.`
-        : a.reason === 'boss'
-          ? `A new ante! Move up to ${a.reassign} points to other skills${a.newPoints ? ` and place ${a.newPoints} new ones` : ''} before the shop${from.length ? ` (${from.join(', ')})` : ''}.`
-          : `${from.join(', ')}: ${a.newPoints ? `place ${a.newPoints} new points` : `move up to ${a.reassign} points to other skills`}.`;
-    k(label(this, x + 16, y + 50, intro, { color: COLORS.text, maxWidth: w - 32 }));
 
     const cap = run.capability();
     SKILLS.forEach((sk, i) => {
@@ -773,7 +770,7 @@ export class RunScene extends Phaser.Scene {
         color: COLORS.teal,
         lines: [
           `A level gets up to ${cap[sk]} ${SKILL_PLURALS[sk].toLowerCase()} (never more than it allows).`,
-          ...(cap[sk] > cur ? [`${cap[sk] - cur} of them come from jokers.`] : []),
+          ...(cap[sk] > cur ? [`${cap[sk] - cur} of them come from gadgets.`] : []),
           ...(cur !== before ? [`It had ${before} before.`] : []),
         ],
         x: x + 40,
@@ -786,14 +783,22 @@ export class RunScene extends Phaser.Scene {
       this.save();
       this.render();
     };
-    this.btn('reset', x + 16, y + 362, 110, 30, 'Reset', COLORS.gray, reset, { enabled: st.moved + st.added > 0 });
+    this.btn('reset', x + 16, y + 362, 100, 30, 'Reset', COLORS.gray, reset, { enabled: st.moved + st.added > 0 });
+    // a best guess: the skills the levels of the round ask for, then the ones most levels need
+    const autoPick = () => {
+      if (!run.autoAssign()) return;
+      this.sfx(SoundEffect.SkillButtonSelect);
+      this.save();
+      this.render();
+    };
+    this.btn('autoPick', x + 124, y + 362, 100, 30, 'Auto pick', COLORS.blue, autoPick);
     const done = () => {
       if (!run.finishAssignment()) return;
       this.sfx(SoundEffect.LetsGo);
       this.save();
       this.render();
     };
-    this.btn('done', x + w - 166, y + 362, 150, 30, 'Done', COLORS.orange, done, { big: true, enabled: run.canFinishAssignment() });
+    this.btn('done', x + 232, y + 362, w - 248, 30, 'Done', COLORS.orange, done, { big: true, enabled: run.canFinishAssignment() });
 
     // the levels of the ante, with what the team brings as it is now
     const lx = x + w + 8;
@@ -808,15 +813,16 @@ export class RunScene extends Phaser.Scene {
     const done = b.status === 'defeated' || b.status === 'skipped';
     const color = BLIND_COLORS[b.kind];
     k(panel(this, x, y, w, h, COLORS.panel, done ? COLORS.panelLight : color, 10));
-    k(label(this, x + 10, y + 8, BLIND_NAMES[b.kind], { color: done ? COLORS.dim : color }));
-    k(label(this, x + w - 10, y + 8, levelName(l), { purple: true, originX: 1 }));
-    k(label(this, x + 10, y + 27, l.title, { color: COLORS.text, maxWidth: w - 20 }));
-    k(label(this, x + 10, y + 46, `Rescue ${p.required}/${p.squad} · ${minutes(p.minutes)} · Rate ${l.releaseRate}`, { color: COLORS.dim }));
-    this.skillCells(k, p, x + 10, y + 68, x - 120);
-    const summary = done ? { text: b.status === 'skipped' ? 'Skipped' : 'Defeated', color: COLORS.dim } : shortSummary(p);
-    k(label(this, x + 10, y + 108, summary.text, { color: summary.color }));
-    if (done) k(this.add.rectangle(x, y, w, h, 0x000000, 0.4).setOrigin(0, 0));
-    else this.btn(`preview:${p.index}`, x + w - 74, y + 43, 64, 20, 'Preview', COLORS.blue, () => this.showLevelPreview(run, p.index));
+    k(label(this, x + 10, y + 10, BLIND_NAMES[b.kind], { color: done ? COLORS.dim : color }));
+    const name = k(label(this, x + w - 52, y + 10, levelName(l), { purple: true, originX: 1 }));
+    this.wikiButton(l, name.x + 6, y + 9, `wiki:${p.index}`);
+    k(label(this, x + 10, y + 34, l.title, { color: COLORS.text, maxWidth: w - 20 }));
+    k(label(this, x + 10, y + 56, rescueText(p), { color: COLORS.dim }));
+    this.skillCells(k, p, x + 10, y + 82, x - 120);
+    if (done) {
+      k(label(this, x + w - 10, y + 56, b.status === 'skipped' ? 'Skipped' : 'Done', { color: COLORS.dim, originX: 1 }));
+      k(this.add.rectangle(x, y, w, h, 0x000000, 0.4).setOrigin(0, 0));
+    } else this.btn(`preview:${p.index}`, x + w - 74, y + 53, 64, 20, 'Preview', COLORS.blue, () => this.showLevelPreview(run, p.index));
   }
 
   /** the skills of a level (its allocation, and below what the team brings), 36 pixels per skill */
@@ -833,7 +839,7 @@ export class RunScene extends Phaser.Scene {
       hoverTip(icon, this.tip, () => ({
         title: SKILL_PLURALS[sk],
         color: COLORS.teal,
-        lines: [`The level has ${p.allocation[sk]}${p.aboveMax[sk] ? ` (+${p.aboveMax[sk]} from jokers)` : ''}, you would bring ${u}.`],
+        lines: [`The level has ${p.allocation[sk]}${p.aboveMax[sk] ? ` (+${p.aboveMax[sk]} from gadgets)` : ''}, you would bring ${u}.`],
         x: tipX,
         y: y + 36,
       }));
@@ -850,7 +856,7 @@ export class RunScene extends Phaser.Scene {
       (g as unknown as Phaser.GameObjects.Components.Depth).setDepth?.(600);
       return g;
     };
-    o(this.add.rectangle(0, 0, W, H, 0x000000, dim).setOrigin(0, 0).setInteractive());
+    o(this.add.rectangle(-W, -H, 3 * W, 3 * H, 0x000000, dim).setOrigin(0, 0).setInteractive());
     return o;
   }
 
@@ -866,11 +872,12 @@ export class RunScene extends Phaser.Scene {
     o(panel(this, 20, 16, 920, 508, COLORS.panel, color, 12));
     const kind = o(label(this, 40, 30, BLIND_NAMES[p.blind.kind], { color }));
     const name = o(label(this, kind.x + kind.width + 12, 30, levelName(l), { purple: true }));
-    o(label(this, name.x + name.width + 12, 30, l.title, { color: COLORS.text, maxWidth: 800 - name.x - name.width }));
+    const wiki = o(this.wikiButton(l, name.x + name.width + 8, 29, 'wiki:preview'));
+    o(label(this, wiki.x + wiki.bw + 12, 30, l.title, { color: COLORS.text, maxWidth: 800 - wiki.x - wiki.bw }));
     this.spot('close', 828 + 46, 26 + 14);
     o(new Button(this, 828, 26, 92, 28, 'Close', COLORS.orange, () => this.closeOverlay()));
     const lemmings = p.squad < l.lemmings ? `${l.lemmings} (you have ${p.squad})` : String(l.lemmings);
-    o(label(this, 40, 56, `Lemmings ${lemmings} · Rescue ${p.required} · Release rate ${l.releaseRate} · Time ${minutes(p.minutes)}`, { color: COLORS.dim }));
+    o(label(this, 40, 56, `Lemmings ${lemmings} · Rescue ${p.required} (${percent(p.required, p.squad)}%)`, { color: COLORS.dim }));
     const meta = loadMeta().levels[l.id];
     if (meta?.fewest) o(label(this, 920, 56, `Your best: ${meta.best}%, ${totalSkills(meta.fewest)} skills`, { color: COLORS.teal, originX: 1 }));
 
@@ -926,8 +933,6 @@ export class RunScene extends Phaser.Scene {
     const sy = my + mh + 10;
     o(label(this, 40, sy + 8, 'Skills: level / yours', { color: COLORS.dim }));
     this.skillCells(o, p, 200, sy, 200);
-    const summary = shortSummary(p);
-    o(label(this, 504, sy + 8, summary.text, { color: summary.color }));
   }
 
   /** a change of the assignment: the screen follows on the next frame (a finger may still be dragging the bar) */
@@ -974,7 +979,9 @@ export class RunScene extends Phaser.Scene {
     }
     k(panel(this, x + 8, y + 43, w - 16, 24, color, 0x000000, 6));
     k(label(this, x + w / 2, y + 55, BLIND_NAMES[b.kind], { big: true, originX: 0.5, originY: 0.5 }));
-    k(label(this, x + w / 2, y + 74, levelName(l), { purple: true, originX: 0.5 }));
+    // the name of the level, and next to it the page of the level on the Lemmings Wiki
+    const name = k(label(this, x + w / 2 - WIKI_W / 2 - 3, y + 74, levelName(l), { purple: true, originX: 0.5 }));
+    this.wikiButton(l, name.x + name.width / 2 + 6, y + 73, `wiki:${p.index}`);
     k(label(this, x + w / 2, y + 92, l.title, { color: COLORS.text, originX: 0.5, maxWidth: w - 16, align: 1 }));
     const thumb = levelThumbnail(this, this.app, l, w - 16, 40);
     const pic = k(this.add.image(x + 8, y + 128, thumb).setOrigin(0, 0));
@@ -1008,15 +1015,13 @@ export class RunScene extends Phaser.Scene {
       }));
       if (squadSpecials.length) k(label(this, x + 12 + 70, y + 171, `*${squadSpecials.length}`, { color: COLORS.purple }));
     }
-    row(y + 191, 'Rescue at least', String(p.required), p.tooFewLemmings ? COLORS.red : COLORS.text);
-    row(y + 211, 'Time', minutes(p.minutes), p.minutes > l.time ? COLORS.green : COLORS.text);
-    row(y + 231, 'Release rate', String(l.releaseRate));
+    row(y + 191, 'Rescue at least', `${p.required} (${percent(p.required, p.squad)}%)`, p.tooFewLemmings ? COLORS.red : COLORS.text);
 
     // skills: the level's allocation and what you bring (min(abilities, allocation))
     // (the tooltip of a skill says which number is which; the colour of the second says how it compares)
     SKILLS.forEach((sk, i) => {
       const cx = x + 12 + (i % 4) * 48;
-      const cy = y + 256 + Math.floor(i / 4) * 38;
+      const cy = y + 220 + Math.floor(i / 4) * 40;
       const alloc = p.allocation[sk] + p.aboveMax[sk];
       const u = p.usable[sk];
       const icon = k(this.add.image(cx, cy + 4, SKILL_ICONS, sk).setOrigin(0, 0));
@@ -1030,7 +1035,7 @@ export class RunScene extends Phaser.Scene {
         title: SKILL_PLURALS[sk],
         color: COLORS.teal,
         lines: [
-          `The level has ${p.allocation[sk]}${p.aboveMax[sk] ? ` (+${p.aboveMax[sk]} from jokers)` : ''}, you bring ${u}.`,
+          `The level has ${p.allocation[sk]}${p.aboveMax[sk] ? ` (+${p.aboveMax[sk]} from gadgets)` : ''}, you bring ${u}.`,
           ...(canHire && !touch.active ? [`Click: hire one for this level ($${HIRE_PRICE}).`] : []),
         ],
         x: cx - 100,
@@ -1050,7 +1055,7 @@ export class RunScene extends Phaser.Scene {
       }
     });
     const meta = loadMeta().levels[l.id];
-    if (meta?.fewest) k(label(this, x + 12, y + 336, `Your best: ${meta.best}%, ${totalSkills(meta.fewest)} skills`, { color: COLORS.teal, maxWidth: w - 24 }));
+    if (meta?.fewest) k(label(this, x + 12, y + 310, `Your best: ${meta.best}%, ${totalSkills(meta.fewest)} skills`, { color: COLORS.teal, maxWidth: w - 24 }));
 
     // the reward, and what skipping gives (the boss: another level instead)
     k(label(this, x + 12, y + 355, 'Reward:', { color: COLORS.dim }));
@@ -1061,7 +1066,7 @@ export class RunScene extends Phaser.Scene {
         const rerollTip = (): TipContent => ({
           title: "Director's Cut",
           color: COLORS.red,
-          lines: ['Another level for the Boss Blind, from the same band.', 'Once per ante, before the boss is played.'],
+          lines: ['Another level for Level 3, from the same band.', 'Once per round, before Level 3 is played.'],
           x: x - 60,
           y: y + 270,
         });
@@ -1071,7 +1076,7 @@ export class RunScene extends Phaser.Scene {
           this.save();
           this.render();
         };
-        const rr = this.btn('rerollBoss', x + 8, y + 374, w - 16, 26, `Reroll Boss $${run.bossRerollPrice()}`, COLORS.red, reroll, { enabled: can });
+        const rr = this.btn('rerollBoss', x + 8, y + 374, w - 16, 26, `Reroll Level 3 $${run.bossRerollPrice()}`, COLORS.red, reroll, { enabled: can });
         hoverTip(rr, this.tip, rerollTip, !can);
       }
     } else if (b.tag) {
@@ -1081,7 +1086,7 @@ export class RunScene extends Phaser.Scene {
       hoverTip(tagLabel, this.tip, () => ({
         title: `Skip for: ${tag.name}`,
         color: COLORS.orange,
-        lines: [tag.text, '', 'No reward and no shop for this blind.'],
+        lines: [tag.text, '', 'No reward and no shop for this level.'],
         x: x - 20,
         y: y + 290,
       }));
@@ -1265,7 +1270,7 @@ export class RunScene extends Phaser.Scene {
       this.save();
       this.render();
     };
-    this.btn('nextRound', x + 12, y + 12, 124, 58, 'Next\nRound', COLORS.red, nextRound, { big: true });
+    this.btn('nextRound', x + 12, y + 12, 124, 58, 'Next\nLevel', COLORS.red, nextRound, { big: true });
     const reroll = () => {
       if (!run.reroll()) return;
       this.sfx(SoundEffect.SkillButtonSelect);
@@ -1294,10 +1299,11 @@ export class RunScene extends Phaser.Scene {
       pic.setInteractive({ useHandCursor: true });
       pic.on('pointerup', () => this.showLevelPreview(run, index));
       this.spot('nextBlind', x + 120, by + 46);
-      k(label(this, x + 20, by + 70, levelName(nl), { purple: true }));
-      k(label(this, x + 220, by + 72, `Rescue ${nl.rescue}/${nl.lemmings}`, { color: COLORS.dim, originX: 1 }));
+      const name = k(label(this, x + 20, by + 70, levelName(nl), { purple: true }));
+      this.wikiButton(nl, name.x + name.width + 6, by + 69, 'wiki:next');
+      k(label(this, x + 220, by + 6, `Rescue ${nl.rescue} (${percent(nl.rescue, Math.min(nl.lemmings, s.colony.length))}%)`, { color: COLORS.dim, originX: 1 }));
       k(label(this, x + 20, by + 90, nl.title, { color: COLORS.text, maxWidth: 200 }));
-    } else k(label(this, x + 20, by + 6, `Next: Ante ${s.ante + 1}`, { color: COLORS.orange }));
+    } else k(label(this, x + 20, by + 6, `Next: Round ${s.ante + 1}`, { color: COLORS.orange }));
 
     // the packs: the recruits, and the extra offers of a Supply Drop
     const packs: Rect = { x: x + 238, y: by, w: w - 250, h: 130 };
@@ -1354,8 +1360,8 @@ export class RunScene extends Phaser.Scene {
   private whyNot(run: RunSession, o: ShopOffer): string {
     const s = run.state;
     if (s.money < o.price) return 'Not enough money.';
-    if (o.type === 'joker' && s.jokers.length >= JOKER_SLOTS) return 'No room for another joker (sell one).';
-    if (o.type === 'tarot' && s.tarots.length >= TAROT_SLOTS) return 'No room for another tarot (use one).';
+    if (o.type === 'joker' && s.jokers.length >= JOKER_SLOTS) return 'No room for another gadget (sell one).';
+    if (o.type === 'tarot' && s.tarots.length >= TAROT_SLOTS) return 'No room for another boost (use one).';
     return '';
   }
 
@@ -1368,7 +1374,7 @@ export class RunScene extends Phaser.Scene {
       case 'tarot': {
         const d = tarotDef(o.id);
         const text = o.skill && d.skillText ? d.skillText(SKILL_NAMES[o.skill]) : d.text;
-        return { title: d.name, color: COLORS.purple, lines: [text], art: o.id === 'manual' && o.skill ? { icon: o.skill } : TAROT_ART[d.id], badge: { text: 'Tarot', color: COLORS.purple } };
+        return { title: d.name, color: COLORS.purple, lines: [text], art: o.id === 'manual' && o.skill ? { icon: o.skill } : TAROT_ART[d.id], badge: { text: 'Boost', color: COLORS.purple } };
       }
       case 'training': {
         const sk = o.skill!;
@@ -1429,7 +1435,7 @@ export class RunScene extends Phaser.Scene {
     if (!t) return;
     const s = run.state.phase;
     if (s === 'result' || s === 'over') {
-      this.toast('Tarots can be used on the blind screen and in the shop.');
+      this.toast('Boosts can be used on the level screen and in the shop.');
       return;
     }
     if (s === 'assign') {
@@ -1477,7 +1483,7 @@ export class RunScene extends Phaser.Scene {
     const update = () =>
       info.setText(
         tarot
-          ? `${selected.size} of ${tarot.max} selected.${squad.size ? ' Lemmings of the squad of the blind you are playing are marked.' : ''}`
+          ? `${selected.size} of ${tarot.max} selected.${squad.size ? ' Lemmings of the squad of the level you are playing are marked.' : ''}`
           : 'Special lemmings have editions (Gold, Lucky, Mentor), abilities or insurance.',
       );
     update();
@@ -1567,7 +1573,7 @@ export class RunScene extends Phaser.Scene {
       const use = () => {
         const notes = tarot.offer !== undefined ? run.buyAndUse(tarot.offer, [...selected]) : run.useTarot(tarot.uid!, [...selected]);
         if (!notes) {
-          this.toast(selected.size === 0 ? 'Select at least one lemming.' : 'That does not work (the squad of a blind cannot leave the colony).');
+          this.toast(selected.size === 0 ? 'Select at least one lemming.' : 'That does not work (the squad of a level cannot leave the colony).');
           return;
         }
         this.sfx(SoundEffect.AssignSkill);
@@ -1587,7 +1593,7 @@ export class RunScene extends Phaser.Scene {
     if (c.floater) lines.push('Floater: has an umbrella in every level.');
     if (c.insured) lines.push('Insured: comes back once after it dies.');
     lines.push(`Reached the exit ${c.saves} time${c.saves === 1 ? '' : 's'}.`);
-    if (inSquad) lines.push('In the squad of the current blind.');
+    if (inSquad) lines.push('In the squad of the current level.');
     return lines;
   }
 
@@ -1601,13 +1607,13 @@ export class RunScene extends Phaser.Scene {
     const w = MAIN_R - MAIN_X;
     k(panel(this, x, y, w, 440, COLORS.panel, s.won ? COLORS.gold : COLORS.red, 12));
     k(label(this, x + w / 2, y + 20, s.won ? 'You win!' : 'Game over', { size: 48, big: true, color: s.won ? COLORS.gold : COLORS.red, originX: 0.5 }));
-    k(label(this, x + w / 2, y + 84, s.won ? 'Your colony made it through all eight antes.' : `Your colony reached ante ${s.ante}.`, { color: COLORS.text, originX: 0.5 }));
+    k(label(this, x + w / 2, y + 84, s.won ? 'Your colony made it through all eight rounds.' : `Your colony reached round ${s.ante}.`, { color: COLORS.text, originX: 0.5 }));
     const st = s.stats;
     const lines = [
-      `Blinds won ${st.blindsWon}, skipped ${st.skipped}, attempts ${st.attempts}`,
+      `Levels won ${st.blindsWon}, skipped ${st.skipped}, attempts ${st.attempts}`,
       `Lemmings saved ${st.saved}, lost ${st.lost}, colony ${s.colony.length}`,
       `Money earned $${st.earned}`,
-      `Jokers: ${s.jokers.map((j) => jokerDef(j.id).name).join(', ') || 'none'}`,
+      `Gadgets: ${s.jokers.map((j) => jokerDef(j.id).name).join(', ') || 'none'}`,
       `Seed ${s.seed}`,
     ];
     this.well(x + 40, y + 112, w - 80, 126);
@@ -1624,6 +1630,14 @@ export class RunScene extends Phaser.Scene {
       this.toMenu();
     };
     this.btn('menu', x + 338, y + 330, 190, 44, 'Main Menu', COLORS.orange, menu, { big: true });
+  }
+
+  /** a small button that opens the page of a level on the Lemmings Wiki (in a new tab), for its strategy */
+  private wikiButton(l: RunLevel, x: number, y: number, name: string): Button {
+    const open = () => window.open(wikiUrl(l), '_blank', 'noopener');
+    const b = this.btn(name, x, y, WIKI_W, 18, 'Wiki', COLORS.teal, open);
+    hoverTip(b, this.tip, () => ({ title: 'Lemmings Wiki', color: COLORS.teal, lines: [`Opens the page of ${l.title} on the Lemmings Wiki: how the level goes, and how others solved it.`], x: x - 100, y: y + 24 }), false);
+    return b;
   }
 
   /* -------------------------------------------------------------------------------------------- messages */

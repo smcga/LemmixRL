@@ -88,9 +88,9 @@ screen, the sideways lock, the wake lock, the audio); `?diag=0` hides it again.
   what a finger was doing, and a second tap that was asked for. The screen stays on while a level is played. With
   WALKER on, a tap on a worker with nobody else under the finger does nothing (with the right mouse button Lemmix
   raises an exception there, see below).
-* Run screens: the cards are handled as in Balatro on a phone. A tap on a card (a joker, a tarot, a card of the
+* Run screens: the cards are handled as in Balatro on a phone. A tap on a card (a gadget, a boost, a card of the
   shop) selects it: it shows what it is and its buttons (Buy, Sell, Use). A card can also be dragged: the areas it can
-  be dropped on light up (Buy over the jokers, Sell over the other row, Use above the colony). A tap on anything else
+  be dropped on light up (Buy over the gadgets, Sell over the other row, Use above the colony). A tap on anything else
   shows what it is; hiring a skill wants a second tap. A tap on an empty spot closes the information.
 
 ## Deployment
@@ -109,14 +109,20 @@ needs access to this repository. Pull requests should target `main`; `master` is
 Click the ROGUELIKE RUN sign in the menu, or press F6. A run wraps the original game; it does
 not replace it.
 
+The screens use Lemmings names for Balatro's things: a *round* (Balatro's ante) has three levels, *Level 1, 2 and 3*
+(the small, big and boss blind), and the *Game* counter is Balatro's round; jokers are *gadgets*, tarots *boosts* and
+the tags for skipping a level *bonuses*. Below, the Balatro names are used for the design.
+
 The screen is laid out like Balatro's: on the left what is going on, the colony, the abilities, Run Info and Options,
-the money, the ante and the round; along the top the jokers and the tarots; in the corner the colony as the deck (click
-it to see every lemming); in the middle the blinds, the cash out or the shop, coming up from below. The cards work as
-in Balatro, with its mobile way of dragging on every device: click a card for its buttons, or drag it. A card of the
-shop dragged up to the jokers is bought; a tarot of the shop dragged to the area above the colony is bought and used
-at once (it needs no free slot); a joker dragged to the tarots is sold (a tarot to the jokers), a tarot dragged above
-the colony is used, and a joker dragged along its row goes to another place. Where a tarot asks for lemmings, one
-drag across them selects them (or takes them out of the selection, when it starts on a selected one). Once a blind starts, it is the original
+the money, the round and the game; along the top the gadgets and the boosts; in the corner the colony as the deck
+(click it to see every lemming); in the middle the levels, the cash out or the shop, coming up from below. It fills the
+window, as the screens of Lemmix do. The cards work as in Balatro, with its mobile way of dragging on every device:
+click a card for its buttons, or drag it. A card of the shop dragged up to the gadgets is bought; a boost of the shop
+dragged to the area above the colony is bought and used at once (it needs no free slot); a gadget dragged to the boosts
+is sold (a boost to the gadgets), a boost dragged above the colony is used, and a gadget dragged along its row goes to
+another place. Where a boost asks for lemmings, one drag across them selects them (or takes them out of the selection,
+when it starts on a selected one). Next to the name of every level, *Wiki* opens its page on the
+[Lemmings Wiki](https://lemmings.fandom.com) (how it goes, how others solved it). Once a blind starts, it is the original
 level: the same terrain, objects, traps, physics, release rate, timer and rescue requirement, played with the original
 preview, game and result screens. The run decides only *what you bring*: how many lemmings and how many of each
 skill.
@@ -139,7 +145,9 @@ skill.
 A run starts with the ability assignment: 60 points to spread over the skills, at most 20 in one, with the three
 levels of the first ante in view (their allocation, and below it what your team would bring, as you assign).
 *Preview* shows a level as it starts at twice its size, with a strip of the whole level: drag it (or the strip, or
-use the arrow keys and the mouse wheel) to look for the traps, the gaps and the exits before you choose. The pictures
+use the arrow keys and the mouse wheel) to look for the traps, the gaps and the exits before you choose. *Auto pick*
+makes a best guess: every point goes where the levels of the round still to be played can use it (Level 3 counts
+most), the rest to the skills most levels need; after a round it moves points while that gains more than it costs. The pictures
 of the levels on the blind screen open the same preview. After
 every boss blind, before the shop, the next ante's levels are drawn and the assignment comes back: up to 10 points can
 be moved to other skills. The Personal Trainer adds 5 new points there and the Careers Advisor 5 more to move; the

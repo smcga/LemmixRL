@@ -495,7 +495,7 @@ export class RunSession {
     s.stats.saved += out.rescued;
 
     // the blind
-    lines.push({ label: `${BLIND_NAMES[blind.kind]} defeated`, amount: BLIND_REWARDS[blind.kind] });
+    lines.push({ label: `${BLIND_NAMES[blind.kind]} done`, amount: BLIND_REWARDS[blind.kind] });
     const unused = Math.max(0, ATTEMPTS - setup.attempts);
     if (unused > 0) lines.push({ label: `Unused attempts (${unused})`, amount: unused });
     if (out.hand > out.required) {
@@ -553,7 +553,7 @@ export class RunSession {
         const sum = lines.reduce((a, l) => a + l.amount, 0);
         lines.push({ label: 'Golden Exit', amount: sum });
       }
-      if (this.takePendingTag('investment')) lines.push({ label: 'Investment Tag', amount: 10 });
+      if (this.takePendingTag('investment')) lines.push({ label: 'Investment Bonus', amount: 10 });
     }
 
     // interest on the money you had
@@ -698,6 +698,69 @@ export class RunSession {
     const st = this.assignment();
     if (!st) return false;
     return st.left === 0 || SKILLS.every((sk) => this.abilityRange(sk).max <= this.state.capacity[sk]);
+  }
+
+  /**
+   * Auto pick: a best guess at the assignment going on. A point is worth what it lets the levels of the round still to
+   * be played bring (Level 3 counts most); points no level of the round can use go to the skills most levels need,
+   * spread out. New points are placed first; then points are moved while that brings more than it costs.
+   */
+  autoAssign(): boolean {
+    const s = this.state;
+    const a = s.assign;
+    if (s.phase !== 'assign' || !a) return false;
+    this.resetAssignment();
+    const levels = s.blinds.filter((b) => b.status !== 'defeated' && b.status !== 'skipped').map((b) => ({ level: this.level(b.levelId), weight: AUTO_WEIGHTS[b.kind] }));
+    const aboveMax = this.fixedAboveMax();
+    const fromJokers = zeroSkills();
+    const cap = this.capability();
+    for (const sk of SKILLS) fromJokers[sk] = cap[sk] - s.capacity[sk];
+    // the worth of the point that makes a skill `value`
+    const worth = (sk: Skill, value: number) => {
+      let w = 0;
+      for (const { level, weight } of levels) if (value + fromJokers[sk] <= level.skills[sk] + aboveMax[sk]) w += weight;
+      return w * 10 + AUTO_IMPORTANCE[sk] / (value + 1);
+    };
+    const best = (except?: Skill): Skill | null => {
+      let pick: Skill | null = null;
+      let most = -1;
+      for (const sk of SKILLS) {
+        const cur = s.capacity[sk];
+        if (sk === except || this.abilityRange(sk).max <= cur) continue;
+        const w = worth(sk, cur + 1);
+        if (w > most) {
+          most = w;
+          pick = sk;
+        }
+      }
+      return pick;
+    };
+    // the new points
+    for (let sk = best(); sk && this.assignment()!.left > 0; sk = best()) this.setAbility(sk, s.capacity[sk] + 1);
+    // moving points: the one that is worth least goes where a point is worth most
+    for (let n = 0; n < a.reassign; n++) {
+      let from: Skill | null = null;
+      let least = Infinity;
+      for (const sk of SKILLS) {
+        const cur = s.capacity[sk];
+        if (cur === 0 || this.abilityRange(sk).min >= cur) continue;
+        const w = worth(sk, cur);
+        if (w < least) {
+          least = w;
+          from = sk;
+        }
+      }
+      if (!from) break;
+      const was = s.capacity[from];
+      this.setAbility(from, was - 1);
+      const to = best(from);
+      if (!to || worth(to, s.capacity[to] + 1) <= least + 1e-9) {
+        this.setAbility(from, was);
+        break;
+      }
+      this.setAbility(to, s.capacity[to] + 1);
+    }
+    return true;
   }
 
   finishAssignment(): boolean {
@@ -1131,3 +1194,8 @@ export function fateOf(l: Lemming | undefined, bombed: boolean, nuked: boolean):
   if (l.yPos > LEMMING_MAX_Y) return 'fell';
   return 'trapped';
 }
+
+/** Auto pick: how much the levels of a round count (the last one, the hardest, most) */
+const AUTO_WEIGHTS: Record<BlindKind, number> = { small: 1, big: 1.2, boss: 1.5 };
+/** Auto pick: the skills most levels need, for the points the levels of the round cannot use */
+const AUTO_IMPORTANCE: SkillCounts = { builder: 6, basher: 5, digger: 5, miner: 4, blocker: 4, floater: 3, climber: 3, bomber: 3 };

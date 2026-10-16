@@ -54,7 +54,8 @@ export interface LemmingCard {
 export type BlindKind = 'small' | 'big' | 'boss';
 export type BlindStatus = 'upcoming' | 'current' | 'skipped' | 'defeated';
 
-export const BLIND_NAMES: Record<BlindKind, string> = { small: 'Small Blind', big: 'Big Blind', boss: 'Boss Blind' };
+/** what the screens call the blinds: the three levels of a round */
+export const BLIND_NAMES: Record<BlindKind, string> = { small: 'Level 1', big: 'Level 2', boss: 'Level 3' };
 
 export interface BlindState {
   kind: BlindKind;
