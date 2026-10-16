@@ -28,6 +28,8 @@ export enum ScreenType {
   LevelCode,
   /** the screens of a roguelike run (LemmixRL) */
   Run,
+  /** the title screen of Lematro (LemmixRL): the run, the settings, or the classic game */
+  Title,
 }
 
 /** TMainDatExtractor */

@@ -4,7 +4,6 @@ import type { LemmixApp } from '../app.ts';
 import { CR, FULL_PROGRAM_NAME, SCredits, SProgramTexts, formatSimple } from '../texts.ts';
 import { speak, VoiceOption } from '../voice.ts';
 import { DosScreenBase, ScreenType } from './base.ts';
-import { pixelGlyphs } from '../run/ui/pixelfont.ts';
 import { toggleVoice } from './player.ts';
 
 /** The dialogs the menu screen opens (Windows dialogs in Lemmix). */
@@ -31,7 +30,6 @@ enum MenuBitmap {
   GameSection3, // tricky/wild     drawn in gmbSection
   GameSection4, // fun/crazy       drawn in gmbSection
   GameSection5, // .../ohno tame, only last one
-  Roguelike, // LemmixRL: 2nd row, 3d button (made from the empty sign of the music button)
 }
 
 // Positions at which the images of the menuscreen are drawn
@@ -41,10 +39,8 @@ const POSITIONS: Record<MenuBitmap, [number, number]> = {
   [MenuBitmap.LevelCode]: [200, 120],
   [MenuBitmap.Music]: [328, 120],
   [MenuBitmap.Section]: [456, 120],
-  // LemmixRL: three signs in the 2nd row (Lemmix has two, at 200 and 328)
-  [MenuBitmap.Exit]: [136, 196],
-  [MenuBitmap.Navigation]: [264, 196],
-  [MenuBitmap.Roguelike]: [392, 196],
+  [MenuBitmap.Exit]: [200, 196],
+  [MenuBitmap.Navigation]: [328, 196],
   [MenuBitmap.MusicNote]: [328 + 27, 120 + 26],
   [MenuBitmap.FXSound]: [328 + 27, 120 + 26],
   [MenuBitmap.GameSection1]: [456 + 32, 120 + 24],
@@ -55,10 +51,6 @@ const POSITIONS: Record<MenuBitmap, [number, number]> = {
 };
 
 const YPos_ProgramText = 272;
-/** LemmixRL: the colours of the sign of the roguelike run (the board, its name and the shadow of the name) */
-const SIGN_BOARD = 0xb03848;
-const SIGN_TEXT = 0xf0f0f0;
-const SIGN_SHADOW = 0x300010;
 const YPos_Credits = 350 - 16;
 const Reel_Width = 34 * 16;
 const Font_Width = 16;
@@ -97,7 +89,7 @@ export class MenuScreen extends DosScreenBase {
     private readonly host: MenuHost,
   ) {
     super(app.data.provider, app.style);
-    for (let e = MenuBitmap.Logo; e <= MenuBitmap.Roguelike; e++) {
+    for (let e = MenuBitmap.Logo; e <= MenuBitmap.GameSection5; e++) {
       const bmp = new Bitmap32();
       if (![MenuBitmap.MusicNote, MenuBitmap.FXSound, MenuBitmap.GameSection1, MenuBitmap.GameSection2, MenuBitmap.GameSection3, MenuBitmap.GameSection4].includes(e))
         bmp.drawMode = DrawMode.Transparent;
@@ -170,10 +162,8 @@ export class MenuScreen extends DosScreenBase {
     this.tileBackgroundBitmap(0, 0);
     this.backBuffer.assign(this.screen); // save it
 
-    this.makeRoguelikeSign();
-
     // menu elements
-    for (const e of [MenuBitmap.Logo, MenuBitmap.Play, MenuBitmap.LevelCode, MenuBitmap.Music, MenuBitmap.Section, MenuBitmap.Exit, MenuBitmap.Navigation, MenuBitmap.Roguelike])
+    for (const e of [MenuBitmap.Logo, MenuBitmap.Play, MenuBitmap.LevelCode, MenuBitmap.Music, MenuBitmap.Section, MenuBitmap.Exit, MenuBitmap.Navigation])
       this.drawBitmapElement(e);
 
     // program text
@@ -190,49 +180,6 @@ export class MenuScreen extends DosScreenBase {
     this.dirty = true;
   }
 
-  /**
-   * LemmixRL: the sign of the roguelike run. The data has no such sign, so it is made from the one of the music
-   * button, which is an empty board with the F3 key on it: the board gets another colour, the key becomes F6, and the
-   * name is written on it.
-   */
-  private makeRoguelikeSign(): void {
-    const sign = this.elements[MenuBitmap.Roguelike];
-    sign.assign(this.elements[MenuBitmap.Music]);
-    sign.drawMode = DrawMode.Transparent;
-    const w = sign.width;
-    const set = (x: number, y: number, c: number) => {
-      if (x >= 0 && y >= 0 && x < w && y < sign.height) sign.bits[y * w + x] = c;
-    };
-    // the board: every pixel in the colour of the board, except the key in its corner
-    const board = sign.bits[40 * w + 60];
-    const key = (x: number, y: number) => x >= 9 && x <= 26 && y >= 20 && y <= 28;
-    for (let y = 0; y < sign.height; y++) for (let x = 0; x < w; x++) if (sign.bits[y * w + x] === board && !key(x, y)) sign.bits[y * w + x] = SIGN_BOARD;
-    // the key: the 3 of F3 becomes a 6 (5 x 5 pixels, dark on the colour of the key)
-    ['#####', '##...', '#####', '##.##', '#####'].forEach((row, y) => {
-      for (let x = 0; x < 5; x++) set(19 + x, 21 + y, row[x] === '#' ? 0 : board);
-    });
-    // the name, with a shadow: a small line next to the key, a big one below it
-    const glyphs = new Map(pixelGlyphs().map((g) => [g.code, g]));
-    const write = (text: string, y: number, scale: number, left: number, right: number) => {
-      const letters = [...text].map((ch) => glyphs.get(ch.charCodeAt(0))!);
-      const width = letters.reduce((n, g) => n + (g.width + 1) * scale, -scale);
-      for (const [dx, dy, c] of [
-        [scale, scale, SIGN_SHADOW],
-        [0, 0, SIGN_TEXT],
-      ]) {
-        let x0 = Math.round((left + right - width) / 2);
-        for (const g of letters) {
-          for (let gy = 0; gy < 16; gy++)
-            for (let gx = 0; gx < g.width; gx++)
-              if (g.bit(gx, gy)) for (let sy = 0; sy < scale; sy++) for (let sx = 0; sx < scale; sx++) set(x0 + gx * scale + sx + dx, y + (gy - 2) * scale + sy + dy, c);
-          x0 += (g.width + 1) * scale;
-        }
-      }
-    };
-    write('ROGUELIKE', 20, 1, 30, 102);
-    write('RUN', 32, 2, 8, 104);
-  }
-
   keyDown(key: string, shift: boolean, ctrl: boolean, alt: boolean): void {
     if (shift || ctrl || alt || this.dialogOpen) return;
     switch (key) {
@@ -243,8 +190,8 @@ export class MenuScreen extends DosScreenBase {
       case 'F2':
         this.close(ScreenType.LevelCode);
         break;
-      case 'F6': // LemmixRL
-        this.close(ScreenType.Run);
+      case 'Escape': // LemmixRL: back to the title screen of Lematro (Lemmix exits to DOS)
+        this.close(ScreenType.Title);
         break;
       case 'F3':
         this.nextSoundSetting();
@@ -312,22 +259,8 @@ export class MenuScreen extends DosScreenBase {
     else if (on(MenuBitmap.Music)) press('F3');
     else if (on(MenuBitmap.Navigation)) press('F4');
     else if (on(MenuBitmap.Section)) press(y < POSITIONS[MenuBitmap.Section][1] + this.elements[MenuBitmap.Section].height / 2 ? 'ArrowUp' : 'ArrowDown');
-    else if (on(MenuBitmap.Exit)) return true; // a browser page does not exit
-    else if (on(MenuBitmap.Roguelike)) press('F6');
+    else if (on(MenuBitmap.Exit)) press('Escape'); // (a browser page does not exit: back to the title of Lematro)
     else return false;
-    return true;
-  }
-
-  /**
-   * LemmixRL: a click on the sign of the roguelike run starts it (a click anywhere else is "play", as in Lemmix).
-   * Returns whether the click was on the sign.
-   */
-  clickAt(x: number, y: number): boolean {
-    if (this.dialogOpen) return false;
-    const [px, py] = POSITIONS[MenuBitmap.Roguelike];
-    const b = this.elements[MenuBitmap.Roguelike];
-    if (x < px || x >= px + b.width || y < py || y >= py + b.height) return false;
-    this.keyDown('F6', false, false, false);
     return true;
   }
 
@@ -483,7 +416,7 @@ const MENU_HELP = [
   ['F3', 'Select sound setting'],
   ['F4', 'Select style'],
   ['F5', 'Configuration'],
-  ['F6', 'Roguelike run'],
+  ['Esc', 'Back to Lematro'],
   ['Up', 'Next section'],
   ['Down', 'Previous section'],
   ['Space', 'Pause or unpause the credits'],

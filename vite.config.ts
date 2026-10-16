@@ -42,8 +42,8 @@ function dataFiles(): Record<string, () => Uint8Array> {
 }
 
 const MANIFEST = {
-  name: 'Lemmix',
-  short_name: 'Lemmix',
+  name: 'Lematro',
+  short_name: 'Lematro',
   start_url: '../',
   display: 'fullscreen',
   orientation: 'landscape',

@@ -18,6 +18,7 @@ export function getApp(): LemmixApp {
 export function gotoScreen(scene: Phaser.Scene, next: ScreenType): void {
   if (next === ScreenType.Play) scene.scene.start('player');
   else if (next === ScreenType.Run) scene.scene.start('run');
+  else if (next === ScreenType.Title) scene.scene.start('title');
   else scene.scene.start('dos', { type: next });
 }
 

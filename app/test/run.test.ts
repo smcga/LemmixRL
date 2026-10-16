@@ -231,7 +231,7 @@ describe('roguelike run', () => {
     expect(run.currentBlind!.kind).toBe('boss');
   });
 
-  it('shop: buying, rerolling, recruits and selling', () => {
+  it('shop: buying, rerolling, packs and selling', () => {
     const run = runOn('Orig-1-02');
     winCurrentBlind(run);
     run.state.money = 50;
@@ -245,13 +245,91 @@ describe('roguelike run', () => {
     expect(run.rerollPrice()).toBe(2);
     run.reroll();
     expect(run.rerollPrice()).toBe(3);
-    const n = run.state.colony.length;
-    run.buyRecruits();
-    expect(run.state.colony.length).toBe(n + 5);
+    // the packs: a Lemmings Pack and one of the others, not rerolled
+    expect(shop.packs!.map((p) => p.id)[0]).toBe('lemmings');
+    expect(shop.packs!.length).toBe(2);
     run.state.jokers.push({ uid: 6000, id: 'toolkit' });
     const money = run.state.money;
     run.sellJoker(6000);
     expect(run.state.money).toBe(money + 4);
+  });
+
+  it('a pack is opened when it is bought: one of its cards is taken, or none', () => {
+    const run = runOn('Orig-1-02');
+    winCurrentBlind(run);
+    const s = run.state;
+    s.money = 50;
+    const pack = s.shop!.packs![0];
+    expect(run.buy(pack.uid)).toBe(true);
+    expect(s.phase).toBe('pack');
+    expect(s.money).toBe(50 - pack.price);
+    expect(s.pack!.kind).toBe('lemmings');
+    expect(s.pack!.choices.length).toBe(3);
+    expect(new Set(s.pack!.choices.map((c) => JSON.stringify(c))).size).toBe(3);
+    expect(run.buy(pack.uid)).toBe(false); // opened once
+    expect(run.nextRound).toBeDefined();
+    // a choice of plain lemmings
+    s.pack!.choices[0] = { type: 'recruits', amount: 5 };
+    const n = s.colony.length;
+    expect(run.choosePack(0)).not.toBeNull();
+    expect(s.colony.length).toBe(n + 5);
+    expect([s.phase, s.pack]).toEqual(['shop', null]);
+    // special lemmings, abilities, every ability
+    s.pack = { kind: 'lemmings', choices: [{ type: 'specials', amount: 2, trait: 'athlete' }] };
+    s.phase = 'pack';
+    run.choosePack(0);
+    expect(s.colony.slice(-2).every((c) => c.climber && c.floater)).toBe(true);
+    const cap = { ...s.capacity };
+    s.pack = { kind: 'training', choices: [{ type: 'ability', skill: 'builder', amount: 5, minus: 'bomber', minusAmount: 3 }, { type: 'allSkills', amount: 1 }] };
+    s.phase = 'pack';
+    run.choosePack(0);
+    expect(s.capacity.builder).toBe(cap.builder + 5);
+    expect(s.capacity.bomber).toBe(Math.max(0, cap.bomber - 3));
+    s.pack = { kind: 'training', choices: [{ type: 'allSkills', amount: 1 }] };
+    s.phase = 'pack';
+    run.choosePack(0);
+    expect(s.capacity.digger).toBe(cap.digger + 1);
+    // a gadget needs room; a boost that wants lemmings needs some; a skipped pack gives nothing
+    s.jokers = [1, 2, 3, 4, 5].map((uid) => ({ uid: 9000 + uid, id: 'piggy' }));
+    s.pack = { kind: 'gadget', choices: [{ type: 'joker', id: 'guild' }] };
+    s.phase = 'pack';
+    expect(run.canChoose(0)).toBe(false);
+    expect(run.choosePack(0)).toBeNull();
+    expect(s.phase).toBe('pack');
+    s.pack = { kind: 'boost', choices: [{ type: 'tarot', id: 'midas' }] };
+    expect(run.choosePack(0)).toBeNull();
+    expect([s.phase, s.tarots.length]).toEqual(['pack', 0]);
+    expect(run.choosePack(0, [s.colony[0].id])).not.toBeNull();
+    expect(s.colony[0].edition).toBe('gold');
+    s.pack = { kind: 'boost', choices: [{ type: 'tarot', id: 'hermit' }] };
+    s.phase = 'pack';
+    const money = s.money;
+    run.skipPack();
+    expect([s.phase, s.pack, s.money]).toEqual(['shop', null, money]);
+  });
+
+  it('the cash out tells how the level went', () => {
+    const run = runOn('Orig-1-02');
+    const setup = run.startBlind();
+    run.state.colony.find((c) => c.id === setup.hand[0])!.edition = 'gold';
+    run.state.outcome = {
+      success: true,
+      rescued: setup.hand.length - 1,
+      required: setup.rescue,
+      hand: setup.hand.length,
+      fates: setup.hand.map((_, i) => (i === 0 ? 'splat' : 'saved')),
+      skillsUsed: zeroSkills(),
+      secondsLeft: 60,
+      timeUp: false,
+      nuked: false,
+      done: 90,
+      target: 0,
+    };
+    setup.attempts = 1;
+    run.state.phase = 'result';
+    const cash = run.accept();
+    expect(cash.result).toMatchObject({ rescued: setup.hand.length - 1, hand: setup.hand.length, lost: 1, deaths: '1 splatted' });
+    expect(cash.result!.specials).toEqual([{ title: expect.stringContaining('(Gold)'), edition: 'gold', fate: 'splat' }]);
   });
 
   it('tarots change the selected lemmings', () => {
@@ -481,7 +559,7 @@ describe('roguelike run', () => {
     delete old.assign;
     for (const b of old.blinds) b.status = 'defeated';
     old.phase = 'shop';
-    old.shop = { offers: [], rerolls: 0, recruitPrice: 3 };
+    old.shop = { offers: [], rerolls: 0 };
     const copy = new RunSession(catalog, old);
     copy.nextRound();
     expect([copy.state.phase, copy.state.ante, copy.currentBlindIndex]).toEqual(['blinds', 2, 0]);

@@ -1,5 +1,5 @@
 /** The saved state of a roguelike run. Everything the run needs to continue is in here (it is stored as JSON). */
-import type { Edition, Fate } from './content.ts';
+import type { Edition, Fate, PackKind } from './content.ts';
 import type { Skill, SkillCounts } from './skills.ts';
 
 export const RUN_VERSION = 1;
@@ -77,12 +77,12 @@ export interface TarotInstance {
   skill?: Skill;
 }
 
-export type OfferType = 'joker' | 'tarot' | 'training' | 'drive';
+export type OfferType = 'joker' | 'tarot' | 'training' | 'drive' | 'pack';
 
 export interface ShopOffer {
   uid: number;
   type: OfferType;
-  /** joker or tarot id */
+  /** joker or tarot id; the kind of a pack */
   id: string;
   skill?: Skill;
   /** training: capacity; drive: lemmings (and capacity) */
@@ -93,8 +93,32 @@ export interface ShopOffer {
 
 export interface ShopState {
   offers: ShopOffer[];
+  /** the packs of the shop (they are not rerolled); runs saved before packs existed do not have them */
+  packs?: ShopOffer[];
   rerolls: number;
-  recruitPrice: number;
+}
+
+/** what can be chosen from an open pack */
+export type PackChoice =
+  /** plain lemmings join the colony */
+  | { type: 'recruits'; amount: number }
+  /** special lemmings join the colony */
+  | { type: 'specials'; amount: number; trait: SpecialTrait }
+  /** an ability goes up (and another one down) */
+  | { type: 'ability'; skill: Skill; amount: number; minus?: Skill; minusAmount?: number }
+  /** every ability goes up */
+  | { type: 'allSkills'; amount: number }
+  /** a boost, used at once */
+  | { type: 'tarot'; id: string; skill?: Skill }
+  /** a gadget */
+  | { type: 'joker'; id: string };
+
+export type SpecialTrait = 'floater' | 'climber' | 'athlete' | 'gold' | 'lucky' | 'mentor' | 'champion' | 'insured';
+
+/** a pack that has been bought and opened: choose one of its cards (or skip it) */
+export interface PackState {
+  kind: PackKind;
+  choices: PackChoice[];
 }
 
 /** A blind that is being played: fixed when the player starts it, the same for every attempt. */
@@ -145,9 +169,22 @@ export interface Cashout {
   total: number;
   /** what happened to the colony */
   notes: string[];
+  /** the level as it went (runs saved before it was shown with the cash out do not have it) */
+  result?: CashoutResult;
 }
 
-export type RunPhase = 'assign' | 'blinds' | 'playing' | 'result' | 'cashout' | 'shop' | 'over';
+export interface CashoutResult {
+  rescued: number;
+  hand: number;
+  required: number;
+  lost: number;
+  /** "2 splatted, 1 drowned" */
+  deaths: string;
+  /** the special lemmings of the squad: what happened to them */
+  specials: { title: string; edition: Edition; fate: Fate }[];
+}
+
+export type RunPhase = 'assign' | 'blinds' | 'playing' | 'result' | 'cashout' | 'shop' | 'pack' | 'over';
 
 export interface RunStats {
   blindsWon: number;
@@ -186,5 +223,7 @@ export interface RunState {
   outcome: AttemptOutcome | null;
   cashout: Cashout | null;
   shop: ShopState | null;
+  /** the pack opened in the shop (phase 'pack') */
+  pack?: PackState | null;
   stats: RunStats;
 }

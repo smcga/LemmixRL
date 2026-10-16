@@ -27,6 +27,8 @@ import {
   TAROTS,
   tagDef,
   tarotDef,
+  PACKS,
+  type PackKind,
 } from './content.ts';
 import { type Rng, RunRandom } from './rng.ts';
 import { SKILL_ACTIONS, SKILL_NAMES, SKILLS, type Skill, type SkillCounts, setSkills, totalSkills, zeroSkills } from './skills.ts';
@@ -58,6 +60,10 @@ import {
   START_MONEY,
   TAROT_SLOTS,
   type TarotInstance,
+  type PackChoice,
+  type PackState,
+  type CashoutResult,
+  type SpecialTrait,
 } from './state.ts';
 
 /** The level bands of the antes, as positions in the level system (0 = Fun 1 ... 119 = Mayhem 30). */
@@ -461,6 +467,21 @@ export class RunSession {
     const lines: PayoutLine[] = [];
     const notes: string[] = [];
 
+    // the level as it went, shown with the cash out (before the lost lemmings leave the colony)
+    const deathCounts = new Map<Fate, number>();
+    for (const f of out.fates) if (isDeath(f)) deathCounts.set(f, (deathCounts.get(f) ?? 0) + 1);
+    const result: CashoutResult = {
+      rescued: out.rescued,
+      hand: out.hand,
+      required: out.required,
+      lost: out.fates.filter(isDeath).length,
+      deaths: [...deathCounts].map(([f, n]) => `${n} ${FATE_TEXTS[f]}`).join(', '),
+      specials: setup.hand.flatMap((id, i) => {
+        const c = this.card(id);
+        return c && isSpecial(c) ? [{ title: cardTitle(c), edition: c.edition, fate: out.fates[i] }] : [];
+      }),
+    };
+
     // the colony
     const returns = new Set<Fate>();
     for (const j of s.jokers) for (const f of jokerDef(j.id).returns ?? []) returns.add(f);
@@ -570,7 +591,7 @@ export class RunSession {
     blind.status = 'defeated';
     s.stats.blindsWon++;
     const total = lines.reduce((a, l) => a + l.amount, 0);
-    s.cashout = { lines, total, notes };
+    s.cashout = { lines, total, notes, result };
     s.phase = 'cashout';
     return s.cashout;
   }
@@ -785,7 +806,10 @@ export class RunSession {
     for (let i = 0; i < 3; i++) offers.push(this.newOffer(rng, offers));
     for (let i = 0; i < extra; i++) offers.push(this.newTraining(rng));
     if (free) for (const o of offers) o.price = 0;
-    s.shop = { offers, rerolls: 0, recruitPrice: 3 };
+    // two packs, as in Balatro: a Lemmings Pack (the colony has to grow somewhere), and one of the others
+    const other = rng.pickWeighted(['training', 'boost', 'gadget'] as PackKind[], [40, 35, 25]);
+    const packs = (['lemmings', other] as PackKind[]).map((kind): ShopOffer => ({ uid: this.uid(), type: 'pack', id: kind, price: PACKS[kind].price, sold: false }));
+    s.shop = { offers, packs, rerolls: 0 };
     s.phase = 'shop';
   }
 
@@ -844,13 +868,24 @@ export class RunSession {
     return true;
   }
 
+  /** an offer of the shop, also a pack */
+  private offer(uid: number): ShopOffer | undefined {
+    const shop = this.state.shop;
+    return shop?.offers.find((o) => o.uid === uid) ?? shop?.packs?.find((o) => o.uid === uid);
+  }
+
   buy(uid: number): boolean {
     const s = this.state;
-    const offer = s.shop?.offers.find((o) => o.uid === uid);
-    if (!offer || !this.canBuy(offer)) return false;
+    const offer = this.offer(uid);
+    if (!offer || !this.canBuy(offer) || s.phase !== 'shop') return false;
     s.money -= offer.price;
     offer.sold = true;
     switch (offer.type) {
+      case 'pack':
+        // opened at once: one of its cards is chosen (or none)
+        s.pack = { kind: offer.id as PackKind, choices: this.packChoices(offer.id as PackKind) };
+        s.phase = 'pack';
+        break;
       case 'joker':
         s.jokers.push({ uid: this.uid(), id: offer.id });
         break;
@@ -868,13 +903,142 @@ export class RunSession {
     return true;
   }
 
-  /** the staple of every shop: 5 plain lemmings */
-  buyRecruits(): boolean {
+  /* -------------------------------------------------------------------------------------------- packs */
+
+  /** the cards of a pack: different ones */
+  private packChoices(kind: PackKind): PackChoice[] {
+    const rng = this.random.stream('pack');
+    const n = PACKS[kind].size;
+    const out: PackChoice[] = [];
+    const seen = new Set<string>();
+    for (let tries = 0; out.length < n && tries < 100; tries++) {
+      const c = this.packChoice(kind, rng, out);
+      if (!c) break;
+      const key = JSON.stringify(c.type === 'ability' ? { t: c.type, s: c.skill } : c);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(c);
+    }
+    return out;
+  }
+
+  private packChoice(kind: PackKind, rng: Rng, others: PackChoice[]): PackChoice | null {
+    switch (kind) {
+      case 'lemmings': {
+        const pool: [PackChoice, number][] = [
+          [{ type: 'recruits', amount: 5 }, 30],
+          [{ type: 'recruits', amount: 8 }, 10],
+          [{ type: 'specials', amount: 2, trait: 'floater' }, 12],
+          [{ type: 'specials', amount: 2, trait: 'climber' }, 12],
+          [{ type: 'specials', amount: 1, trait: 'athlete' }, 6],
+          [{ type: 'specials', amount: 1, trait: 'gold' }, 8],
+          [{ type: 'specials', amount: 1, trait: 'lucky' }, 8],
+          [{ type: 'specials', amount: 1, trait: 'mentor' }, 6],
+          [{ type: 'specials', amount: 1, trait: 'champion' }, 4],
+          [{ type: 'specials', amount: 3, trait: 'insured' }, 8],
+        ];
+        return rng.pickWeighted(
+          pool.map(([c]) => c),
+          pool.map(([, w]) => w),
+        );
+      }
+      case 'training': {
+        const skill = rng.pick(SKILLS);
+        const kindOf = rng.pickWeighted(['plus', 'trade', 'all'] as const, [55, 33, 12]);
+        if (kindOf === 'all' && !others.some((o) => o.type === 'allSkills')) return { type: 'allSkills', amount: 1 };
+        if (kindOf === 'trade') {
+          const minus = rng.pick(SKILLS.filter((sk) => sk !== skill));
+          return { type: 'ability', skill, amount: 5, minus, minusAmount: 3 };
+        }
+        return { type: 'ability', skill, amount: 3 };
+      }
+      case 'boost': {
+        const t = this.newTarot(rng);
+        return { type: 'tarot', id: t.id, skill: t.skill };
+      }
+      case 'gadget': {
+        const owned = new Set([...this.state.jokers.map((j) => j.id), ...others.map((o) => (o.type === 'joker' ? o.id : ''))]);
+        const rarity = rng.pickWeighted(['common', 'uncommon', 'rare'] as Rarity[], [RARITY_WEIGHTS.common, RARITY_WEIGHTS.uncommon, RARITY_WEIGHTS.rare]);
+        let pool = JOKERS.filter((j) => j.rarity === rarity && !owned.has(j.id));
+        if (!pool.length) pool = JOKERS.filter((j) => !owned.has(j.id));
+        return pool.length ? { type: 'joker', id: rng.pick(pool).id } : null;
+      }
+    }
+  }
+
+  /** can this card of the open pack be chosen (a gadget needs room; a boost that wants lemmings, some) */
+  canChoose(index: number): boolean {
     const s = this.state;
-    if (!s.shop || s.money < s.shop.recruitPrice) return false;
-    s.money -= s.shop.recruitPrice;
-    this.recruit(5);
+    const c = s.pack?.choices[index];
+    if (!c || s.phase !== 'pack') return false;
+    if (c.type === 'joker') return s.jokers.length < JOKER_SLOTS;
     return true;
+  }
+
+  /** Takes a card of the open pack; back to the shop. Returns what happened, or null when it cannot be taken. */
+  choosePack(index: number, selected: number[] = []): string[] | null {
+    const s = this.state;
+    const pack = s.pack;
+    if (!pack || !this.canChoose(index)) return null;
+    const c = pack.choices[index];
+    // (the shop comes back first: a boost that opens the ability assignment goes back to the shop)
+    s.pack = null;
+    s.phase = 'shop';
+    const notes = this.applyChoice(c, selected);
+    if (!notes) {
+      s.pack = pack;
+      s.phase = 'pack';
+    }
+    return notes;
+  }
+
+  /** Leaves the open pack without taking anything. */
+  skipPack(): void {
+    const s = this.state;
+    if (s.phase !== 'pack') return;
+    s.pack = null;
+    s.phase = 'shop';
+  }
+
+  private applyChoice(c: PackChoice, selected: number[]): string[] | null {
+    const s = this.state;
+    switch (c.type) {
+      case 'recruits':
+        this.recruit(c.amount);
+        return [`${c.amount} lemmings joined the colony.`];
+      case 'specials': {
+        const names = this.random.stream('names');
+        const joined: LemmingCard[] = [];
+        for (let i = 0; i < c.amount; i++) {
+          const card = this.newCard(names);
+          applyTrait(card, c.trait);
+          s.colony.push(card);
+          joined.push(card);
+        }
+        return [`${joined.map(cardTitle).join(', ')} joined the colony.`];
+      }
+      case 'ability': {
+        s.capacity[c.skill] += c.amount;
+        if (c.minus) s.capacity[c.minus] = Math.max(0, s.capacity[c.minus] - (c.minusAmount ?? 0));
+        if (s.setup) this.refreshSetup(s.setup);
+        return [`+${c.amount} ${SKILL_NAMES[c.skill]} ability${c.minus ? `, -${c.minusAmount} ${SKILL_NAMES[c.minus]}` : ''}.`];
+      }
+      case 'allSkills':
+        for (const sk of SKILLS) s.capacity[sk] += c.amount;
+        if (s.setup) this.refreshSetup(s.setup);
+        return [`+${c.amount} ability in every skill.`];
+      case 'joker':
+        if (s.jokers.length >= JOKER_SLOTS) return null;
+        s.jokers.push({ uid: this.uid(), id: c.id });
+        return [`${jokerDef(c.id).name} joined your gadgets.`];
+      case 'tarot': {
+        const tarot: TarotInstance = { uid: this.uid(), id: c.id, skill: c.skill };
+        s.tarots.push(tarot);
+        const notes = this.useTarot(tarot.uid, selected);
+        if (!notes) s.tarots.pop();
+        return notes;
+      }
+    }
   }
 
   sellJoker(uid: number): boolean {
@@ -1110,6 +1274,26 @@ export function cardTitle(c: LemmingCard): string {
   else if (c.floater) tags.push('Floater');
   if (c.insured) tags.push('Insured');
   return tags.length ? `${c.name} (${tags.join(', ')})` : c.name;
+}
+
+/** a lemming of a Lemmings Pack */
+function applyTrait(c: LemmingCard, trait: SpecialTrait): void {
+  switch (trait) {
+    case 'floater':
+      c.floater = true;
+      break;
+    case 'climber':
+      c.climber = true;
+      break;
+    case 'athlete':
+      c.climber = c.floater = true;
+      break;
+    case 'insured':
+      c.insured = true;
+      break;
+    default:
+      c.edition = trait;
+  }
 }
 
 function names(cards: LemmingCard[]): string {

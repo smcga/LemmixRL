@@ -32,6 +32,8 @@ export interface CardFace {
   price?: string;
   /** a pile of cards, face down (the colony) */
   pile?: boolean;
+  /** a pack: a foil wrapper, crimped at both ends, with its name on a band */
+  pack?: string;
 }
 
 /** A card: a cream edge around a field in the colour of its kind, with its picture. Its position is its middle. */
@@ -61,12 +63,29 @@ export class CardView extends Phaser.GameObjects.Container {
         g.fillStyle(shade(COLORS.cream, 0.55 + i * 0.08), 1);
         g.fillRoundedRect(l + i * 2, t + i * 2, cw, ch, 6);
       }
-    g.fillStyle(COLORS.cream, 1);
-    g.fillRoundedRect(l, t, cw, ch, 6);
-    g.fillStyle(shade(face.color, 0.4), 1);
-    g.fillRoundedRect(l + 4, t + 4, cw - 8, ch - 8, 4);
-    g.lineStyle(2, face.color, 1);
-    g.strokeRoundedRect(l + 5, t + 5, cw - 10, ch - 10, 3);
+    if (face.pack) {
+      // the foil, its shine, and the crimped ends
+      g.fillStyle(shade(face.color, 0.75), 1);
+      g.fillRect(l, t + 6, cw, ch - 12);
+      g.fillStyle(face.color, 1);
+      g.fillRect(l + 3, t + 9, cw - 6, ch - 18);
+      g.fillStyle(0xffffff, 0.18);
+      g.fillRect(l + 8, t + 9, 6, ch - 18);
+      for (let x = 0; x < cw; x += 6) {
+        g.fillStyle(shade(face.color, 0.55), 1);
+        g.fillTriangle(l + x, t + 6, l + x + 6, t + 6, l + x + 3, t);
+        g.fillTriangle(l + x, t + ch - 6, l + x + 6, t + ch - 6, l + x + 3, t + ch);
+      }
+      g.fillStyle(COLORS.cream, 1);
+      g.fillRect(l + 3, t + ch - 30, cw - 6, 16);
+    } else {
+      g.fillStyle(COLORS.cream, 1);
+      g.fillRoundedRect(l, t, cw, ch, 6);
+      g.fillStyle(shade(face.color, 0.4), 1);
+      g.fillRoundedRect(l + 4, t + 4, cw - 8, ch - 8, 4);
+      g.lineStyle(2, face.color, 1);
+      g.strokeRoundedRect(l + 5, t + 5, cw - 10, ch - 10, 3);
+    }
     this.add(g);
     const art = face.art;
     if (art) {
@@ -80,6 +99,13 @@ export class CardView extends Phaser.GameObjects.Container {
         if (text.width > cw - 14) text.setScale((cw - 14) / text.width);
         this.add(text);
       }
+    }
+    if (face.pack) {
+      const name = label(scene, 0, t + ch - 22, face.pack, { color: COLORS.ink, originX: 0.5, originY: 0.5 });
+      name.setDropShadow(0, 0, 0, 0);
+      if (name.width > cw - 10) name.setScale((cw - 10) / name.width);
+      this.add(name);
+      for (const o of this.list) if (o !== g && o !== name && 'setY' in o) (o as unknown as { y: number }).y -= 10;
     }
     if (face.price) {
       const price = label(scene, 0, t - 11, face.price, { color: COLORS.gold, originX: 0.5, originY: 0.5 });

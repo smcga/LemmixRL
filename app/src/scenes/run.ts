@@ -12,14 +12,16 @@ import * as Phaser from 'phaser';
 import { SoundEffect } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
 import { type RunLevel, levelName } from '../run/catalog.ts';
-import { EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, type Fate, isDeath, JOKERS, jokerDef, type Rarity, tagDef, tarotDef } from '../run/content.ts';
+import { EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, type Fate, isDeath, JOKERS, jokerDef, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
 import { normalizeSeed, randomSeed } from '../run/rng.ts';
 import { type BlindPreview, cardTitle, isSpecial, RunSession, sellPrice, tarotSellPrice } from '../run/session.ts';
 import { describeSkills, SKILL_NAMES, SKILL_PLURALS, SKILLS, type Skill, totalSkills } from '../run/skills.ts';
-import { ABILITY_CAP, ANTES, ATTEMPTS, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
+import { ABILITY_CAP, ANTES, ATTEMPTS, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type PackChoice, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
 import { loadMeta, loadRun, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
-import { BACKGROUND, ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
+import { ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
 import { type Art, CARD_H, CARD_W, type CardBehaviour, CardTable, CardView, type DropTarget, inRect, type Rect } from '../run/ui/cards.ts';
+import { lematroLogo } from '../run/ui/logo.ts';
+import { Swirl, type SwirlColors, SWIRLS } from '../run/ui/swirl.ts';
 import { Button, type ButtonOptions, COLORS, hoverTip, label, panel, showTip, type TipContent, Tooltip } from '../run/ui/widgets.ts';
 import { cssPx, onTouchChange, safeAreaInsets, touch } from '../touch.ts';
 import { ScreenType } from '../screens/base.ts';
@@ -56,7 +58,13 @@ const BLIND_COLORS: Record<BlindKind, number> = { small: COLORS.blue, big: COLOR
 const RARITY_COLORS: Record<Rarity, number> = { common: COLORS.blue, uncommon: COLORS.green, rare: COLORS.red };
 const RARITY_NAMES: Record<Rarity, string> = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare' };
 /** the rock behind the screens, in the colour of what is going on */
-const BACKDROPS: Record<string, number> = { assign: 0x4fa8a0, blinds: 0x58a070, shop: 0xb8705c, result: 0x7088b0, cashout: 0xc0a050, over: 0x8a7a8a };
+/** the packs of the shop: their colour, picture and the name on their band */
+const PACK_LOOKS: Record<PackKind, { color: number; art: Art; band: string }> = {
+  lemmings: { color: 0x3fae4f, art: { anim: 'walk' }, band: 'LEMMINGS' },
+  training: { color: COLORS.teal, art: { icon: 'builder' }, band: 'TRAINING' },
+  boost: { color: COLORS.purple, art: { anim: 'float' }, band: 'BOOST' },
+  gadget: { color: COLORS.orange, art: { anim: 'build' }, band: 'GADGET' },
+};
 
 const JOKER_ART: Record<string, Art> = {
   toolkit: { anim: 'build' },
@@ -116,8 +124,8 @@ const FATE_ANIMS: Partial<Record<Fate, LemmingAnim>> = {
   fell: 'fall',
 };
 
-/** a tarot that is used: one of the player's, or one of the shop that is bought for it */
-type TarotUse = { uid?: number; offer?: number; max: number; name: string };
+/** a tarot that is used: one of the player's, one of the shop that is bought for it, or the card of an open pack */
+type TarotUse = { uid?: number; offer?: number; pack?: number; max: number; name: string };
 
 /** "Rescue 72/80 (90%)": the requirement of a level, of the squad you bring to it */
 function rescueText(p: BlindPreview): string {
@@ -168,6 +176,8 @@ export class RunScene extends Phaser.Scene {
   /** what the middle of the screen showed last: when it changes, the new one comes up from below */
   private shown = '';
   private shownMoney: number | null = null;
+  /** the swirl behind everything, in the colours of what is going on */
+  private swirl!: Swirl;
 
   constructor() {
     super('run');
@@ -188,6 +198,9 @@ export class RunScene extends Phaser.Scene {
     ensureRunAssets(this, this.app);
     this.tip = new Tooltip(this);
     this.table = new CardTable(this, this.tip, (name, x, y) => this.spot(name, x, y));
+    this.swirl = new Swirl(this, SWIRLS.start);
+    // every button clicks (the "Let's go!" of the lemmings is for the levels)
+    Button.clickSound = () => this.sfx(SoundEffect.SkillButtonSelect);
     this.app.enterRunMode();
     const run = this.run;
     if (run && run.state.phase === 'playing') run.abandonAttempt();
@@ -220,6 +233,7 @@ export class RunScene extends Phaser.Scene {
     cam.setViewport(ins.left, ins.top, w, h);
     cam.setZoom(f);
     cam.centerOn(W / 2, H / 2);
+    this.swirl.cover(W / 2 - w / f / 2, H / 2 - h / f / 2, w / f, h / f);
     this.updatePortraitCover();
   }
 
@@ -257,7 +271,7 @@ export class RunScene extends Phaser.Scene {
   private toMenu(): void {
     this.save();
     this.app.leaveRunMode();
-    gotoScreen(this, ScreenType.Menu);
+    gotoScreen(this, ScreenType.Title);
   }
 
   private save(): void {
@@ -320,13 +334,10 @@ export class RunScene extends Phaser.Scene {
   private render(): void {
     this.clear();
     const run = this.run;
+    // a level that was won is cashed out: there is no going back to it (the result is shown with the cash out)
+    if (run && !this.choosing && run.state.phase === 'result' && run.state.outcome?.success) this.acceptResult(run);
     const phase = this.choosing || !run ? 'start' : run.state.phase === 'playing' ? 'blinds' : run.state.phase;
-    // background: the brown rock of the DOS screens, in the colour of the phase, drifting slowly
-    // (it reaches past the 960 x 540 of the screens: a window of another shape shows more of it at the sides)
-    const rock = this.k(this.add.tileSprite(-W, -H, 3 * W, 3 * H, BACKGROUND).setOrigin(0, 0).setTint(BACKDROPS[phase] ?? 0x8a7a8a));
-    rock.tilePositionX = (this.time.now / 90) % 4096;
-    this.tweens.add({ targets: rock, tilePositionX: rock.tilePositionX + 4096, tilePositionY: 1024, duration: 360000, repeat: -1 });
-    this.k(this.add.rectangle(-W, -H, 3 * W, 3 * H, 0x101820, 0.3).setOrigin(0, 0));
+    this.swirl.set(this.swirlColors(run, phase));
     if (this.choosing || !run) {
       this.renderStart();
       this.shown = 'start';
@@ -352,6 +363,9 @@ export class RunScene extends Phaser.Scene {
       case 'shop':
         this.renderShop(run);
         break;
+      case 'pack':
+        this.renderPack(run);
+        break;
       case 'over':
         this.renderOver(run);
         break;
@@ -369,32 +383,51 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
+  /** the colours of the swirl: the level being played or chosen, the shop, the pack that is open */
+  private swirlColors(run: RunSession | null, phase: string): SwirlColors {
+    if (!run || phase === 'start') return SWIRLS.start;
+    const s = run.state;
+    switch (phase) {
+      case 'assign':
+        return SWIRLS.assign;
+      case 'shop':
+        return SWIRLS.shop;
+      case 'pack':
+        return SWIRLS[s.pack?.kind ?? 'lemmings'];
+      case 'over':
+        return s.won ? SWIRLS.won : SWIRLS.over;
+    }
+    const blind = s.setup && (phase === 'result' || phase === 'cashout') ? s.blinds[s.setup.blind] : run.currentBlind;
+    return SWIRLS[blind?.kind ?? 'small'];
+  }
+
   /* -------------------------------------------------------------------------------------------- start */
 
   private renderStart(): void {
     const saved = loadRun();
     const meta = loadMeta();
     const k = this.k.bind(this);
-    k(panel(this, 180, 40, 600, 460, COLORS.panel, COLORS.panelLight, 12));
-    k(label(this, W / 2, 72, 'Lemmings', { size: 48, purple: true, originX: 0.5 }));
-    k(label(this, W / 2, 128, 'the roguelike run', { size: 16, color: COLORS.gold, originX: 0.5 }));
+    k(panel(this, 200, 30, 560, 480, COLORS.panel, COLORS.panelLight, 14));
+    k(lematroLogo(this, W / 2, 104, 80));
+    k(label(this, W / 2, 168, 'a Lemmings roguelike', { size: 24, color: COLORS.gold, originX: 0.5, originY: 0.5 }));
     const text = [
-      'Eight rounds of three levels each: original levels from Fun to Mayhem. Your lemmings are your deck: the ones that die are gone for good, the ones that survive come with you. Rescue lemmings to earn money, then spend it on recruits, training, gadgets and boosts.',
-      '',
-      'Your abilities: 60 points to spread over the eight skills (at most 20 in one), some of them moved after every boss. In a level you have min(your ability, the allocation of the level) of every skill. The level itself is the original: the same terrain, traps, release rate, timer and rescue requirement.',
+      'Eight rounds of three levels: the original levels, from Fun to Mayhem.',
+      'Your lemmings are your deck: the ones that die are gone for good.',
+      'Rescue lemmings for money; spend it on gadgets, boosts and packs.',
     ];
-    k(label(this, 212, 168, text.join('\n'), { color: COLORS.text, maxWidth: 536 }));
-    for (let i = 0; i < 6; i++) k(lemmingSprite(this, 230 + i * 100, 372, i % 2 ? 'walkLeft' : 'walk', 2));
+    this.well(224, 196, 512, 84);
+    k(label(this, W / 2, 238, text.join('\n'), { color: COLORS.text, originX: 0.5, originY: 0.5, align: 1, maxWidth: 490 }));
+    for (let i = 0; i < 6; i++) k(lemmingSprite(this, 260 + i * 88, 312, i % 2 ? 'walkLeft' : 'walk', 2));
     const seed = randomSeed();
-    const y = 410;
+    const y = 344;
     if (saved) {
       const s = saved;
-      this.btn('continue', 210, y, 260, 52, 'Continue run', COLORS.blue, () => this.continueRun(s), { sub: `Round ${s.ante}, $${s.money}, ${s.colony.length} lemmings` });
-      this.btn('newRun', 490, y, 260, 52, 'New run', COLORS.red, () => this.newRun(seed), { sub: `seed ${seed}` });
-    } else this.btn('newRun', 350, y, 260, 52, 'New run', COLORS.red, () => this.newRun(seed), { sub: `seed ${seed}` });
-    this.btn('seed', 210, 470, 120, 24, 'Seed...', COLORS.gray, () => this.askSeed());
-    this.btn('menu', 630, 470, 120, 24, 'Menu', COLORS.gray, () => this.toMenu());
-    if (meta.runs > 0) k(label(this, W / 2, 476, `Runs ${meta.runs}  Won ${meta.wins}  Best round ${meta.bestAnte}`, { color: COLORS.dim, originX: 0.5 }));
+      this.btn('continue', 232, y, 240, 64, 'Continue', COLORS.blue, () => this.continueRun(s), { big: true, sub: `Round ${s.ante}, $${s.money}, ${s.colony.length} lemmings` });
+      this.btn('newRun', 488, y, 240, 64, 'New run', COLORS.red, () => this.newRun(seed), { big: true, sub: `seed ${seed}` });
+    } else this.btn('newRun', 360, y, 240, 64, 'New run', COLORS.red, () => this.newRun(seed), { big: true, sub: `seed ${seed}` });
+    this.btn('seed', 232, 430, 140, 30, 'Seed...', COLORS.gray, () => this.askSeed());
+    this.btn('menu', 588, 430, 140, 30, 'Back', COLORS.orange, () => this.toMenu());
+    if (meta.runs > 0) k(label(this, W / 2, 445, `Runs ${meta.runs}  Won ${meta.wins}  Best round ${meta.bestAnte}`, { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
   }
 
   private askSeed(): void {
@@ -411,7 +444,6 @@ export class RunScene extends Phaser.Scene {
     saveMeta(meta);
     this.choosing = false;
     this.shownMoney = null;
-    this.sfx(SoundEffect.LetsGo);
     this.save();
     this.render();
   }
@@ -447,8 +479,14 @@ export class RunScene extends Phaser.Scene {
       k(label(this, x + w / 2, 42, 'Shop', { size: 48, color: COLORS.red, originX: 0.5, originY: 0.5 }));
       k(label(this, x + w / 2, 76, 'Improve your colony!', { color: COLORS.gold, originX: 0.5, originY: 0.5 }));
     } else {
-      const title: Record<string, string> = { assign: 'Assign your\nabilities', blinds: 'Choose your\nnext level', playing: 'Choose your\nnext level', over: s.won ? 'You won!' : 'Run over' };
-      const color = s.phase === 'assign' ? COLORS.teal : s.phase === 'over' ? (s.won ? COLORS.gold : COLORS.red) : COLORS.text;
+      const title: Record<string, string> = {
+        assign: 'Assign your\nabilities',
+        blinds: 'Choose your\nnext level',
+        playing: 'Choose your\nnext level',
+        pack: PACKS[s.pack?.kind ?? 'lemmings'].name.replace(' ', '\n'),
+        over: s.won ? 'You won!' : 'Run over',
+      };
+      const color = s.phase === 'assign' ? COLORS.teal : s.phase === 'pack' ? PACK_LOOKS[s.pack?.kind ?? 'lemmings'].color : s.phase === 'over' ? (s.won ? COLORS.gold : COLORS.red) : COLORS.text;
       this.well(x + 6, 12, w - 12, 84);
       // (in the text font, twice its size: the headings of Balatro are in its pixel font too)
       k(label(this, x + w / 2, 54, title[s.phase] ?? '', { size: 32, color, originX: 0.5, originY: 0.5, align: 1 }));
@@ -495,7 +533,7 @@ export class RunScene extends Phaser.Scene {
 
     // Run Info and Options; the attempts and the lemmings lost; the money; the ante and the round
     this.btn('runInfo', x + 6, 298, 82, 112, 'Run\nInfo', COLORS.red, () => this.showRunInfo(run), { big: true });
-    this.btn('options', x + 6, 418, 82, 110, 'Options', COLORS.orange, () => this.showOptions(run));
+    this.btn('options', x + 6, 418, 82, 110, 'Options', COLORS.orange, () => this.showOptions(run), { big: true });
     const rx = x + 94;
     const box = (bx: number, by: number, bw: number, bh: number, name: string, value: string, color: number, big = true) => {
       k(panel(this, bx, by, bw, bh, COLORS.panelLight, COLORS.panelLight, 6));
@@ -787,14 +825,12 @@ export class RunScene extends Phaser.Scene {
     // a best guess: the skills the levels of the round ask for, then the ones most levels need
     const autoPick = () => {
       if (!run.autoAssign()) return;
-      this.sfx(SoundEffect.SkillButtonSelect);
       this.save();
       this.render();
     };
     this.btn('autoPick', x + 124, y + 362, 100, 30, 'Auto pick', COLORS.blue, autoPick);
     const done = () => {
       if (!run.finishAssignment()) return;
-      this.sfx(SoundEffect.LetsGo);
       this.save();
       this.render();
     };
@@ -1072,7 +1108,6 @@ export class RunScene extends Phaser.Scene {
         });
         const reroll = () => {
           if (!run.rerollBoss()) return;
-          this.sfx(SoundEffect.SkillButtonSelect);
           this.save();
           this.render();
         };
@@ -1100,7 +1135,6 @@ export class RunScene extends Phaser.Scene {
   private play(run: RunSession): void {
     const setup = run.startBlind();
     this.save();
-    this.sfx(SoundEffect.LetsGo);
     this.app.currentLevelInfo = run.level(setup.levelId).info;
     gotoScreen(this, ScreenType.Preview);
   }
@@ -1108,13 +1142,13 @@ export class RunScene extends Phaser.Scene {
   private skip(run: RunSession): void {
     const notes = run.skipBlind();
     this.save();
-    this.sfx(SoundEffect.SkillButtonSelect);
     this.render();
     this.toast(notes.join('\n'));
   }
 
   /* -------------------------------------------------------------------------------------------- result */
 
+  /** A level that was not won: try it again (the attempts that are left pay at the cash out), or give up the run. */
   private renderResult(run: RunSession): void {
     const k = this.k.bind(this);
     const s = run.state;
@@ -1124,32 +1158,17 @@ export class RunScene extends Phaser.Scene {
     const x = MAIN_X;
     const y = MAIN_Y;
     const w = MAIN_R - MAIN_X;
-    k(panel(this, x, y, w, 440, COLORS.panel, out.success ? COLORS.green : COLORS.red, 12));
-    k(label(this, x + w / 2, y + 14, out.success ? 'Level complete' : 'Not enough lemmings saved', { size: 32, big: true, color: out.success ? COLORS.green : COLORS.red, originX: 0.5 }));
-    k(label(this, x + w / 2, y + 54, `${levelName(l)}  ${l.title}`, { purple: true, originX: 0.5 }));
-    // accept or retry, on top like the Cash Out of Balatro
+    k(panel(this, x, y, w, 440, COLORS.panel, COLORS.red, 12));
+    k(label(this, x + w / 2, y + 12, 'Not enough lemmings saved', { size: 32, big: true, color: COLORS.red, originX: 0.5 }));
+    k(label(this, x + w / 2, y + 60, `${levelName(l)}  ${l.title}`, { color: COLORS.lilac, originX: 0.5 }));
     const giveUp = () => {
       if (window.confirm('Give up this run?')) this.finishRun(false);
     };
-    if (out.success) {
-      const accept = () => {
-        run.accept();
-        const meta = loadMeta();
-        recordLevel(meta, setup.levelId, out);
-        saveMeta(meta);
-        this.save();
-        this.sfx(SoundEffect.Yippee);
-        this.render();
-      };
-      this.btn('accept', x + 16, y + 80, 306, 34, 'Accept result', COLORS.orange, accept, { big: true });
-      this.btn('retry', x + 336, y + 80, 306, 34, 'Retry', COLORS.blue, () => this.retry(run), { big: true });
-    } else {
-      this.btn('retry', x + 16, y + 80, 306, 34, 'Retry', COLORS.blue, () => this.retry(run), { big: true });
-      this.btn('giveUp', x + 336, y + 80, 306, 34, 'Give up the run', COLORS.red, giveUp, { big: true });
-    }
-    this.well(x + 12, y + 126, w - 24, 274);
+    this.btn('retry', x + 16, y + 86, 306, 40, 'Retry', COLORS.blue, () => this.retry(run), { big: true });
+    this.btn('giveUp', x + 336, y + 86, 306, 40, 'Give up the run', COLORS.red, giveUp, { big: true });
+    this.well(x + 12, y + 140, w - 24, 230);
     const pct = out.hand ? Math.floor((out.rescued * 100) / out.hand) : 0;
-    k(label(this, x + 24, y + 134, `Rescued ${out.rescued} of ${out.hand} (${pct}%), you needed ${out.required}.`, { color: COLORS.text }));
+    k(label(this, x + 24, y + 152, `Rescued ${out.rescued} of ${out.hand} (${pct}%), you needed ${out.required}.`, { color: COLORS.text }));
     const count = (f: (x: Fate) => boolean) => out.fates.filter(f).length;
     const lost = count(isDeath);
     const alive = count((f) => f === 'alive');
@@ -1157,29 +1176,23 @@ export class RunScene extends Phaser.Scene {
     const deaths = new Map<Fate, number>();
     for (const f of out.fates) if (isDeath(f)) deaths.set(f, (deaths.get(f) ?? 0) + 1);
     const how = [...deaths].map(([f, n]) => `${n} ${FATE_TEXTS[f]}`).join(', ');
-    k(label(this, x + 24, y + 154, `Survived ${alive}   Stayed home ${home}   Lost ${lost}${how ? ` (${how})` : ''}`, { color: COLORS.dim, maxWidth: w - 48 }));
-    if (out.success && lost > 0) k(label(this, x + 24, y + 190, 'If you accept this result, the lost lemmings leave your colony for good.', { color: COLORS.orange, maxWidth: w - 48 }));
-    k(label(this, x + 24, y + 226, `Skills used: ${describeSkills(out.skillsUsed, 'none')}`, { color: COLORS.dim, maxWidth: w - 48 }));
-
-    // what happened to the special lemmings
-    const specials: [LemmingCard, Fate][] = [];
-    setup.hand.forEach((id, i) => {
-      const c = run.card(id);
-      if (c && isSpecial(c)) specials.push([c, out.fates[i]]);
-    });
-    if (specials.length) {
-      k(label(this, x + 24, y + 264, 'Special lemmings', { color: COLORS.purple }));
-      specials.slice(0, 8).forEach(([c, f], i) => {
-        const cx = x + 24 + (i % 2) * 310;
-        const cy = y + 286 + Math.floor(i / 2) * 22;
-        const sp = k(lemmingSprite(this, cx + 8, cy + 6, FATE_ANIMS[f] ?? 'walk', 1));
-        sp.setTint(EDITION_TINTS[c.edition]);
-        k(label(this, cx + 22, cy, `${cardTitle(c)}: ${FATE_TEXTS[f]}`, { color: isDeath(f) ? COLORS.red : f === 'saved' ? COLORS.green : COLORS.text }));
-      });
-      if (specials.length > 8) k(label(this, x + 24, y + 376, `and ${specials.length - 8} more`, { color: COLORS.dim }));
-    }
+    k(label(this, x + 24, y + 176, `Survived ${alive}   Stayed home ${home}   Lost ${lost}${how ? ` (${how})` : ''}`, { color: COLORS.dim, maxWidth: w - 48 }));
+    k(label(this, x + 24, y + 212, 'Nothing counts until a level is won: the colony is as it was.', { color: COLORS.text, maxWidth: w - 48 }));
+    k(label(this, x + 24, y + 236, `Skills used: ${describeSkills(out.skillsUsed, 'none')}`, { color: COLORS.dim, maxWidth: w - 48 }));
     const unused = Math.max(0, ATTEMPTS - setup.attempts);
-    k(label(this, x + w / 2, y + 406, `Attempt ${setup.attempts}. Unused attempts pay $1 each (${unused} left).`, { color: COLORS.dim, originX: 0.5 }));
+    k(label(this, x + w / 2, y + 390, `Attempt ${setup.attempts}. Unused attempts pay $1 each (${unused} left).`, { color: COLORS.dim, originX: 0.5 }));
+  }
+
+  /** a won level: its result becomes the colony's, and it pays (the cash out) */
+  private acceptResult(run: RunSession): void {
+    const out = run.state.outcome!;
+    const levelId = run.state.setup!.levelId;
+    run.accept();
+    const meta = loadMeta();
+    recordLevel(meta, levelId, out);
+    saveMeta(meta);
+    this.save();
+    this.sfx(SoundEffect.Yippee);
   }
 
   private retry(run: RunSession): void {
@@ -1202,7 +1215,7 @@ export class RunScene extends Phaser.Scene {
 
   /* -------------------------------------------------------------------------------------------- cash out */
 
-  /** The cash out of Balatro: the button on top, and below it what the blind paid, line by line. */
+  /** The cash out of Balatro: the button on top, below it how the level went, and what it paid, line by line. */
   private renderCashout(run: RunSession): void {
     const k = this.k.bind(this);
     const cash = run.state.cashout!;
@@ -1216,11 +1229,43 @@ export class RunScene extends Phaser.Scene {
       if (run.state.phase === 'over') this.finishRun(true);
       else this.render();
     };
-    this.btn('cashout', x + 12, y + 12, w - 24, 44, `Cash Out: $${cash.total}`, COLORS.orange, cashOut, { big: true });
+    this.btn('cashout', x + 12, y + 12, w - 24, 48, `Cash Out: $${cash.total}`, COLORS.orange, cashOut, { big: true, size: 21 });
     this.well(x + 12, y + 70, w - 24, 340);
+    // how the level went
+    let ly = y + 80;
+    const res = cash.result;
+    const setup = run.state.setup;
+    if (setup) {
+      const blind = run.state.blinds[setup.blind];
+      const l = run.level(setup.levelId);
+      const head = k(label(this, x + 24, ly, BLIND_NAMES[blind.kind], { color: BLIND_COLORS[blind.kind] }));
+      k(label(this, head.x + head.width + 10, ly, `${levelName(l)}  ${l.title}`, { color: COLORS.lilac, maxWidth: w - head.width - 60 }));
+      ly += 22;
+    }
+    if (res) {
+      k(label(this, x + 24, ly, `Rescued ${res.rescued} of ${res.hand} (${percent(res.rescued, res.hand)}%), you needed ${res.required}.`, { color: COLORS.green }));
+      ly += 20;
+      if (res.lost) {
+        k(label(this, x + 24, ly, `Lost ${res.lost} (${res.deaths})`, { color: COLORS.red, maxWidth: w - 48 }));
+        ly += 20;
+      }
+      res.specials.slice(0, 4).forEach((sp, i) => {
+        const cx = x + 24 + (i % 2) * 250;
+        const cy = ly + Math.floor(i / 2) * 20;
+        k(lemmingSprite(this, cx + 8, cy + 7, FATE_ANIMS[sp.fate] ?? 'walk', 1)).setTint(EDITION_TINTS[sp.edition]);
+        k(label(this, cx + 22, cy, `${sp.title}: ${FATE_TEXTS[sp.fate]}`, { color: isDeath(sp.fate) ? COLORS.red : sp.fate === 'saved' ? COLORS.green : COLORS.text, maxWidth: 226 }));
+      });
+      ly += Math.ceil(Math.min(4, res.specials.length) / 2) * 20;
+    }
+    const rule = k(this.add.graphics());
+    rule.fillStyle(COLORS.panelLight, 1);
+    rule.fillRect(x + 24, ly + 4, w - 48, 2);
+    ly += 14;
+    // what it paid
     const items: Phaser.GameObjects.BitmapText[] = [];
+    const top = ly;
     cash.lines.forEach((ln, i) => {
-      const ly = y + 82 + i * 22;
+      const ly = top + i * 22;
       const a = k(label(this, x + 24, ly, ln.label, { color: COLORS.text }));
       // the money as Balatro counts it out: a $ for every dollar
       const b = k(label(this, x + w - 24, ly, ln.amount <= 12 ? '$'.repeat(ln.amount) : `$${ln.amount}`, { color: COLORS.gold, originX: 1 }));
@@ -1233,8 +1278,9 @@ export class RunScene extends Phaser.Scene {
         items.push(o);
       }
     });
-    const ty = y + 82 + cash.lines.length * 22 + 10;
-    cash.notes.slice(0, 6).forEach((n, i) => k(label(this, x + 24, ty + i * 20, n, { color: COLORS.dim, maxWidth: w - 48 })));
+    const ty = top + cash.lines.length * 22 + 6;
+    const room = Math.max(1, Math.floor((y + 404 - ty) / 20));
+    cash.notes.slice(0, room).forEach((n, i) => k(label(this, x + 24, ty + i * 20, n, { color: COLORS.dim, maxWidth: w - 48 })));
     // the lines come in one by one, with a click each
     items.forEach((o, i) =>
       this.tweens.add({
@@ -1273,7 +1319,6 @@ export class RunScene extends Phaser.Scene {
     this.btn('nextRound', x + 12, y + 12, 124, 58, 'Next\nLevel', COLORS.red, nextRound, { big: true });
     const reroll = () => {
       if (!run.reroll()) return;
-      this.sfx(SoundEffect.SkillButtonSelect);
       this.save();
       this.render();
     };
@@ -1305,33 +1350,168 @@ export class RunScene extends Phaser.Scene {
       k(label(this, x + 20, by + 90, nl.title, { color: COLORS.text, maxWidth: 200 }));
     } else k(label(this, x + 20, by + 6, `Next: Round ${s.ante + 1}`, { color: COLORS.orange }));
 
-    // the packs: the recruits, and the extra offers of a Supply Drop
+    // the packs, and the extra offers of a Supply Drop
     const packs: Rect = { x: x + 238, y: by, w: w - 250, h: 130 };
     this.well(packs.x, packs.y, packs.w, packs.h);
+    const packOffers = (shop.packs ?? []).filter((o) => !o.sold);
     const extras = shop.offers.slice(3).filter((o) => !o.sold);
-    const px = this.slots(packs, extras.length + 1);
+    const px = this.slots(packs, packOffers.length + extras.length);
     const py = packs.y + 36 + CARD_H / 2;
-    const canRecruit = s.money >= shop.recruitPrice;
-    const recruit = () => {
-      if (!run.buyRecruits()) {
-        this.toast('Not enough money.');
-        return;
-      }
-      this.sfx(SoundEffect.LetsGo);
-      this.save();
-      this.render();
-    };
-    const price = shop.recruitPrice === 0 ? 'FREE' : `$${shop.recruitPrice}`;
-    const pack = k(new CardView(this, px[0], py, { color: COLORS.blue, art: { anim: 'walk' }, price, pile: true }));
-    this.spot('recruits', px[0], py);
-    this.table.add(pack, {
-      tip: () => ({ title: 'Recruits', color: COLORS.blue, lines: ['5 plain lemmings join the colony.', 'Every shop has them, as often as you like.'], badge: { text: 'Lemming Pack', color: COLORS.blue } }),
-      buttons: () => [{ label: 'BUY', color: COLORS.orange, side: 'below', enabled: canRecruit, run: recruit }],
-      targets: () => [{ rect: BUY_ZONE, color: COLORS.green, lines: ['BUY', price], active: canRecruit, release: recruit, refused: recruit }],
-    });
-    extras.forEach((o, i) => this.offerCard(run, o, px[i + 1], py, `extra:${i}`));
+    packOffers.forEach((o, i) => this.packCard(run, o, px[i], py, `pack:${i}`));
+    extras.forEach((o, i) => this.offerCard(run, o, px[packOffers.length + i], py, `extra:${i}`));
+    if (!packOffers.length && !extras.length) k(label(this, packs.x + packs.w / 2, packs.y + packs.h / 2, 'Sold out', { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
 
     k(label(this, x + w / 2, y + 296, touch.active ? 'Drag a card up to buy it, or tap it for what it is' : 'Drag a card up to buy it, or click it for its Buy button', { color: COLORS.dim, originX: 0.5 }));
+  }
+
+  /** a pack of the shop: opened when it is bought (by a drag to the gadgets, or with its Open button) */
+  private packCard(run: RunSession, o: ShopOffer, cx: number, cy: number, spot: string): void {
+    const kind = o.id as PackKind;
+    const d = PACKS[kind];
+    const look = PACK_LOOKS[kind];
+    const price = `$${o.price}`;
+    const card = this.k(new CardView(this, cx, cy, { color: look.color, art: look.art, price, pack: look.band }));
+    this.spot(spot, cx, cy);
+    const open = () => this.openPack(run, o, card);
+    this.table.add(card, {
+      tip: () => ({ title: d.name, color: look.color, lines: [d.text, ...(run.canBuy(o) ? [] : ['', 'Not enough money.'])], badge: { text: 'Pack', color: look.color } }),
+      buttons: () => [{ label: 'OPEN', color: COLORS.orange, side: 'below', enabled: run.canBuy(o), run: open }],
+      targets: () => [{ rect: BUY_ZONE, color: COLORS.green, lines: ['OPEN', price], active: run.canBuy(o), release: open, refused: open }],
+    });
+  }
+
+  /** a pack is bought: it bursts open (and the shop makes way for its cards) */
+  private openPack(run: RunSession, o: ShopOffer, card: CardView): void {
+    if (!run.canBuy(o)) {
+      this.toast('Not enough money.');
+      return;
+    }
+    this.table.select(null);
+    this.tip.hide();
+    card.disableInteractive();
+    card.setDepth(900);
+    this.sfx(SoundEffect.AssignSkill);
+    this.tweens.add({
+      targets: card,
+      scale: 1.6,
+      alpha: 0,
+      angle: 12,
+      duration: 260,
+      ease: 'Cubic.easeIn',
+      onComplete: () => {
+        if (!run.buy(o.uid)) return;
+        this.save();
+        this.render();
+      },
+    });
+  }
+
+  /* -------------------------------------------------------------------------------------------- an open pack */
+
+  /** The cards of an open pack, dealt one after the other: take one (tap it, or drag it up), or skip the pack. */
+  private renderPack(run: RunSession): void {
+    const k = this.k.bind(this);
+    const pack = run.state.pack!;
+    const d = PACKS[pack.kind];
+    const cx = (MAIN_X + MAIN_R) / 2;
+    k(label(this, cx, MAIN_Y + 30, d.name, { size: 48, originX: 0.5, originY: 0.5 }));
+    k(label(this, cx, MAIN_Y + 72, `Choose 1 of ${pack.choices.length}`, { size: 24, color: COLORS.gold, originX: 0.5, originY: 0.5 }));
+    const area: Rect = { x: MAIN_X + 40, y: MAIN_Y + 96, w: MAIN_R - MAIN_X - 80, h: 200 };
+    this.well(area.x, area.y, area.w, area.h, 0x000000, 0.35, 12);
+    const cw = 92;
+    const ch = 123;
+    const pitch = Math.min(cw + 30, (area.w - 40) / Math.max(1, pack.choices.length));
+    const x0 = cx - (pitch * (pack.choices.length - 1)) / 2;
+    pack.choices.forEach((c, i) => {
+      const info = this.choiceInfo(run, c);
+      const x = x0 + i * pitch;
+      const y = area.y + area.h / 2 - 8;
+      const card = k(new CardView(this, x, y, { color: info.color, art: info.art }, cw, ch));
+      this.spot(`choice:${i}`, x, y);
+      // its name below it (the popup says the rest)
+      const name = k(label(this, x, area.y + area.h - 12, info.title, { color: COLORS.text, originX: 0.5, originY: 0.5, maxWidth: pitch - 6, align: 1 }));
+      name.setAlpha(0);
+      this.tweens.add({ targets: name, alpha: 1, duration: 200, delay: 480 + i * 150 });
+      const verb = c.type === 'tarot' ? 'USE' : 'TAKE';
+      const can = run.canChoose(i);
+      const take = () => this.choose(run, i);
+      this.table.add(card, {
+        tip: () => ({ title: info.title, color: info.color, lines: [...info.lines, ...(can ? [] : ['', 'No room for another gadget (sell one).'])], badge: info.badge }),
+        buttons: () => [{ label: verb, color: c.type === 'tarot' ? COLORS.red : COLORS.green, side: 'below', enabled: can, run: take }],
+        targets: () => [{ rect: BUY_ZONE, color: COLORS.green, lines: [verb], active: can, release: take }],
+      });
+      // dealt from the pack: turned over one after the other
+      card.scaleX = 0;
+      this.tweens.add({ targets: card, scaleX: 1, duration: 160, delay: 380 + i * 150, ease: 'Back.easeOut', onStart: () => this.sfx(SoundEffect.AssignSkill) });
+    });
+    this.btn('skipPack', cx - 70, area.y + area.h + 18, 140, 34, 'Skip', COLORS.gray, () => {
+      run.skipPack();
+      this.save();
+      this.render();
+    }, { big: true });
+    k(label(this, cx, area.y + area.h + 72, touch.active ? 'Tap a card for what it is, or drag it up to take it' : 'Click a card for what it is, or drag it up to take it', { color: COLORS.dim, originX: 0.5 }));
+  }
+
+  private choose(run: RunSession, index: number): void {
+    const c = run.state.pack?.choices[index];
+    if (!c) return;
+    if (c.type === 'tarot') {
+      const d = tarotDef(c.id);
+      if (d.select > 0) {
+        this.showColony({ pack: index, max: d.select, name: d.name });
+        return;
+      }
+    }
+    const notes = run.choosePack(index);
+    if (!notes) return;
+    this.sfx(SoundEffect.AssignSkill);
+    this.save();
+    this.render();
+    this.toast(notes.join('\n'));
+  }
+
+  /** what a card of a pack is */
+  private choiceInfo(run: RunSession, c: PackChoice): { title: string; color: number; lines: string[]; art: Art; badge: { text: string; color: number } } {
+    const lemmings = (title: string, line: string, art: Art) => ({ title, color: COLORS.blue, lines: [line], art, badge: { text: 'Lemmings', color: COLORS.blue } });
+    switch (c.type) {
+      case 'recruits':
+        return lemmings(`${c.amount} Lemmings`, `${c.amount} plain lemmings join the colony.`, { anim: 'walk' });
+      case 'specials': {
+        const n = c.amount;
+        switch (c.trait) {
+          case 'floater':
+            return lemmings(`${n} Floaters`, `${n} lemmings with an umbrella in every level join the colony.`, { anim: 'float' });
+          case 'climber':
+            return lemmings(`${n} Climbers`, `${n} lemmings that climb walls in every level join the colony.`, { anim: 'climb' });
+          case 'athlete':
+            return lemmings('An Athlete', 'A lemming that climbs and floats in every level joins the colony.', { anim: 'climb', tint: 0x9fd0ff });
+          case 'insured':
+            return lemmings(`${n} Insured`, `${n} lemmings that come back once after they die join the colony.`, { anim: 'block', tint: 0xffd0a0 });
+          default:
+            return lemmings(`A ${EDITION_NAMES[c.trait]} Lemming`, `Joins the colony. ${EDITION_TEXTS[c.trait]}`, { anim: c.trait === 'mentor' ? 'build' : c.trait === 'champion' ? 'exit' : 'walk', tint: EDITION_TINTS[c.trait] });
+        }
+      }
+      case 'ability':
+        return {
+          title: `+${c.amount} ${SKILL_PLURALS[c.skill]}`,
+          color: COLORS.teal,
+          lines: [`+${c.amount} ${SKILL_NAMES[c.skill]} ability for good${c.minus ? `, but ${c.minusAmount} less ${SKILL_NAMES[c.minus]}` : ''}.`, `You have ${run.capability()[c.skill]}${c.minus ? ` and ${run.capability()[c.minus]}` : ''}.`],
+          art: { icon: c.skill },
+          badge: { text: c.minus ? 'Trade' : 'Training', color: COLORS.teal },
+        };
+      case 'allSkills':
+        return { title: 'All-round Training', color: COLORS.teal, lines: [`+${c.amount} ability in every skill, for good.`], art: { text: `+${c.amount}`, color: COLORS.teal }, badge: { text: 'Training', color: COLORS.teal } };
+      case 'tarot': {
+        const d = tarotDef(c.id);
+        const text = c.skill && d.skillText ? d.skillText(SKILL_NAMES[c.skill]) : d.text;
+        return { title: d.name, color: COLORS.purple, lines: [text, '', 'Used as soon as you choose it.'], art: c.id === 'manual' && c.skill ? { icon: c.skill } : TAROT_ART[c.id], badge: { text: 'Boost', color: COLORS.purple } };
+      }
+      case 'joker': {
+        const d = jokerDef(c.id);
+        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text], art: JOKER_ART[c.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } };
+      }
+    }
+    throw new Error('unknown card of a pack');
   }
 
   /** a card of the shop: its price on top, bought by a drag to the jokers or with its Buy button */
@@ -1367,6 +1547,11 @@ export class RunScene extends Phaser.Scene {
 
   private offerInfo(run: RunSession, o: ShopOffer): { title: string; color: number; lines: string[]; art: Art; badge: { text: string; color: number } } {
     switch (o.type) {
+      case 'pack': {
+        const d = PACKS[o.id as PackKind];
+        const look = PACK_LOOKS[o.id as PackKind];
+        return { title: d.name, color: look.color, lines: [d.text], art: look.art, badge: { text: 'Pack', color: look.color } };
+      }
       case 'joker': {
         const d = jokerDef(o.id);
         return { title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text], art: JOKER_ART[d.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } };
@@ -1571,7 +1756,8 @@ export class RunScene extends Phaser.Scene {
     if (tarot) {
       this.spot('use', 665, 482);
       const use = () => {
-        const notes = tarot.offer !== undefined ? run.buyAndUse(tarot.offer, [...selected]) : run.useTarot(tarot.uid!, [...selected]);
+        const notes =
+          tarot.pack !== undefined ? run.choosePack(tarot.pack, [...selected]) : tarot.offer !== undefined ? run.buyAndUse(tarot.offer, [...selected]) : run.useTarot(tarot.uid!, [...selected]);
         if (!notes) {
           this.toast(selected.size === 0 ? 'Select at least one lemming.' : 'That does not work (the squad of a level cannot leave the colony).');
           return;

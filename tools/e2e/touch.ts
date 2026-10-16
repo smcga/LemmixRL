@@ -71,6 +71,19 @@ try {
   const canvas = await ev<number[]>(`[document.querySelector('canvas').width, document.querySelector('canvas').height]`);
   if (canvas[0] !== W * DPR || canvas[1] !== H * DPR) fail('the canvas does not have the device resolution: ' + canvas.join('x'));
 
+  // the title of Lematro (960 x 540, scaled to the screen): Classic Lemmings
+  const titleSpot = async (name: string) => {
+    const t = await ev<{ x: number; y: number; zoom: number; left: number; top: number; sx: number; sy: number }>(
+      `(() => { const sc = globalThis.phaserGame.scene.getScene('title'); const c = sc.cameras.main; const s = sc.spots[${JSON.stringify(name)}]; return { x: c.worldView.x, y: c.worldView.y, zoom: c.zoom, left: c.x, top: c.y, sx: s.x, sy: s.y }; })()`,
+    );
+    return { x: (t.left + (t.sx - t.x) * t.zoom) / DPR, y: (t.top + (t.sy - t.y) * t.zoom) / DPR };
+  };
+  await page.waitForTimeout(500);
+  if ((await sceneKeys()) !== 'title') fail('the program does not start with the title of Lematro');
+  let tp = await titleSpot('classic');
+  await tap(tp.x, tp.y, 800);
+  if ((await sceneKeys()) !== 'dos') fail('Classic Lemmings did not open the menu of Lemmix');
+
   // the menu (640 x 350, next to the column of touch buttons): the "1 Player" sign
   const ms = Math.min((W - 96) / 640, H / 350);
   const mx = (x: number) => Math.floor((W - 96 - 640 * ms) / 2) + x * ms;
@@ -157,9 +170,12 @@ try {
   // the result screen: its MENU button (the right mouse button of Lemmix)
   await tapButton('dos', 'MENU', 800);
 
-  // the run: the sign of the roguelike run, then "New run"
-  await tap(mx(392 + 60), my(196 + 40), 800);
-  if ((await sceneKeys()) !== 'run') fail('the menu did not start the run screens');
+  // the Exit sign goes back to the title of Lematro; its Play starts the run screens
+  await tap(mx(200 + 60), my(196 + 30), 800);
+  if ((await sceneKeys()) !== 'title') fail('the Exit sign of the menu did not go back to the title');
+  tp = await titleSpot('play');
+  await tap(tp.x, tp.y, 800);
+  if ((await sceneKeys()) !== 'run') fail('Play did not start the run screens');
   const cam = await ev<{ zoom: number; x: number; y: number }>(
     `(() => { const c = globalThis.phaserGame.scene.getScene('run').cameras.main; return { zoom: c.zoom, x: c.worldView.x, y: c.worldView.y }; })()`,
   );
@@ -190,7 +206,7 @@ try {
   await tapSpot('skip', 700);
   if ((await run<string>('state.blinds[0].status')) !== 'skipped') fail('a tap on Skip did not skip');
 
-  // the shop: a card is dragged up to the jokers to buy it
+  // the shop: a pack is dragged up to the gadgets to open it
   await ev(`(() => { const r = globalThis.lemmix.run; r.state.money = 10; r.openShop(); ${runScene}.render(); })()`);
   await page.waitForTimeout(700);
   const colony = await run<number>('state.colony.length');
@@ -200,16 +216,20 @@ try {
     await drag(from.x, from.y, to.x, to.y);
     await page.waitForTimeout(400);
   };
-  await dragSpot('recruits', 500, 60);
-  if ((await run<number>('state.colony.length')) !== colony + 5 || (await run<number>('state.money')) !== 7) fail('a card dragged to Buy was not bought');
-  await dragSpot('recruits', 500, 420);
-  if ((await run<number>('state.colony.length')) !== colony + 5) fail('a card dropped next to Buy was bought');
-  // a tap selects a card (it shows what it is, and its Buy button); a tap on the button buys
-  await tapSpot('recruits');
-  if ((await run<number>('state.colony.length')) !== colony + 5) fail('a tap on a card bought it');
-  if (!(await ev<boolean>(`!!${runScene}.tip.owner`))) fail('a tap on a card did not show what it is');
-  await tapSpot('card:BUY');
-  if ((await run<number>('state.colony.length')) !== colony + 10 || (await run<number>('state.money')) !== 4) fail('the Buy button of a tapped card did not buy it');
+  // a tap selects a card (it shows what it is, and its Open button), it does not buy it; nor does a drag next to Open
+  await tapSpot('pack:1');
+  if ((await run<string>('state.phase')) !== 'shop') fail('a tap on a pack opened it');
+  if (!(await ev<boolean>(`!!${runScene}.tip.owner`))) fail('a tap on a pack did not show what it is');
+  await dragSpot('pack:0', 500, 420);
+  if ((await run<string>('state.phase')) !== 'shop') fail('a pack dropped next to Open was opened');
+  await dragSpot('pack:0', 500, 60);
+  if ((await run<string>('state.phase')) !== 'pack' || (await run<number>('state.money')) !== 6) fail('a pack dragged to Open was not opened');
+  // its cards: one is tapped, then its Take button
+  await page.waitForTimeout(900);
+  await tapSpot('choice:0');
+  if ((await run<string>('state.phase')) !== 'pack') fail('a tap on a card of a pack took it');
+  await tapSpot('card:TAKE', 600);
+  if ((await run<string>('state.phase')) !== 'shop' || (await run<number>('state.colony.length')) <= colony) fail('the Take button of a card of a pack did not take it');
   // a tarot: its Use button opens the colony, where a finger dragged across lemmings selects them
   await ev(
     `(() => { const s = globalThis.lemmix.run.state; s.tarots = [{ uid: 9001, id: 'umbrella' }]; s.jokers = [{ uid: 9002, id: 'piggy' }]; for (const c of s.colony) c.floater = false; for (let i = 0; i < 3; i++) s.colony[i].insured = true; ${runScene}.render(); })()`,
@@ -227,7 +247,7 @@ try {
     fail('a finger dragged across three lemmings did not select them for the tarot');
   // a joker dragged to the tarots is sold
   await dragSpot('joker:0', 840, 60);
-  if ((await run<number>('state.jokers.length')) !== 0 || (await run<number>('state.money')) !== 6) fail('a joker dragged to Sell was not sold');
+  if ((await run<number>('state.jokers.length')) !== 0 || (await run<number>('state.money')) !== 8) fail('a gadget dragged to Sell was not sold');
   await page.screenshot({ path: `${REPO_ROOT}/tools/e2e/touch.png` });
 
   // the safe area of an iPhone held sideways: the screens stay out of the notch (left) and the home indicator (below)
@@ -241,12 +261,16 @@ try {
       fail(`${what} is outside the safe area: ${JSON.stringify(b)} not in ${JSON.stringify(safe)}`);
   };
   inside('the run screen', await ev<Box>(`(() => { const c = globalThis.phaserGame.scene.getScene('run').cameras.main; return { x: c.x, y: c.y, w: c.width, h: c.height }; })()`));
-  await page.keyboard.press('Escape'); // the run screens -> the menu
+  await page.keyboard.press('Escape'); // the run screens -> the title
   await page.waitForTimeout(800);
-  if ((await sceneKeys()) !== 'dos') fail('no menu after the run screens');
+  if ((await sceneKeys()) !== 'title') fail('no title after the run screens');
+  inside('the title', await ev<Box>(`(() => { const c = globalThis.phaserGame.scene.getScene('title').cameras.main; return { x: c.x, y: c.y, w: c.width, h: c.height }; })()`));
+  tp = await titleSpot('classic');
+  await tap(tp.x, tp.y, 800);
+  if ((await sceneKeys()) !== 'dos') fail('no menu after Classic Lemmings');
   const dosImage = `(() => { const i = globalThis.phaserGame.scene.getScene('dos').image; return { x: i.x, y: i.y, w: i.displayWidth, h: i.displayHeight }; })()`;
   inside('the menu', await ev<Box>(dosImage));
-  for (const label of ['OPTIONS', 'STYLE']) inside(`the menu button ${label}`, await touchButton('dos', label));
+  for (const label of ['LEMATRO', 'OPTIONS', 'STYLE']) inside(`the menu button ${label}`, await touchButton('dos', label));
   await page.keyboard.press('F1'); // -> the preview
   await page.waitForTimeout(600);
   inside('the preview', await ev<Box>(dosImage));
