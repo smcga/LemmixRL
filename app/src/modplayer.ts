@@ -104,6 +104,8 @@ export class ModPlayer {
   constructor(
     private readonly context: AudioContext,
     data: Uint8Array,
+    /** where the music goes (LemmixRL: the volume of the music; else the speakers) */
+    private readonly output: AudioNode = context.destination,
   ) {
     if (data.length < 1084 || String.fromCharCode(...data.subarray(1080, 1084)) !== 'M.K.') throw new Error('unsupported module');
     this.rate = context.sampleRate;
@@ -172,7 +174,7 @@ export class ModPlayer {
     this.samplesLeft = 0;
     this.gain = this.context.createGain();
     this.gain.gain.value = volume;
-    this.gain.connect(this.context.destination);
+    this.gain.connect(this.output);
     this.node = this.context.createScriptProcessor(4096, 0, 2);
     this.node.onaudioprocess = (e) => this.render(e.outputBuffer.getChannelData(0), e.outputBuffer.getChannelData(1));
     this.node.connect(this.gain);

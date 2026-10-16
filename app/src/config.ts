@@ -18,6 +18,9 @@ export class Config {
   soundOptions = new Set<SoundOption>([SoundOption.Sound, SoundOption.Music]);
   /** 0 = maximum */
   zoomFactor = 0;
+  /** LemmixRL: the volumes of the sounds and of the music, 0 to 1 (on when their sound option is) */
+  sfxVolume = 0.8;
+  musicVolume = 0.6;
 
   static load(): Config {
     const c = new Config();
@@ -33,6 +36,9 @@ export class Config {
       c.optionalMechanics = names<OptionalMechanic>(OptionalMechanic, j.optionalMechanics) ?? c.optionalMechanics;
       c.soundOptions = names<SoundOption>(SoundOption, j.soundOptions) ?? c.soundOptions;
       if (typeof j.zoomFactor === 'number' && j.zoomFactor >= 0 && j.zoomFactor < 16) c.zoomFactor = j.zoomFactor;
+      const volume = (v: unknown, d: number) => (typeof v === 'number' && v >= 0 && v <= 1 ? v : d);
+      c.sfxVolume = volume(j.sfxVolume, c.sfxVolume);
+      c.musicVolume = volume(j.musicVolume, c.musicVolume);
     } catch {
       // keep defaults
     }
@@ -47,6 +53,8 @@ export class Config {
       optionalMechanics: [...this.optionalMechanics].map((o) => OptionalMechanic[o]),
       soundOptions: [...this.soundOptions].map((o) => SoundOption[o]),
       zoomFactor: this.zoomFactor,
+      sfxVolume: this.sfxVolume,
+      musicVolume: this.musicVolume,
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(j));

@@ -52,6 +52,7 @@ export class LemmixApp {
     readonly data: LemmixData,
     readonly sound: WebSoundManager,
   ) {
+    sound.setVolumes(this.config.sfxVolume, this.config.musicVolume);
     this.setStyle(this.config.styleName);
     for (const name of ['CursorDefault', 'CursorDefaultMask', 'CursorHighlight', 'CursorHighlightMask', 'CursorDrag', 'CursorDragMask']) {
       const bytes = data.cursors.get(name + '.bmp');

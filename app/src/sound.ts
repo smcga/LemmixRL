@@ -22,9 +22,24 @@ export class WebSoundManager implements GameSoundManager {
   private readonly playing = new Map<number, PlayingSound>();
   private musics: Music[] = [];
   private musicArchive: Archive | null = null;
+  /** LemmixRL: the volumes of the sounds and of the music (the settings), on top of what the game sets */
+  private readonly sfxGain: GainNode;
+  private readonly musicGain: GainNode;
 
   private constructor(context: AudioContext) {
     this.context = context;
+    this.sfxGain = context.createGain();
+    this.sfxGain.connect(context.destination);
+    this.musicGain = context.createGain();
+    this.musicGain.connect(context.destination);
+  }
+
+  /** LemmixRL: the volumes of the sounds and of the music, 0 to 1 */
+  setVolumes(sfx: number, music: number): void {
+    const v = (x: number) => Math.min(1, Math.max(0, x));
+    // (a curve: the ear hears the square of the slider about evenly)
+    this.sfxGain.gain.value = v(sfx) ** 2;
+    this.musicGain.gain.value = v(music) ** 2;
   }
 
   static async create(sounds: Archive): Promise<WebSoundManager> {
@@ -80,7 +95,7 @@ export class WebSoundManager implements GameSoundManager {
   private start(buffer: AudioBuffer): AudioBufferSourceNode {
     const source = this.context.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.context.destination);
+    source.connect(this.sfxGain);
     source.start();
     return source;
   }
@@ -90,7 +105,7 @@ export class WebSoundManager implements GameSoundManager {
     let player: ModPlayer | null = null;
     if (data) {
       try {
-        player = new ModPlayer(this.context, data);
+        player = new ModPlayer(this.context, data, this.musicGain);
       } catch {
         player = null;
       }

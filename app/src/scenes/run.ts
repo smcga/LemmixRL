@@ -17,10 +17,12 @@ import { normalizeSeed, randomSeed } from '../run/rng.ts';
 import { type BlindPreview, cardTitle, isSpecial, RunSession, sellPrice, tarotSellPrice } from '../run/session.ts';
 import { describeSkills, SKILL_NAMES, SKILL_PLURALS, SKILLS, type Skill, totalSkills } from '../run/skills.ts';
 import { ABILITY_CAP, ANTES, ATTEMPTS, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type PackChoice, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
-import { loadMeta, loadRun, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
+import { loadMeta, loadRun, markSeen, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
 import { ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
 import { type Art, CARD_H, CARD_W, type CardBehaviour, CardTable, CardView, type DropTarget, inRect, type Rect } from '../run/ui/cards.ts';
+import { EDITION_TINTS, JOKER_ART, PACK_LOOKS, RARITY_COLORS, RARITY_NAMES, TAROT_ART } from '../run/ui/art.ts';
 import { lematroLogo } from '../run/ui/logo.ts';
+import { soundSliders } from '../run/ui/settings.ts';
 import { Swirl, type SwirlColors, SWIRLS } from '../run/ui/swirl.ts';
 import { Button, type ButtonOptions, COLORS, hoverTip, label, panel, showTip, type TipContent, Tooltip } from '../run/ui/widgets.ts';
 import { cssPx, onTouchChange, safeAreaInsets, touch } from '../touch.ts';
@@ -55,61 +57,6 @@ const ASSIGN_ROW_Y = 58;
 const ASSIGN_ROW_H = 36;
 
 const BLIND_COLORS: Record<BlindKind, number> = { small: COLORS.blue, big: COLORS.orange, boss: COLORS.red };
-const RARITY_COLORS: Record<Rarity, number> = { common: COLORS.blue, uncommon: COLORS.green, rare: COLORS.red };
-const RARITY_NAMES: Record<Rarity, string> = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare' };
-/** the rock behind the screens, in the colour of what is going on */
-/** the packs of the shop: their colour, picture and the name on their band */
-const PACK_LOOKS: Record<PackKind, { color: number; art: Art; band: string }> = {
-  lemmings: { color: 0x3fae4f, art: { anim: 'walk' }, band: 'LEMMINGS' },
-  training: { color: COLORS.teal, art: { icon: 'builder' }, band: 'TRAINING' },
-  boost: { color: COLORS.purple, art: { anim: 'float' }, band: 'BOOST' },
-  gadget: { color: COLORS.orange, art: { anim: 'build' }, band: 'GADGET' },
-};
-
-const JOKER_ART: Record<string, Art> = {
-  toolkit: { anim: 'build' },
-  smuggler: { anim: 'bash' },
-  overtime: { text: '+1:00', color: COLORS.gold },
-  ladder: { anim: 'climb' },
-  umbrellas: { anim: 'float' },
-  hardhat: { anim: 'block' },
-  disposal: { anim: 'ohno' },
-  shelter: { icon: 'nuke' },
-  lifeguard: { anim: 'drown' },
-  crashmats: { anim: 'splat' },
-  scout: { anim: 'walk' },
-  unionrep: { anim: 'shrug' },
-  nolem: { anim: 'exit' },
-  piggy: { text: '$$', color: COLORS.gold },
-  speedrun: { anim: 'fall' },
-  minimalist: { anim: 'shrug', tint: 0xb0e0ff },
-  headcount: { anim: 'walkLeft' },
-  guild: { icon: 'builder' },
-  demolition: { icon: 'basher' },
-  climbclub: { icon: 'climber' },
-  bombsquad: { icon: 'bomber' },
-  trainer: { text: '+5', color: COLORS.teal },
-  advisor: { anim: 'walkLeft', tint: 0x9fd0ff },
-};
-
-const TAROT_ART: Record<string, Art> = {
-  umbrella: { icon: 'floater' },
-  gear: { icon: 'climber' },
-  midas: { anim: 'walk', tint: COLORS.gold },
-  clover: { anim: 'walk', tint: 0x7dff7d },
-  mentor: { anim: 'build', tint: 0x9fd0ff },
-  policy: { anim: 'block', tint: 0xffd0a0 },
-  manual: { icon: 'builder' },
-  conscription: { anim: 'walkLeft', tint: 0xff9090 },
-  vat: { anim: 'walk', tint: 0xd0a0ff },
-  hermit: { text: 'x2', color: COLORS.gold },
-  laurel: { anim: 'exit', tint: 0xd090ff },
-  recruiter: { anim: 'walk' },
-  bootcamp: { anim: 'climb', tint: 0x7dd0ff },
-  rethink: { anim: 'shrug', tint: 0xd0a0ff },
-};
-
-const EDITION_TINTS: Record<string, number> = { plain: 0xffffff, gold: COLORS.gold, lucky: 0x7dff7d, mentor: 0x9fd0ff, champion: 0xd090ff };
 
 const FATE_ANIMS: Partial<Record<Fate, LemmingAnim>> = {
   saved: 'exit',
@@ -262,6 +209,8 @@ export class RunScene extends Phaser.Scene {
   }
 
   private onKey(e: KeyboardEvent): void {
+    // (not while the collection is open over it)
+    if (!this.sys.isActive()) return;
     if (e.key === 'Escape') {
       if (this.overlay.length) this.closeOverlay();
       else this.toMenu();
@@ -370,6 +319,8 @@ export class RunScene extends Phaser.Scene {
         this.renderOver(run);
         break;
     }
+    // what the player comes across turns over in the collection
+    markSeen(run.visibleKeys());
     // what is new in the middle of the screen comes up from below, as the shop and the blinds of Balatro do
     const key = `${phase}:${run.state.ante}`;
     if (key !== this.shown) {
@@ -629,22 +580,35 @@ export class RunScene extends Phaser.Scene {
     o(new Button(this, 380, 450, 200, 30, 'Back', COLORS.orange, () => this.closeOverlay()));
   }
 
-  /** Options: back to the menu of Lemmix, or the end of the run. */
+  /** Options: the volumes, the collection, back to the title, or the end of the run. */
   private showOptions(run: RunSession): void {
     const o = this.openOverlay();
-    o(panel(this, 340, 130, 280, 280, COLORS.panel, COLORS.panelLight, 12));
-    o(label(this, 480, 156, 'Options', { size: 32, big: true, originX: 0.5, originY: 0.5 }));
-    o(new Button(this, 364, 190, 232, 40, 'Main menu', COLORS.blue, () => this.toMenu(), { sub: 'the run is saved' }));
+    o(panel(this, 320, 40, 320, 460, COLORS.panel, COLORS.panelLight, 12));
+    o(label(this, 480, 72, 'Options', { size: 48, originX: 0.5, originY: 0.5 }));
+    o(new Button(this, 344, 108, 272, 40, 'Collection', COLORS.green, () => this.openCollection(), { big: true }));
+    this.spot('collection', 480, 128);
+    const [sfx, music] = soundSliders(this, this.app, 344, 166, 272).map((sl) => o(sl));
+    // (the left end of a slider, and its width)
+    this.spot('slider:sfx', sfx.x, sfx.y + 31);
+    this.spot('slider:music', music.x, music.y + 31);
+    o(new Button(this, 344, 290, 272, 40, 'Main menu', COLORS.blue, () => this.toMenu(), { sub: 'the run is saved' }));
     if (run.state.phase !== 'over')
       o(
-        new Button(this, 364, 244, 232, 40, 'Give up the run', COLORS.red, () => {
+        new Button(this, 344, 340, 272, 40, 'Give up the run', COLORS.red, () => {
           if (window.confirm('Give up this run?')) this.finishRun(false);
         }),
       );
-    o(label(this, 480, 312, `Seed ${run.state.seed}`, { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
-    o(label(this, 480, 334, touch.active ? 'The run is saved as you go' : 'Esc: menu, the run is saved', { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
-    this.spot('back', 480, 379);
-    o(new Button(this, 364, 364, 232, 30, 'Back', COLORS.orange, () => this.closeOverlay()));
+    o(label(this, 480, 402, `Seed ${run.state.seed}`, { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
+    o(label(this, 480, 424, touch.active ? 'The run is saved as you go' : 'Esc: menu, the run is saved', { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
+    this.spot('back', 480, 465);
+    o(new Button(this, 344, 448, 272, 34, 'Back', COLORS.orange, () => this.closeOverlay()));
+  }
+
+  /** the collection, over the run (which waits under it) */
+  private openCollection(): void {
+    this.closeOverlay();
+    this.scene.pause();
+    this.scene.launch('collection', { from: 'run' });
   }
 
   /* -------------------------------------------------------------------------------------------- jokers, tarots, the deck */
@@ -1821,9 +1785,7 @@ export class RunScene extends Phaser.Scene {
   /** a small button that opens the page of a level on the Lemmings Wiki (in a new tab), for its strategy */
   private wikiButton(l: RunLevel, x: number, y: number, name: string): Button {
     const open = () => window.open(wikiUrl(l), '_blank', 'noopener');
-    const b = this.btn(name, x, y, WIKI_W, 18, 'Wiki', COLORS.teal, open);
-    hoverTip(b, this.tip, () => ({ title: 'Lemmings Wiki', color: COLORS.teal, lines: [`Opens the page of ${l.title} on the Lemmings Wiki: how the level goes, and how others solved it.`], x: x - 100, y: y + 24 }), false);
-    return b;
+    return this.btn(name, x, y, WIKI_W, 18, 'Wiki', COLORS.teal, open);
   }
 
   /* -------------------------------------------------------------------------------------------- messages */

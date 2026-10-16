@@ -23,6 +23,9 @@ export interface Meta {
   runs: number;
   wins: number;
   bestAnte: number;
+  /** what the player has come across, for the collection: "joker:piggy", "tarot:midas", "pack:boost", "tag:coupon",
+   * "lemming:gold" (records saved before the collection existed do not have it) */
+  seen?: string[];
 }
 
 function storage(): Storage | null {
@@ -71,6 +74,23 @@ export function saveMeta(meta: Meta): void {
   } catch {
     // not saved
   }
+}
+
+/** What the player has come across (see Meta.seen). */
+export function seenSet(): Set<string> {
+  return new Set(loadMeta().seen ?? []);
+}
+
+/** Remembers that the player came across these things; returns the ones that are new. */
+export function markSeen(keys: Iterable<string>): string[] {
+  const meta = loadMeta();
+  const seen = new Set(meta.seen ?? []);
+  const added = [...new Set(keys)].filter((k) => !seen.has(k));
+  if (added.length) {
+    meta.seen = [...seen, ...added];
+    saveMeta(meta);
+  }
+  return added;
 }
 
 /** Remembers an accepted result of a level. */

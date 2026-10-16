@@ -107,9 +107,12 @@ needs access to this repository. Pull requests should target `main`; `master` is
 
 ## The roguelike run
 
-The program starts with the title of Lematro: *Play* (or Enter) starts or continues a run, *Settings* has the sound,
-full screen and the options of Lemmix, and *Classic Lemmings* (or C) opens the menu of Lemmix, the original game as it
-was (Escape goes back to the title). A run wraps the original game; it does not replace it.
+The program starts with the title of Lematro: *Play* (or Enter) starts or continues a run, *Settings* has the volumes
+of the sounds and of the music (a slider each; at 0 it is off, as F3 turns it off in the menu of Lemmix), full screen
+and the options of Lemmix, *Collection* shows every gadget, boost, pack, bonus and kind of lemming of the game, face
+down until you first come across it in a run (as Balatro's collection), and *Classic Lemmings* (or C) opens the menu of
+Lemmix, the original game as it was (Escape goes back to the title). In a run, Options has the volumes and the
+collection too. A run wraps the original game; it does not replace it.
 
 The Lematro screens are drawn over a swirl of paint in the colours of what is going on (the level, the shop, the pack
 that is open), and their large text is in the pixel font of the run screens; the buttons click, and the "Let's go!"
@@ -136,7 +139,7 @@ skill.
 | Balatro | Lemmings |
 |---|---|
 | Ante (8) | Three original levels from a band of the 120 levels of the original game, moving from Fun to Mayhem |
-| Small, Big, Boss blind | An easier, a medium and a harder level of the ante's band (no level twice in a run) |
+| Small, Big, Boss blind | A level from the easier half, the middle half and the harder half of the ante's band (no level twice in a run) |
 | Deck | Your colony: 80 lemmings at the start |
 | Hand | The squad of a level: min(colony, level lemmings), drawn at random; the same squad for every attempt |
 | Hand levels | Abilities: 60 points you spread over the eight skills at the start (at most 20 in one); a level gets **min(your ability, the level's allocation)** of every skill |

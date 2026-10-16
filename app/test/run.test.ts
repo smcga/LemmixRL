@@ -332,6 +332,28 @@ describe('roguelike run', () => {
     expect(cash.result!.specials).toEqual([{ title: expect.stringContaining('(Gold)'), edition: 'gold', fate: 'splat' }]);
   });
 
+  it('Level 1 of the first round comes from a dozen levels, not a handful', () => {
+    const firsts = new Set<string>();
+    for (let i = 0; i < 300; i++) firsts.add(RunSession.newRun(catalog, `SEED${i}`).state.blinds[0].levelId);
+    expect(firsts.size).toBeGreaterThanOrEqual(10);
+  });
+
+  it('tells the collection what the player can see', () => {
+    const run = runOn('Orig-1-02');
+    winCurrentBlind(run);
+    const s = run.state;
+    s.jokers = [{ uid: 9000, id: 'piggy' }];
+    s.tarots = [{ uid: 9001, id: 'midas' }];
+    s.colony[0].edition = 'gold';
+    s.colony[1].climber = s.colony[1].floater = true;
+    s.shop!.offers[0] = { uid: 5000, type: 'joker', id: 'guild', price: 4, sold: false };
+    const keys = run.visibleKeys();
+    for (const k of ['joker:piggy', 'tarot:midas', 'joker:guild', 'pack:lemmings', 'lemming:gold', 'lemming:athlete']) expect(keys).toContain(k);
+    expect(keys.some((k) => k.startsWith('tag:'))).toBe(false); // the bonuses are seen on the levels screen
+    run.nextRound();
+    expect(run.visibleKeys().some((k) => k.startsWith('tag:'))).toBe(true);
+  });
+
   it('tarots change the selected lemmings', () => {
     const run = started('TAROT');
     const [a, b] = run.state.colony;
