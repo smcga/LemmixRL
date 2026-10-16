@@ -16,7 +16,7 @@ import { EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, type Fate, isDeath, JOKERS, j
 import { normalizeSeed, randomSeed } from '../run/rng.ts';
 import { type BlindPreview, cardTitle, isSpecial, RunSession, sellPrice, tarotSellPrice } from '../run/session.ts';
 import { describeSkills, SKILL_NAMES, SKILL_PLURALS, SKILLS, type Skill, totalSkills } from '../run/skills.ts';
-import { ABILITY_CAP, ANTES, ATTEMPTS, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type PackChoice, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
+import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type PackChoice, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
 import { loadMeta, loadRun, markSeen, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
 import { ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
 import { type Art, CARD_H, CARD_W, type CardBehaviour, CardTable, CardView, type DropTarget, inRect, type Rect } from '../run/ui/cards.ts';
@@ -283,8 +283,13 @@ export class RunScene extends Phaser.Scene {
   private render(): void {
     this.clear();
     const run = this.run;
-    // a level that was won is cashed out: there is no going back to it (the result is shown with the cash out)
-    if (run && !this.choosing && run.state.phase === 'result' && run.state.outcome?.success) this.acceptResult(run);
+    // a level that was won is cashed out: there is no going back to it (the result is shown with the cash out); one that
+    // was not won is the end of the run (a run saved at its result, before that was so, ends here too)
+    if (run && !this.choosing && run.state.phase === 'result') {
+      if (run.state.outcome?.success) this.acceptResult(run);
+      else run.giveUp();
+    }
+    if (run && !this.choosing && run.state.phase === 'over') this.noteEnd(run);
     const phase = this.choosing || !run ? 'start' : run.state.phase === 'playing' ? 'blinds' : run.state.phase;
     this.swirl.set(this.swirlColors(run, phase));
     if (this.choosing || !run) {
@@ -302,9 +307,6 @@ export class RunScene extends Phaser.Scene {
         break;
       case 'blinds':
         this.renderBlinds(run);
-        break;
-      case 'result':
-        this.renderResult(run);
         break;
       case 'cashout':
         this.renderCashout(run);
@@ -424,7 +426,7 @@ export class RunScene extends Phaser.Scene {
       k(panel(this, x + 6, 12, w - 12, 84, BLIND_COLORS[played.kind], 0x000000, 8));
       k(label(this, x + w / 2, 32, BLIND_NAMES[played.kind], { size: 32, originX: 0.5, originY: 0.5 }));
       k(label(this, x + w / 2, 54, levelName(l), { originX: 0.5, originY: 0.5 }));
-      k(label(this, x + w / 2, 76, `Attempt ${setup.attempts}`, { originX: 0.5, originY: 0.5 }));
+      k(label(this, x + w / 2, 76, `Round ${s.ante}`, { originX: 0.5, originY: 0.5 }));
     } else if (s.phase === 'shop') {
       this.well(x + 6, 12, w - 12, 84);
       k(label(this, x + w / 2, 42, 'Shop', { size: 48, color: COLORS.red, originX: 0.5, originY: 0.5 }));
@@ -494,13 +496,12 @@ export class RunScene extends Phaser.Scene {
       if (t.width > bw - 12) t.setScale((bw - 12) / t.width);
       return t;
     };
-    const tries = Math.max(0, ATTEMPTS - (setup?.attempts ?? 0));
-    const triesBox = k(this.add.zone(rx, 298, 48, 72).setOrigin(0, 0).setInteractive());
-    box(rx, 298, 48, 72, 'Tries', String(tries), COLORS.blue);
-    hoverTip(triesBox, this.tip, () => ({
-      title: 'Attempts',
+    const savedBox = k(this.add.zone(rx, 298, 100, 72).setOrigin(0, 0).setInteractive());
+    box(rx, 298, 48, 72, 'Saved', String(s.stats.saved), COLORS.blue);
+    hoverTip(savedBox, this.tip, () => ({
+      title: 'Saved and lost',
       color: COLORS.blue,
-      lines: [`Three attempts per level are paid: $1 for each one you do not need. You can always retry.`],
+      lines: [`${s.stats.saved} lemmings reached the exit in this run, ${s.stats.lost} were lost for good. A level that is not won ends the run (in the level, Restart starts it again).`],
       x: x + w + 6,
       y: 298,
     }));
@@ -592,16 +593,26 @@ export class RunScene extends Phaser.Scene {
     this.spot('slider:sfx', sfx.x, sfx.y + 31);
     this.spot('slider:music', music.x, music.y + 31);
     o(new Button(this, 344, 290, 272, 40, 'Main menu', COLORS.blue, () => this.toMenu(), { sub: 'the run is saved' }));
-    if (run.state.phase !== 'over')
-      o(
-        new Button(this, 344, 340, 272, 40, 'Give up the run', COLORS.red, () => {
-          if (window.confirm('Give up this run?')) this.finishRun(false);
-        }),
-      );
+    if (run.state.phase !== 'over') {
+      o(new Button(this, 344, 340, 272, 40, 'Give up the run', COLORS.red, () => this.confirmGiveUp()));
+      this.spot('giveUpRun', 480, 360);
+    }
     o(label(this, 480, 402, `Seed ${run.state.seed}`, { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
     o(label(this, 480, 424, touch.active ? 'The run is saved as you go' : 'Esc: menu, the run is saved', { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
     this.spot('back', 480, 465);
     o(new Button(this, 344, 448, 272, 34, 'Back', COLORS.orange, () => this.closeOverlay()));
+  }
+
+  /** Give up the run? Asked over the screen, in the colours of the run. */
+  private confirmGiveUp(): void {
+    const o = this.openOverlay(0.75);
+    o(panel(this, 300, 170, 360, 200, COLORS.panel, COLORS.red, 14));
+    o(label(this, 480, 206, 'Give up the run?', { size: 32, originX: 0.5, originY: 0.5 }));
+    o(label(this, 480, 246, 'The colony is gone for good: the run ends here.', { color: COLORS.dim, originX: 0.5, originY: 0.5, maxWidth: 320, align: 1 }));
+    this.spot('giveUp', 400, 318);
+    o(new Button(this, 324, 296, 152, 44, 'Give up', COLORS.red, () => this.finishRun(false), { big: true }));
+    this.spot('keepPlaying', 560, 318);
+    o(new Button(this, 484, 296, 152, 44, 'Keep playing', COLORS.green, () => this.closeOverlay(), { big: true }));
   }
 
   /** the collection, over the run (which waits under it) */
@@ -1112,41 +1123,6 @@ export class RunScene extends Phaser.Scene {
 
   /* -------------------------------------------------------------------------------------------- result */
 
-  /** A level that was not won: try it again (the attempts that are left pay at the cash out), or give up the run. */
-  private renderResult(run: RunSession): void {
-    const k = this.k.bind(this);
-    const s = run.state;
-    const out = s.outcome!;
-    const setup = s.setup!;
-    const l = run.level(setup.levelId);
-    const x = MAIN_X;
-    const y = MAIN_Y;
-    const w = MAIN_R - MAIN_X;
-    k(panel(this, x, y, w, 440, COLORS.panel, COLORS.red, 12));
-    k(label(this, x + w / 2, y + 12, 'Not enough lemmings saved', { size: 32, big: true, color: COLORS.red, originX: 0.5 }));
-    k(label(this, x + w / 2, y + 60, `${levelName(l)}  ${l.title}`, { color: COLORS.lilac, originX: 0.5 }));
-    const giveUp = () => {
-      if (window.confirm('Give up this run?')) this.finishRun(false);
-    };
-    this.btn('retry', x + 16, y + 86, 306, 40, 'Retry', COLORS.blue, () => this.retry(run), { big: true });
-    this.btn('giveUp', x + 336, y + 86, 306, 40, 'Give up the run', COLORS.red, giveUp, { big: true });
-    this.well(x + 12, y + 140, w - 24, 230);
-    const pct = out.hand ? Math.floor((out.rescued * 100) / out.hand) : 0;
-    k(label(this, x + 24, y + 152, `Rescued ${out.rescued} of ${out.hand} (${pct}%), you needed ${out.required}.`, { color: COLORS.text }));
-    const count = (f: (x: Fate) => boolean) => out.fates.filter(f).length;
-    const lost = count(isDeath);
-    const alive = count((f) => f === 'alive');
-    const home = count((f) => f === 'unreleased');
-    const deaths = new Map<Fate, number>();
-    for (const f of out.fates) if (isDeath(f)) deaths.set(f, (deaths.get(f) ?? 0) + 1);
-    const how = [...deaths].map(([f, n]) => `${n} ${FATE_TEXTS[f]}`).join(', ');
-    k(label(this, x + 24, y + 176, `Survived ${alive}   Stayed home ${home}   Lost ${lost}${how ? ` (${how})` : ''}`, { color: COLORS.dim, maxWidth: w - 48 }));
-    k(label(this, x + 24, y + 212, 'Nothing counts until a level is won: the colony is as it was.', { color: COLORS.text, maxWidth: w - 48 }));
-    k(label(this, x + 24, y + 236, `Skills used: ${describeSkills(out.skillsUsed, 'none')}`, { color: COLORS.dim, maxWidth: w - 48 }));
-    const unused = Math.max(0, ATTEMPTS - setup.attempts);
-    k(label(this, x + w / 2, y + 390, `Attempt ${setup.attempts}. Unused attempts pay $1 each (${unused} left).`, { color: COLORS.dim, originX: 0.5 }));
-  }
-
   /** a won level: its result becomes the colony's, and it pays (the cash out) */
   private acceptResult(run: RunSession): void {
     const out = run.state.outcome!;
@@ -1159,22 +1135,24 @@ export class RunScene extends Phaser.Scene {
     this.sfx(SoundEffect.Yippee);
   }
 
-  private retry(run: RunSession): void {
-    run.retry();
-    this.play(run);
-  }
-
   private finishRun(won: boolean): void {
     const run = this.run;
     if (!run) return;
     if (!won) run.giveUp();
+    this.save();
+    this.render();
+  }
+
+  /** the end of a run (won, given up, or a level that was not won): the records, once */
+  private noteEnd(run: RunSession): void {
+    if (endedRuns.has(run)) return;
+    endedRuns.add(run);
     const meta = loadMeta();
     if (run.state.won) meta.wins++;
     meta.bestAnte = Math.max(meta.bestAnte, run.state.ante);
     saveMeta(meta);
     this.save();
     this.sfx(run.state.won ? SoundEffect.Yippee : SoundEffect.Explosion);
-    this.render();
   }
 
   /* -------------------------------------------------------------------------------------------- cash out */
@@ -1757,17 +1735,21 @@ export class RunScene extends Phaser.Scene {
     const w = MAIN_R - MAIN_X;
     k(panel(this, x, y, w, 440, COLORS.panel, s.won ? COLORS.gold : COLORS.red, 12));
     k(label(this, x + w / 2, y + 20, s.won ? 'You win!' : 'Game over', { size: 48, big: true, color: s.won ? COLORS.gold : COLORS.red, originX: 0.5 }));
-    k(label(this, x + w / 2, y + 84, s.won ? 'Your colony made it through all eight rounds.' : `Your colony reached round ${s.ante}.`, { color: COLORS.text, originX: 0.5 }));
+    const out = s.outcome;
+    const lostLevel = !s.won && out && !out.success && s.setup ? run.level(s.setup.levelId) : null;
+    const why = lostLevel && out ? `${levelName(lostLevel)} was not won: ${out.rescued} of ${out.hand} saved, ${out.required} needed.` : '';
+    k(label(this, x + w / 2, y + 80, s.won ? 'Your colony made it through all eight rounds.' : `Your colony reached round ${s.ante}.`, { color: COLORS.text, originX: 0.5 }));
+    if (why) k(label(this, x + w / 2, y + 98, why, { color: COLORS.red, originX: 0.5 }));
     const st = s.stats;
     const lines = [
-      `Levels won ${st.blindsWon}, skipped ${st.skipped}, attempts ${st.attempts}`,
+      `Levels won ${st.blindsWon}, skipped ${st.skipped}`,
       `Lemmings saved ${st.saved}, lost ${st.lost}, colony ${s.colony.length}`,
       `Money earned $${st.earned}`,
       `Gadgets: ${s.jokers.map((j) => jokerDef(j.id).name).join(', ') || 'none'}`,
       `Seed ${s.seed}`,
     ];
-    this.well(x + 40, y + 112, w - 80, 126);
-    k(label(this, x + w / 2, y + 124, lines.join('\n'), { color: COLORS.text, originX: 0.5, align: 1, maxWidth: w - 100 }));
+    this.well(x + 40, y + 122, w - 80, 126);
+    k(label(this, x + w / 2, y + 134, lines.join('\n'), { color: COLORS.text, originX: 0.5, align: 1, maxWidth: w - 100 }));
     for (let i = 0; i < 8; i++) k(lemmingSprite(this, x + 77 + i * 72, y + 280, s.won ? (i % 2 ? 'exit' : 'walk') : i % 2 ? 'splat' : 'drown', 2));
     const again = () => {
       this.app.run = null;
@@ -1807,6 +1789,9 @@ export class RunScene extends Phaser.Scene {
     });
   }
 }
+
+/** the runs whose end has been recorded (the end screen can be shown again: back from the title) */
+const endedRuns = new WeakSet<RunSession>();
 
 /** for tests and debugging */
 export function describeRun(run: RunSession): string {

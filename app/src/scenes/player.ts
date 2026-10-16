@@ -66,6 +66,8 @@ export class PlayerScene extends Phaser.Scene {
   /** LemmixRL: touch screens */
   private touchBar!: TouchBar;
   private portraitHint!: Phaser.GameObjects.BitmapText;
+  /** LemmixRL: the keys of a run, under the game (with a mouse) */
+  private keysHint!: Phaser.GameObjects.BitmapText;
   private touchTrack: { id: number; area: Area; x0: number; y0: number; lastX: number; panning: boolean } | null = null;
   private lastTouchTime = -Infinity;
   /** the double tap of the nuke button (only two taps on the nuke itself count) */
@@ -147,15 +149,21 @@ export class PlayerScene extends Phaser.Scene {
     this.panelTaps = new DoubleTap<SkillPanelButton>(DOUBLE_CLICK_MS, cssPx(TOUCH_SLOP));
     ensureRunAssets(this, app);
     const p = this.player;
+    // (a run has no walker selection, frame steps or rewinding: the level is played as it goes)
+    const run = app.inRun;
     this.touchBar = new TouchBar(
       this,
       [
         { label: 'PAUSE', action: () => this.safe(() => p.clickPanelButton(SkillPanelButton.Pause)), active: () => p.game.isPaused },
         { label: 'FAST', action: () => this.safe(() => p.keyPress('f')), active: () => p.game.fastForward },
         // the right mouse button: the next tap picks the walker where it overlaps a worker
-        { label: 'WALKER', action: () => this.safe(() => p.setTouchSelectWalker(!p.touchSelectWalker)), active: () => p.touchSelectWalker },
-        { label: 'STEP', action: () => this.safe(() => p.keyPress('n')) },
-        { label: '-1 SEC', action: () => this.safe(() => p.keyPress('!')) },
+        ...(run
+          ? []
+          : [
+              { label: 'WALKER', action: () => this.safe(() => p.setTouchSelectWalker(!p.touchSelectWalker)), active: () => p.touchSelectWalker },
+              { label: 'STEP', action: () => this.safe(() => p.keyPress('n')) },
+              { label: '-1 SEC', action: () => this.safe(() => p.keyPress('!')) },
+            ]),
         { label: 'RESTART', action: () => this.safe(() => p.keyPress('R')), confirm: true },
         { label: 'END', action: () => this.safe(() => p.keyDown('Escape', { shift: false, ctrl: false, alt: false }, performance.now())), confirm: true },
       ],
@@ -164,6 +172,10 @@ export class PlayerScene extends Phaser.Scene {
     this.portraitHint = this.add.bitmapText(0, 0, FONT, 'TURN YOUR PHONE SIDEWAYS FOR A BIGGER GAME', 16).setOrigin(0.5, 0.5).setTint(0x8080c0);
     this.cameras.main.ignore(this.portraitHint);
     this.textCam.ignore(this.portraitHint);
+    // a run on a desktop: its keys, under the game
+    this.keysHint = this.add.bitmapText(0, 0, FONT, '[F]ast      [P]ause      [R]eset      [E]nd', 16).setOrigin(0.5, 0.5).setTint(0xffffff);
+    this.cameras.main.ignore(this.keysHint);
+    this.textCam.ignore(this.keysHint);
     this.layout();
 
     this.scale.on('resize', this.onResize, this);
@@ -244,6 +256,12 @@ export class PlayerScene extends Phaser.Scene {
     this.portraitHint.setFontSize(16 * Math.max(1, Math.round(cssPx(16) / 16)));
     if (this.portraitHint.width > areaW * 0.9) this.portraitHint.setFontSize(Math.max(8, Math.floor((this.portraitHint.fontSize * areaW * 0.9) / this.portraitHint.width)));
     this.portraitHint.setPosition(ins.left + areaW / 2, ins.top + room / 2);
+    // the keys of a run: below the game where there is room, else on the bottom of the skill panel's row
+    const below = H - ins.bottom - (this.top + 200 * s);
+    this.keysHint.setVisible(!bar && getApp().inRun);
+    this.keysHint.setFontSize(16 * Math.max(1, Math.round(s / 2)));
+    if (this.keysHint.width > 320 * s) this.keysHint.setFontSize(16);
+    this.keysHint.setPosition(this.left + 160 * s, below > this.keysHint.height + cssPx(6) ? this.top + 200 * s + below / 2 : H - ins.bottom - this.keysHint.height / 2 - 2);
     const main = this.cameras.main;
     main.setViewport(this.left, this.top, 320 * s, 160 * s);
     main.setOrigin(0, 0);

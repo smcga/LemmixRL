@@ -36,7 +36,6 @@ import {
   ABILITY_CAP,
   ANTES,
   type AssignState,
-  ATTEMPTS,
   type AttemptOutcome,
   BOSS_REASSIGN_POINTS,
   BLIND_NAMES,
@@ -379,7 +378,7 @@ export class RunSession {
     return this.refreshSetup(s.setup);
   }
 
-  /** Play the current blind (also a retry). */
+  /** Play the current blind. */
   startBlind(): BlindSetup {
     const setup = this.ensureSetup();
     this.state.phase = 'playing';
@@ -445,7 +444,9 @@ export class RunSession {
     setup.attempts++;
     s.stats.attempts++;
     s.outcome = outcome;
-    s.phase = 'result';
+    // a level that is not won ends the run (in the level it can be restarted, as often as you like)
+    if (outcome.success) s.phase = 'result';
+    else this.giveUp();
     return outcome;
   }
 
@@ -454,11 +455,7 @@ export class RunSession {
     if (this.state.phase === 'playing') this.state.phase = 'blinds';
   }
 
-  retry(): void {
-    if (this.state.phase === 'result') this.state.phase = 'blinds';
-  }
-
-  /** Give up the run (after a failed attempt, or any time from the blind screen). */
+  /** Give up the run (or a level was not won). */
   giveUp(): void {
     this.state.phase = 'over';
     this.state.won = false;
@@ -525,8 +522,6 @@ export class RunSession {
 
     // the blind
     lines.push({ label: `${BLIND_NAMES[blind.kind]} done`, amount: BLIND_REWARDS[blind.kind] });
-    const unused = Math.max(0, ATTEMPTS - setup.attempts);
-    if (unused > 0) lines.push({ label: `Unused attempts (${unused})`, amount: unused });
     if (out.hand > out.required) {
       const bonus = Math.floor((4 * (out.rescued - out.required)) / (out.hand - out.required) + 1e-9);
       // champions that reached the exit multiply it

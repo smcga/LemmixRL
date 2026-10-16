@@ -4,7 +4,7 @@ import { repoDataProvider } from '../../engine/src/node/repoData.ts';
 import { LevelCatalog } from '../src/run/catalog.ts';
 import { ANTE_BANDS, RunSession } from '../src/run/session.ts';
 import { SKILLS, type SkillCounts, totalSkills, zeroSkills } from '../src/run/skills.ts';
-import { ABILITY_CAP, ANTES, ATTEMPTS, BOSS_REASSIGN_POINTS, type RunState, START_ABILITY_POINTS, START_COLONY } from '../src/run/state.ts';
+import { ABILITY_CAP, ANTES, BOSS_REASSIGN_POINTS, type RunState, START_ABILITY_POINTS, START_COLONY } from '../src/run/state.ts';
 
 const data = repoDataProvider();
 const catalog = new LevelCatalog(getStyle(data, StyleDef.Orig));
@@ -119,8 +119,7 @@ describe('roguelike run', () => {
     const setup = run.startBlind();
     expect(setup.hand.length).toBe(50);
     expect(new Set(setup.hand).size).toBe(50);
-    run.state.phase = 'result';
-    run.retry();
+    run.abandonAttempt(); // (back from the preview)
     expect(run.startBlind().hand).toEqual(setup.hand);
   });
 
@@ -133,23 +132,19 @@ describe('roguelike run', () => {
     expect(outcome.fates).toEqual(['saved', 'saved', 'saved', 'splat', 'splat', 'splat', 'splat', 'splat', 'splat', 'splat']);
     const cash = run.accept();
     expect(run.state.colony.length).toBe(START_COLONY - 7);
-    expect(cash.lines).toEqual([
-      { label: 'Level 1 done', amount: 3 },
-      { label: `Unused attempts (${ATTEMPTS - 1})`, amount: ATTEMPTS - 1 },
-    ]);
+    expect(cash.lines).toEqual([{ label: 'Level 1 done', amount: 4 }]);
     run.cashOut();
-    expect(run.state.money).toBe(4 + 3 + ATTEMPTS - 1);
+    expect(run.state.money).toBe(4 + 4);
     expect(run.state.phase).toBe('shop');
   });
 
-  it('a failed attempt can be retried without losing lemmings', () => {
+  it('a level that is not won ends the run', () => {
     const run = runOn('Orig-1-02');
     const { outcome } = playIdle(run); // no floaters: everybody splats
     expect(outcome.success).toBe(false);
+    expect([run.state.phase, run.state.won]).toEqual(['over', false]);
     expect(() => run.accept()).toThrow();
-    run.retry();
     expect(run.state.colony.length).toBe(START_COLONY);
-    expect(run.state.phase).toBe('blinds');
   });
 
   it('jokers and insurance bring lost lemmings back', () => {
@@ -183,15 +178,14 @@ describe('roguelike run', () => {
     expect(outcome.rescued).toBe(10);
     const cash = run.accept();
     expect(cash.lines).toEqual([
-      { label: 'Level 1 done', amount: 3 },
-      { label: 'Unused attempts (2)', amount: 2 },
+      { label: 'Level 1 done', amount: 4 },
       { label: 'Rescue bonus (100%)', amount: 4 },
       { label: 'Perfect rescue', amount: 2 },
       { label: 'Gold lemmings (1)', amount: 2 },
       { label: 'Leave No Lem Behind', amount: 3 },
       { label: 'Interest ($1 per $5)', amount: 4 },
     ]);
-    expect(cash.total).toBe(20);
+    expect(cash.total).toBe(19);
   });
 
   it('champions multiply the rescue bonus', () => {

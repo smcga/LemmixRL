@@ -44,7 +44,10 @@ function dataFiles(): Record<string, () => Uint8Array> {
 const MANIFEST = {
   name: 'Lematro',
   short_name: 'Lematro',
+  description: 'Lemmings x Balatro: a roguelike run through the original Lemmings, and the classic game.',
+  id: '../',
   start_url: '../',
+  scope: '../',
   display: 'fullscreen',
   orientation: 'landscape',
   background_color: '#000000',
