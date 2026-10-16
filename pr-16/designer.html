@@ -6,9 +6,9 @@
     <meta name="theme-color" content="#132526" />
     <title>Power Card Designer · Lematro</title>
     <link rel="icon" href="data/lemmix.ico" />
-    <script type="module" crossorigin src="./assets/designer-CIIL4UCo.js"></script>
-    <link rel="modulepreload" crossorigin href="./assets/render-r7FA_flU.js">
-    <link rel="stylesheet" crossorigin href="./assets/designer-CE7AvFbc.css">
+    <script type="module" crossorigin src="./assets/designer-z3rdvBlZ.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/render-CuvuSo37.js">
+    <link rel="stylesheet" crossorigin href="./assets/designer-X-aEFkM1.css">
   </head>
   <body>
     <header class="topbar">
@@ -49,7 +49,7 @@
             aria-label="Card artwork. Drag to move; arrow keys nudge; Shift plus arrows moves five pixels."
           ></canvas>
         </div>
-        <p class="hint">Drag the lemming to position it.<br />Arrow keys nudge · Shift + arrows move five pixels</p>
+        <p class="hint">Select an element in the card or layer list, then drag to position it.<br />Arrow keys nudge · Shift + arrows move five pixels</p>
         <div class="playback">
           <button id="play" aria-pressed="true">Pause</button><label for="frame">Frame</label><input id="frame" type="range" min="0" max="7" value="0" /><output
             id="frame-label"
@@ -88,12 +88,49 @@
             <p id="id-hint" class="hint"></p>
           </fieldset>
           <fieldset>
-            <legend>Lemming & pose</legend>
+            <legend>Artwork layers</legend>
+            <p class="hint">Front to back. Select a layer to edit just that element.</p>
+            <div id="layer-list" aria-label="Artwork layers"></div>
+            <div class="actions layer-actions">
+              <button type="button" id="add-lemming">+ Lemming</button><button type="button" id="add-text">+ Text</button
+              ><button type="button" id="add-icon">+ Icon</button>
+            </div>
+            <div class="actions layer-actions">
+              <button type="button" id="duplicate-layer">Duplicate</button><button type="button" id="remove-layer">Remove</button
+              ><button type="button" id="layer-forward" aria-label="Move layer forward">↑ Front</button
+              ><button type="button" id="layer-backward" aria-label="Move layer backward">↓ Back</button>
+            </div>
+            <label for="art-type">Selected layer type</label
+            ><select id="art-type">
+              <option value="lemming">Lemming</option>
+              <option value="text">Text</option>
+              <option value="icon">Icon</option>
+            </select>
+          </fieldset>
+          <fieldset id="lemming-properties">
+            <legend>Lemming pose</legend>
             <label for="animation">Animation</label
             ><select id="animation"></select>
-            <div id="legacy-art" hidden>
-              <p class="hint">This existing card uses icon/text artwork. Choose an animation above to replace it with a lemming.</p>
-            </div>
+            <label for="layer-playback">Playback</label
+            ><select id="layer-playback">
+              <option value="animated">Animated</option>
+              <option value="fixed">Fixed frame</option>
+            </select>
+            <label for="pose-frame">Saved pose <output id="pose-frame-label"></output></label><input id="pose-frame" type="range" min="1" max="8" value="1" />
+            <button type="button" id="freeze-pose">Freeze current pose</button>
+          </fieldset>
+          <fieldset id="text-properties" hidden disabled>
+            <legend>Text artwork</legend>
+            <label for="art-text">Text on the card</label><input id="art-text" maxlength="16" required />
+            <label class="colour-field">Text colour<input id="art-text-color" type="color" /></label>
+          </fieldset>
+          <fieldset id="icon-properties" hidden disabled>
+            <legend>Icon artwork</legend>
+            <label for="art-icon">Icon</label
+            ><select id="art-icon"></select>
+          </fieldset>
+          <fieldset>
+            <legend>Selected layer position</legend>
             <label for="scale">Scale</label>
             <div class="range-row">
               <input id="scale" type="range" min="0.25" max="12" step="0.25" /><input
@@ -112,9 +149,9 @@
             </div>
             <button type="button" id="center">Centre artwork</button>
           </fieldset>
-          <fieldset>
+          <fieldset id="sprite-colors">
             <legend>Sprite colours</legend>
-            <p class="hint">Each swatch replaces one original colour across every frame. Transparent pixels stay transparent.</p>
+            <p class="hint">These colours apply only to the selected lemming, across all its frames. Transparent pixels stay transparent.</p>
             <div id="palette"></div>
             <button type="button" id="reset-colors">Reset sprite colours</button>
           </fieldset>
