@@ -21,6 +21,8 @@ export const SKILL_ICONS = 'rl-skills';
 export const BACKGROUND = 'rl-background';
 
 import { LEMMING_ANIMS, type LemmingAnim } from '../power-cards/animations.ts';
+import { lemmingPalette, paletteKey, remapColor } from '../colors.ts';
+import type { LemmingCard } from '../state.ts';
 export { LEMMING_ANIMS, type LemmingAnim } from '../power-cards/animations.ts';
 
 const CHARS_FIRST = 33;
@@ -211,9 +213,33 @@ export function ensureRunAssets(scene: Phaser.Scene, app: LemmixApp): void {
   }
 }
 
-/** A lemming sprite playing an animation. */
-export function lemmingSprite(scene: Phaser.Scene, x: number, y: number, anim: LemmingAnim, scale = 2): Phaser.GameObjects.Sprite {
-  const key = 'rl-lem-' + anim;
+/**
+ * The animation of a lemming in the colours of its card (its hair, its clothes, the skin of its edition): the textures
+ * and animations of a palette are made the first time it is asked for.
+ */
+export function lemmingAnimKey(scene: Phaser.Scene, anim: LemmingAnim, card?: LemmingCard): string {
+  const plain = 'rl-lem-' + anim;
+  if (!card || !animationSet) return plain;
+  const palette = lemmingPalette(card);
+  const pk = paletteKey(palette);
+  if (!pk) return plain;
+  const key = `${plain}-${pk}`;
+  if (scene.anims.exists(key)) return key;
+  const [ix, count] = LEMMING_ANIMS[anim];
+  const m = animationSet.metaLemmingAnimationList[ix];
+  const bmp = new Bitmap32();
+  bmp.assign(animationSet.lemmingBitmaps[ix]);
+  for (let p = 0; p < bmp.bits.length; p++) bmp.bits[p] = remapColor(bmp.bits[p], palette);
+  const f: [string, number, number, number, number][] = [];
+  for (let i = 0; i < count; i++) f.push([String(i), 0, i * m.height, m.width, m.height]);
+  addFramedTexture(scene, key, bmp, f);
+  scene.anims.create({ key, frames: f.map(([fr]) => ({ key, frame: fr })), frameRate: 12, repeat: -1 });
+  return key;
+}
+
+/** A lemming sprite playing an animation (in the colours of a card). */
+export function lemmingSprite(scene: Phaser.Scene, x: number, y: number, anim: LemmingAnim, scale = 2, card?: LemmingCard): Phaser.GameObjects.Sprite {
+  const key = lemmingAnimKey(scene, anim, card);
   const s = scene.add.sprite(x, y, key, '0').setScale(scale);
   s.play(key);
   return s;

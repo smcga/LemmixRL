@@ -11,7 +11,7 @@ describe('Power Card JSON boundary', () => {
   it('round trips every shipped design and preserves the existing effect IDs', () => {
     expect(parsePowerCardLibrary(JSON.parse(JSON.stringify(POWER_CARD_LIBRARY)))).toEqual(POWER_CARD_LIBRARY);
     expect(JOKERS.map((c) => c.id).sort()).toEqual(Object.keys(POWER_CARD_EFFECTS).sort());
-    expect(JOKERS).toHaveLength(23);
+    expect(JOKERS).toHaveLength(Object.keys(POWER_CARD_EFFECTS).length);
   });
   it('uses JSON metadata for gameplay while withholding unimplemented designs', () => {
     const library = structuredClone(POWER_CARD_LIBRARY);
@@ -21,7 +21,7 @@ describe('Power Card JSON boundary', () => {
     library.cards[0].rarity = 'common';
     library.cards.push(newPowerCard('future-card'));
     const playable = playablePowerCards(parsePowerCardLibrary(library));
-    expect(playable).toHaveLength(23);
+    expect(playable).toHaveLength(Object.keys(POWER_CARD_EFFECTS).length);
     expect(playable[0]).toMatchObject({ name: 'New toolkit name', text: 'New tooltip', price: 13, rarity: 'common', aboveMax: { builder: 1 } });
     expect(playable.some((c) => c.id === 'future-card')).toBe(false);
   });
@@ -48,15 +48,17 @@ describe('Power Card JSON boundary', () => {
     expect(POWER_CARD_LIBRARY.cards[0].name).toBe('Illegal Toolkit');
   });
   it('migrates version 1 exports and browser drafts, including text, icons and custom palettes', () => {
+    // (version 1 had one picture a card: the designs of one layer)
+    const single = { version: 2 as const, cards: POWER_CARD_LIBRARY.cards.filter((card) => card.appearance.layers.length === 1) };
     const legacy = {
       version: 1,
-      cards: POWER_CARD_LIBRARY.cards.map((card) => {
+      cards: single.cards.map((card) => {
         const { layers, ...appearance } = structuredClone(card.appearance);
         const { playback: _playback, frame: _frame, ...art } = layers[0] as any;
         return { ...card, appearance: { ...appearance, art } };
       }),
     };
-    expect(parsePowerCardLibrary(legacy)).toEqual(POWER_CARD_LIBRARY);
+    expect(parsePowerCardLibrary(legacy)).toEqual(single);
     expect(legacy.cards[0].appearance).toHaveProperty('art'); // migration does not modify the input
   });
   it('round trips independently coloured fixed/animated layers, text and icons in drawing order', () => {

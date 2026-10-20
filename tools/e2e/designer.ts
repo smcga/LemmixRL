@@ -2,7 +2,10 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import { readFileSync } from 'node:fs';
 import { REPO_ROOT } from '../../engine/src/node/repoData.ts';
+
+const SHIPPED = JSON.parse(readFileSync(`${REPO_ROOT}/app/src/run/power-cards/catalogue.json`, 'utf8')).cards.length as number;
 
 const server = await createServer({ configFile: `${REPO_ROOT}/vite.config.ts`, server: { port: 0 }, logLevel: 'error' });
 await server.listen();
@@ -18,7 +21,7 @@ try {
   page.on('dialog', (dialog) => dialog.accept());
   await page.goto(url + 'designer.html');
   await page.waitForFunction(() => !document.getElementById('workspace')!.inert);
-  assert.equal(await page.locator('#card-list button').count(), 23);
+  assert.equal(await page.locator('#card-list button').count(), SHIPPED);
   // Existing artwork types are editable, without converting them into a lemming.
   await page.locator('#card-list button').filter({ hasText: 'Overtime' }).click();
   assert.equal(await page.inputValue('#art-text'), '+1:00');
@@ -182,7 +185,7 @@ try {
   assert.equal(layers[3].icon, 'pause');
   await page.reload();
   await page.waitForFunction(() => !document.getElementById('workspace')!.inert);
-  assert.equal(await page.locator('#card-list button').count(), 24, 'draft survives reload');
+  assert.equal(await page.locator('#card-list button').count(), SHIPPED + 1, 'draft survives reload');
   await page.locator('#file').setInputFiles({ name: 'card.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exported)) });
   await page.waitForFunction(() => document.getElementById('status')!.textContent!.startsWith('Imported'));
   assert.equal(await page.inputValue('#name'), 'Midnight Mason');
@@ -260,10 +263,10 @@ try {
     }
     return designs.length;
   }, exported.cards[0]);
-  assert.equal(checked, 25);
+  assert.equal(checked, SHIPPED + 2);
   assert.deepEqual(errors, []);
   console.log(
-    'designer e2e ok: editable text/icons, version 1 migration, 28 animations, independent palettes/fixed poses, layer controls, JSON round trip, mobile layout, 25 in-game renders and mixed-loop pixel parity',
+    `designer e2e ok: editable text/icons, version 1 migration, 28 animations, independent palettes/fixed poses, layer controls, JSON round trip, mobile layout, ${SHIPPED + 2} in-game renders and mixed-loop pixel parity`,
   );
 } finally {
   await browser.close();

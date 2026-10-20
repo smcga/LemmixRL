@@ -6,7 +6,7 @@
  */
 import * as Phaser from 'phaser';
 import type { LemmingCard } from '../state.ts';
-import { type LemmingAnim, lemmingSprite } from './assets.ts';
+import { type LemmingAnim, lemmingAnimKey, lemmingSprite } from './assets.ts';
 import { COLORS, label } from './widgets.ts';
 
 export interface HabitatRect {
@@ -82,9 +82,10 @@ export class Habitat {
       const piece = Phaser.Utils.Array.GetRandom(this.floors[floor].pieces);
       const wx = Phaser.Math.FloatBetween(piece[0] + 6, piece[1] - 6);
       const dir = Math.random() < 0.5 ? -1 : 1;
-      const sprite = this.add(lemmingSprite(scene, wx, this.floors[floor].y, dir > 0 ? 'walk' : 'walkLeft', 2));
+      const sprite = this.add(lemmingSprite(scene, wx, this.floors[floor].y, dir > 0 ? 'walk' : 'walkLeft', 2, card));
       sprite.setOrigin(0.5, 1);
-      const tint = card.edition !== 'plain' ? tints[card.edition] : card.insured ? 0xffd0a0 : null;
+      // (the skin of a special lemming is in the colour of its edition: see lemmingPalette)
+      const tint = card.edition === 'plain' && card.insured ? 0xffd0a0 : null;
       if (tint) sprite.setTint(tint);
       // (the animations start at different frames: a crowd does not walk in step)
       sprite.anims.setProgress(Math.random());
@@ -139,7 +140,7 @@ export class Habitat {
   }
 
   private play(w: Walker, anim: LemmingAnim, flip = false): void {
-    const key = 'rl-lem-' + anim;
+    const key = lemmingAnimKey(this.scene, anim, w.card);
     if (w.sprite.anims.currentAnim?.key !== key) w.sprite.play(key);
     w.sprite.setFlipX(flip);
   }

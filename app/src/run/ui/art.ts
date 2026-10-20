@@ -37,7 +37,7 @@ export const TAROT_ART: Record<string, Art> = {
   rethink: { anim: 'shrug', tint: 0xd0a0ff },
 };
 
-export const EDITION_TINTS: Record<string, number> = { plain: 0xffffff, gold: COLORS.gold, lucky: 0x7dff7d, mentor: 0x9fd0ff, champion: 0xd090ff };
+export const EDITION_TINTS: Record<string, number> = { plain: 0xffffff, gold: COLORS.gold, lucky: 0x7dff7d, mentor: 0x9fd0ff, champion: 0xd090ff, wise: 0xe8e8f0 };
 
 /** the bonuses for skipping a level */
 export const TAG_ART: Record<string, Art> = {
@@ -62,4 +62,5 @@ export const TRAIT_LOOKS: Record<SpecialTrait, { name: string; text: string; art
   floater: { name: 'Floater', text: 'Has an umbrella in every level.', art: { anim: 'float' } },
   athlete: { name: 'Athlete', text: 'A climber and a floater.', art: { anim: 'climb', tint: 0x9fd0ff } },
   insured: { name: 'Insured', text: 'Comes back once after it dies.', art: { anim: 'block', tint: 0xffd0a0 } },
+  wise: { name: 'Wise', text: 'A wise old lemming: some Power Cards count the Wise lemmings of your colony.', art: { anim: 'walk', tint: 0xe8e8f0 } },
 };

@@ -1,6 +1,7 @@
 /** A small UI toolkit for the run screens: labels in the DOS font, panels, buttons, cards and tooltips. */
 import * as Phaser from 'phaser';
 import { touch } from '../../touch.ts';
+import { keywordsOf } from '../content.ts';
 import { FONT, FONT_PURPLE } from './assets.ts';
 
 /** The colours of Balatro's interface (its G.C table), for the panels, buttons and texts of the run screens. */
@@ -197,6 +198,8 @@ export type TipContent = {
   badge?: { text: string; color: number };
   center?: boolean;
   above?: boolean;
+  /** the boxes of the keywords next to it (by default the keywords its lines use: see KEYWORDS) */
+  keywords?: { title: string; text: string }[];
 };
 
 /** A popup with a description, shown next to a game object while the pointer is over it (or after a tap on it). */
@@ -252,11 +255,35 @@ export class Tooltip {
       g.fillRect(12, title.y + title.height + 1, width - 24, 2);
     }
     box.add(parts);
-    // keep it on the screen (960 x 540)
+    // the keywords: small boxes beside it, as in Balatro (on the side with room)
+    const keywords = c.keywords ?? keywordsOf(c.lines.join(' '));
+    const kw = 170;
     const x = c.center ? c.x - width / 2 : c.x;
     const y = c.above ? c.y - h : c.y;
-    const px = Math.max(4, Math.min(960 - width - 4, x));
-    const py = !c.above && y + h > 536 ? Math.max(4, y - h - 8) : Math.max(4, y);
+    let px = Math.max(4, Math.min(960 - width - 4, x));
+    const left = keywords.length > 0 && px + width + 6 + kw > 956;
+    if (left) px = Math.max(kw + 10, px);
+    let ky = 0;
+    for (const k of keywords) {
+      const kt = label(s, kw / 2, 6, k.title, { originX: 0.5, maxWidth: kw - 12, align: 1 });
+      const kb = label(s, kw / 2, kt.y + kt.height + 8, k.text, { maxWidth: kw - 22, color: COLORS.ink, originX: 0.5, align: 1 });
+      const kh = kb.y + kb.height + 10;
+      const kg = s.add.graphics();
+      kg.fillStyle(0x000000, 0.35);
+      kg.fillRoundedRect(2, 4, kw, kh, 8);
+      kg.fillStyle(COLORS.panelLight, 1);
+      kg.fillRoundedRect(0, 0, kw, kh, 8);
+      kg.lineStyle(2, 0xdfe7e9, 1);
+      kg.strokeRoundedRect(0, 0, kw, kh, 8);
+      kg.fillStyle(COLORS.cream, 1);
+      kg.fillRoundedRect(6, kb.y - 4, kw - 12, kb.height + 8, 6);
+      const kc = s.add.container(left ? -kw - 6 : width + 6, ky, [kg, kt, kb]);
+      box.add(kc);
+      ky += kh + 6;
+    }
+    // keep it on the screen (960 x 540)
+    const fullH = Math.max(h, ky - 6);
+    const py = !c.above && y + fullH > 536 ? Math.max(4, Math.min(y - h - 8, 536 - fullH)) : Math.max(4, Math.min(y, 536 - fullH));
     box.setPosition(Math.round(px), Math.round(py));
     this.container = box;
   }
