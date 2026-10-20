@@ -3,6 +3,7 @@
  * kinds of lemmings, with the colours of their rarity and edition. Shared by the run screens and the collection.
  */
 import type { Art } from './cards.ts';
+import { POWER_CARD_LIBRARY } from '../power-cards/catalogue.ts';
 import { COLORS } from './widgets.ts';
 import type { PackKind, Rarity } from '../content.ts';
 import type { SpecialTrait } from '../state.ts';
@@ -17,31 +18,7 @@ export const PACK_LOOKS: Record<PackKind, { color: number; art: Art; band: strin
   gadget: { color: COLORS.orange, art: { anim: 'build' }, band: 'POWER' },
 };
 
-export const JOKER_ART: Record<string, Art> = {
-  toolkit: { anim: 'build' },
-  smuggler: { anim: 'bash' },
-  overtime: { text: '+1:00', color: COLORS.gold },
-  ladder: { anim: 'climb' },
-  umbrellas: { anim: 'float' },
-  hardhat: { anim: 'block' },
-  disposal: { anim: 'ohno' },
-  shelter: { icon: 'nuke' },
-  lifeguard: { anim: 'drown' },
-  crashmats: { anim: 'splat' },
-  scout: { anim: 'walk' },
-  unionrep: { anim: 'shrug' },
-  nolem: { anim: 'exit' },
-  piggy: { text: '$$', color: COLORS.gold },
-  speedrun: { anim: 'fall' },
-  minimalist: { anim: 'shrug', tint: 0xb0e0ff },
-  headcount: { anim: 'walkLeft' },
-  guild: { icon: 'builder' },
-  demolition: { icon: 'basher' },
-  climbclub: { icon: 'climber' },
-  bombsquad: { icon: 'bomber' },
-  trainer: { text: '+5', color: COLORS.teal },
-  advisor: { anim: 'walkLeft', tint: 0x9fd0ff },
-};
+export const JOKER_ART: Record<string, Art> = Object.fromEntries(POWER_CARD_LIBRARY.cards.map((design) => [design.id, { design }]));
 
 export const TAROT_ART: Record<string, Art> = {
   umbrella: { icon: 'floater' },
@@ -60,7 +37,7 @@ export const TAROT_ART: Record<string, Art> = {
   rethink: { anim: 'shrug', tint: 0xd0a0ff },
 };
 
-export const EDITION_TINTS: Record<string, number> = { plain: 0xffffff, gold: COLORS.gold, lucky: 0x7dff7d, mentor: 0x9fd0ff, champion: 0xd090ff };
+export const EDITION_TINTS: Record<string, number> = { plain: 0xffffff, gold: COLORS.gold, lucky: 0x7dff7d, mentor: 0x9fd0ff, champion: 0xd090ff, wise: 0xe8e8f0 };
 
 /** the bonuses for skipping a level */
 export const TAG_ART: Record<string, Art> = {
@@ -85,4 +62,5 @@ export const TRAIT_LOOKS: Record<SpecialTrait, { name: string; text: string; art
   floater: { name: 'Floater', text: 'Has an umbrella in every level.', art: { anim: 'float' } },
   athlete: { name: 'Athlete', text: 'A climber and a floater.', art: { anim: 'climb', tint: 0x9fd0ff } },
   insured: { name: 'Insured', text: 'Comes back once after it dies.', art: { anim: 'block', tint: 0xffd0a0 } },
+  wise: { name: 'Wise', text: 'A wise old lemming: some Power Cards count the Wise lemmings of your colony.', art: { anim: 'walk', tint: 0xe8e8f0 } },
 };

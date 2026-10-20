@@ -708,6 +708,17 @@ export class LemmingGame {
    * not set the game is exactly the original.
    */
   onLemmingReleased: ((l: Lemming, releaseIndex: number) => void) | null = null;
+  /**
+   * LemmixRL, not in the original: called for every lemming that reaches an exit (when it counts as saved). The
+   * roguelike layer notes the order the lemmings are saved in. When it is not set the game is exactly the original.
+   */
+  onLemmingExited: ((l: Lemming) => void) | null = null;
+  /**
+   * LemmixRL, not in the original: the bitmap a lemming is drawn from, instead of its animation bitmap (a copy of it in
+   * other colours, of the same size). The roguelike layer draws the lemmings of a colony in their own colours. When it
+   * is not set the game is exactly the original.
+   */
+  lemmingBitmap: ((l: Lemming, bitmap: Bitmap32) => Bitmap32) | null = null;
 
   // owned objects
   readonly lemmingList: Lemming[] = [];
@@ -1898,14 +1909,15 @@ export class LemmingGame {
 
         this.minimapBuffer.setPixelS(Math.trunc(l.xPos / 16), Math.trunc(l.yPos / 8), color32(0, 255, 0));
 
+        const lab = this.lemmingBitmap?.(l, l.lab) ?? l.lab;
         if (!l.photoFlashForReplay) {
-          l.lab.onPixelCombine = l.pixelCombine;
-          l.lab.drawToRect(this.targetBitmap, dstRect, srcRect);
+          lab.onPixelCombine = l.pixelCombine;
+          lab.drawToRect(this.targetBitmap, dstRect, srcRect);
         } else {
-          const oldCombine = l.lab.onPixelCombine;
-          l.lab.onPixelCombine = this.combineLemmingPhotoFlash;
-          l.lab.drawToRect(this.targetBitmap, dstRect, srcRect);
-          l.lab.onPixelCombine = oldCombine;
+          const oldCombine = lab.onPixelCombine;
+          lab.onPixelCombine = this.combineLemmingPhotoFlash;
+          lab.drawToRect(this.targetBitmap, dstRect, srcRect);
+          lab.onPixelCombine = oldCombine;
           l.photoFlashForReplay = false;
         }
 
@@ -2415,6 +2427,7 @@ export class LemmingGame {
     if (l.endOfAnimation) {
       this.removeLemming(l);
       this.lemmingsSaved++;
+      this.onLemmingExited?.(l);
       this.toolbar.setInfoLemmingsOut(this.lemmingsOut);
       this.toolbar.setInfoLemmingsSaved(this.lemmingsSaved, this.maxNumLemmings, !this.miscOptions.has(MiscOption.LemmingsPercentages));
     }

@@ -14,9 +14,10 @@ import type { LemmixApp } from '../app.ts';
 import { type RunLevel, levelName } from '../run/catalog.ts';
 import { EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, type Fate, isDeath, JOKERS, jokerDef, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
 import { normalizeSeed, randomSeed } from '../run/rng.ts';
-import { type BlindPreview, cardTitle, isSpecial, RunSession, sellPrice, tarotSellPrice } from '../run/session.ts';
+import { type BlindPreview, cardTitle, isSpecial, jokerSellValue, RunSession, tarotSellPrice } from '../run/session.ts';
+import { COLOR_NAMES, colorsText } from '../run/colors.ts';
 import { describeSkills, SKILL_NAMES, SKILL_PLURALS, SKILLS, type Skill, totalSkills } from '../run/skills.ts';
-import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type PackChoice, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
+import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type JokerInstance, type PackChoice, type RescueLine, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
 import { loadMeta, loadRun, markSeen, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
 import { ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
 import { type Art, CARD_H, CARD_W, type CardBehaviour, CardTable, CardView, type DropTarget, inRect, type Rect } from '../run/ui/cards.ts';
@@ -77,7 +78,8 @@ type TarotUse = { uid?: number; offer?: number; pack?: number; max: number; name
 
 /** "Rescue 72/80 (90%)": the requirement of a level, of the squad you bring to it */
 function rescueText(p: BlindPreview): string {
-  return `Rescue ${p.required}/${p.squad} (${percent(p.required, p.squad)}%)`;
+  const all = p.squad + p.extra;
+  return `Rescue ${p.required}/${all} (${percent(p.required, all)}%)`;
 }
 
 function percent(n: number, of: number): number {
@@ -376,7 +378,7 @@ export class RunScene extends Phaser.Scene {
     const y = 344;
     if (saved) {
       const s = saved;
-      this.btn('continue', 232, y, 240, 64, 'Continue', COLORS.blue, () => this.continueRun(s), { big: true, sub: `Round ${s.ante}, $${s.money}, ${s.colony.length} lemmings` });
+      this.btn('continue', 232, y, 240, 64, 'Continue', COLORS.blue, () => this.continueRun(s), { big: true, sub: `Round ${s.ante}, ${s.money < 0 ? `-$${-s.money}` : `$${s.money}`}, ${s.colony.length} lemmings` });
       this.btn('newRun', 488, y, 240, 64, 'New run', COLORS.red, () => this.newRun(seed), { big: true, sub: `seed ${seed}` });
     } else this.btn('newRun', 360, y, 240, 64, 'New run', COLORS.red, () => this.newRun(seed), { big: true, sub: `seed ${seed}` });
     this.btn('seed', 232, 430, 140, 30, 'Seed...', COLORS.gray, () => this.askSeed());
@@ -509,7 +511,7 @@ export class RunScene extends Phaser.Scene {
     box(rx + 52, 298, 48, 72, 'Lost', String(s.stats.lost), COLORS.red);
     k(panel(this, rx, 376, 100, 72, COLORS.panelLight, COLORS.panelLight, 6));
     this.well(rx + 4, 380, 92, 64, COLORS.dark, 1, 5);
-    const money = k(label(this, rx + 50, 412, `$${s.money}`, { size: 32, big: true, color: COLORS.gold, originX: 0.5, originY: 0.5 }));
+    const money = k(label(this, rx + 50, 412, s.money < 0 ? `-$${-s.money}` : `$${s.money}`, { size: 32, big: true, color: COLORS.gold, originX: 0.5, originY: 0.5 }));
     if (money.width > 86) money.setScale(86 / money.width);
     if (this.shownMoney !== null && this.shownMoney !== s.money) {
       const to = money.scale;
@@ -522,7 +524,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private specialCounts(colony: LemmingCard[]): string {
-    const n = { gold: 0, lucky: 0, mentor: 0, champion: 0, climber: 0, floater: 0, insured: 0 };
+    const n = { gold: 0, lucky: 0, mentor: 0, champion: 0, wise: 0, climber: 0, floater: 0, insured: 0 };
     for (const c of colony) {
       if (c.edition !== 'plain') n[c.edition]++;
       if (c.climber) n.climber++;
@@ -534,6 +536,7 @@ export class RunScene extends Phaser.Scene {
     if (n.lucky) parts.push(`${n.lucky} Lucky`);
     if (n.mentor) parts.push(`${n.mentor} Mentor`);
     if (n.champion) parts.push(`${n.champion} Champion`);
+    if (n.wise) parts.push(`${n.wise} Wise`);
     if (n.climber) parts.push(`${n.climber} Climber${n.climber > 1 ? 's' : ''}`);
     if (n.floater) parts.push(`${n.floater} Floater${n.floater > 1 ? 's' : ''}`);
     if (n.insured) parts.push(`${n.insured} Insured`);
@@ -657,9 +660,9 @@ export class RunScene extends Phaser.Scene {
       const card = k(new CardView(this, jx[i], cy, { color: RARITY_COLORS[d.rarity], art: JOKER_ART[j.id] }));
       this.spot(`joker:${i}`, jx[i], cy);
       this.table.add(card, {
-        tip: () => ({ title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } }),
-        buttons: () => (canSell ? [{ label: 'SELL', sub: `$${sellPrice(j.id)}`, color: COLORS.green, side: 'right', run: sell }] : []),
-        targets: () => (canSell ? [{ rect: SELL_JOKER_ZONE, color: COLORS.gold, lines: ['SELL', `$${sellPrice(j.id)}`], active: true, release: sell }] : []),
+        tip: () => ({ title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text, ...jokerState(j)], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } }),
+        buttons: () => (canSell ? [{ label: 'SELL', sub: `$${jokerSellValue(j)}`, color: COLORS.green, side: 'right', run: sell }] : []),
+        targets: () => (canSell ? [{ rect: SELL_JOKER_ZONE, color: COLORS.gold, lines: ['SELL', `$${jokerSellValue(j)}`], active: true, release: sell }] : []),
         // dropped among the jokers: it goes where it was dropped
         reorder: {
           area: { x: JOKER_AREA.x, y: 0, w: JOKER_AREA.w, h: 122 },
@@ -888,8 +891,8 @@ export class RunScene extends Phaser.Scene {
     o(label(this, wiki.x + wiki.bw + 12, 30, l.title, { color: COLORS.text, maxWidth: 800 - wiki.x - wiki.bw }));
     this.spot('close', 828 + 46, 26 + 14);
     o(new Button(this, 828, 26, 92, 28, 'Close', COLORS.orange, () => this.closeOverlay()));
-    const lemmings = p.squad < l.lemmings ? `${l.lemmings} (you have ${p.squad})` : String(l.lemmings);
-    o(label(this, 40, 56, `Lemmings ${lemmings} · Rescue ${p.required} (${percent(p.required, p.squad)}%)`, { color: COLORS.dim }));
+    const lemmings = (p.squad < l.lemmings ? `${l.lemmings} (you have ${p.squad})` : String(l.lemmings)) + (p.extra ? ` +${p.extra}` : '');
+    o(label(this, 40, 56, `Lemmings ${lemmings} · Rescue ${p.required} (${percent(p.required, p.squad + p.extra)}%)`, { color: COLORS.dim }));
     const meta = loadMeta().levels[l.id];
     if (meta?.fewest) o(label(this, 920, 56, `Your best: ${meta.best}%, ${totalSkills(meta.fewest)} skills`, { color: COLORS.teal, originX: 1 }));
 
@@ -1013,7 +1016,7 @@ export class RunScene extends Phaser.Scene {
     const mine = p.squad < l.lemmings;
     const setup = current ? run.state.setup : null;
     const squadSpecials = setup ? setup.hand.map((id) => run.card(id)).filter((c): c is LemmingCard => !!c && isSpecial(c)) : [];
-    row(y + 171, 'Lemmings', mine ? `${l.lemmings}, you have ${p.squad}` : String(l.lemmings), mine ? COLORS.orange : COLORS.text);
+    row(y + 171, 'Lemmings', (mine ? `${l.lemmings}, you have ${p.squad}` : String(l.lemmings)) + (p.extra ? ` +${p.extra}` : ''), mine ? COLORS.orange : COLORS.text);
     if (current) {
       const zone = k(this.add.zone(x + 8, y + 170, w - 16, 20).setOrigin(0, 0).setInteractive());
       hoverTip(zone, this.tip, () => ({
@@ -1027,7 +1030,19 @@ export class RunScene extends Phaser.Scene {
       }));
       if (squadSpecials.length) k(label(this, x + 12 + 70, y + 171, `*${squadSpecials.length}`, { color: COLORS.purple }));
     }
-    row(y + 191, 'Rescue at least', `${p.required} (${percent(p.required, p.squad)}%)`, p.tooFewLemmings ? COLORS.red : COLORS.text);
+    row(y + 191, 'Rescue at least', `${p.required} (${percent(p.required, p.squad + p.extra)}%)`, p.tooFewLemmings ? COLORS.red : COLORS.text);
+    const rescueZone = k(this.add.zone(x + 8, y + 190, w - 16, 20).setOrigin(0, 0).setInteractive());
+    hoverTip(rescueZone, this.tip, () => ({
+      title: 'Rescue count',
+      color: COLORS.blue,
+      lines: [
+        `The level asks for ${l.rescue}; in round ${run.state.ante} you need ${p.required}.`,
+        'The rescue count is the lemmings saved, then your Power Cards from left to right: +Rescues, then X Rescues.',
+        ...(p.extra ? [`+${p.extra} lemmings drop in besides your squad (Power Cards).`] : []),
+      ],
+      x: x + 20,
+      y: y + 212,
+    }));
 
     // skills: the level's allocation and what you bring (min(abilities, allocation))
     // (the tooltip of a skill says which number is which; the colour of the second says how it compares)
@@ -1158,6 +1173,30 @@ export class RunScene extends Phaser.Scene {
 
   /* -------------------------------------------------------------------------------------------- cash out */
 
+  /** "Rescue count  3  +6 Abstract Lemming  X5 Personal Space  = 45", wrapped; returns the y below it */
+  private rescueCountRow(lines: RescueLine[], x: number, y: number, w: number): number {
+    const k = this.k.bind(this);
+    let cx = x;
+    let cy = y;
+    const put = (text: string, color: number) => {
+      const t = k(label(this, cx, cy, text, { color }));
+      if (cx > x && cx + t.width > x + w) {
+        cx = x + 12;
+        cy += 18;
+        t.setPosition(cx, cy);
+      }
+      cx += t.width + 8;
+    };
+    put('Rescue count', COLORS.text);
+    put(String(lines[0].total), COLORS.blue);
+    for (const ln of lines.slice(1)) {
+      if (ln.plus) put(`+${ln.plus} ${ln.label}`, COLORS.blue);
+      if (ln.times !== undefined) put(`X${ln.times} ${ln.label}`, COLORS.red);
+    }
+    put(`= ${lines[lines.length - 1].total}`, COLORS.gold);
+    return cy + 20;
+  }
+
   /** The cash out of Balatro: the button on top, below it how the level went, and what it paid, line by line. */
   private renderCashout(run: RunSession): void {
     const k = this.k.bind(this);
@@ -1186,8 +1225,11 @@ export class RunScene extends Phaser.Scene {
       ly += 22;
     }
     if (res) {
-      k(label(this, x + 24, ly, `Rescued ${res.rescued} of ${res.hand} (${percent(res.rescued, res.hand)}%), you needed ${res.required}.`, { color: COLORS.green }));
+      const counted = res.scoring && res.scoring.length > 1;
+      k(label(this, x + 24, ly, `Rescued ${res.rescued} of ${res.hand} (${percent(res.rescued, res.hand)}%), you needed ${counted ? 'a rescue count of ' : ''}${res.required}.`, { color: COLORS.green }));
       ly += 20;
+      // the rescue count as Balatro counts a hand: the saved, then the Power Cards from left to right
+      if (counted) ly = this.rescueCountRow(res.scoring!, x + 24, ly, w - 48) + 2;
       if (res.lost) {
         k(label(this, x + 24, ly, `Lost ${res.lost} (${res.deaths})`, { color: COLORS.red, maxWidth: w - 48 }));
         ly += 20;
@@ -1265,7 +1307,7 @@ export class RunScene extends Phaser.Scene {
       this.save();
       this.render();
     };
-    this.btn('reroll', x + 12, y + 80, 124, 58, 'Reroll', COLORS.green, reroll, { big: true, enabled: s.money >= run.rerollPrice(), sub: `$${run.rerollPrice()}` });
+    this.btn('reroll', x + 12, y + 80, 124, 58, 'Reroll', COLORS.green, reroll, { big: true, enabled: run.canAfford(run.rerollPrice()), sub: run.rerollPrice() === 0 ? `FREE (${s.shop?.freeRerolls ?? 0})` : `$${run.rerollPrice()}` });
 
     // the cards on offer
     const top: Rect = { x: x + 146, y: y + 12, w: w - 158, h: 130 };
@@ -1482,7 +1524,7 @@ export class RunScene extends Phaser.Scene {
 
   private whyNot(run: RunSession, o: ShopOffer): string {
     const s = run.state;
-    if (s.money < o.price) return 'Not enough money.';
+    if (!run.canAfford(o.price)) return 'Not enough money.';
     if (o.type === 'joker' && s.jokers.length >= JOKER_SLOTS) return 'No room for another Power Card (sell one).';
     if (o.type === 'tarot' && s.tarots.length >= TAROT_SLOTS) return 'No room for another boost (use one).';
     return '';
@@ -1745,7 +1787,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private cardLines(c: LemmingCard, inSquad: boolean): string[] {
-    const lines = [EDITION_TEXTS[c.edition]];
+    const lines = [colorsText(c) + '.', EDITION_TEXTS[c.edition]];
     if (c.climber) lines.push('Climber: climbs walls from the start of every level.');
     if (c.floater) lines.push('Floater: has an umbrella in every level.');
     if (c.insured) lines.push('Insured: comes back once after it dies.');
@@ -1766,7 +1808,7 @@ export class RunScene extends Phaser.Scene {
     k(label(this, x + w / 2, y + 20, s.won ? 'You win!' : 'Game over', { size: 48, big: true, color: s.won ? COLORS.gold : COLORS.red, originX: 0.5 }));
     const out = s.outcome;
     const lostLevel = !s.won && out && !out.success && s.setup ? run.level(s.setup.levelId) : null;
-    const why = lostLevel && out ? `${levelName(lostLevel)} was not won: ${out.rescued} of ${out.hand} saved, ${out.required} needed.` : '';
+    const why = lostLevel && out ? `${levelName(lostLevel)} was not won: ${out.score !== undefined && out.score !== out.rescued ? `rescue count ${out.score}` : `${out.rescued} of ${out.hand} saved`}, ${out.required} needed.` : '';
     k(label(this, x + w / 2, y + 80, s.won ? 'Your colony made it through all eight rounds.' : `Your colony reached round ${s.ante}.`, { color: COLORS.text, originX: 0.5 }));
     if (why) k(label(this, x + w / 2, y + 98, why, { color: COLORS.red, originX: 0.5 }));
     const st = s.stats;
@@ -1832,4 +1874,14 @@ export function describeRun(run: RunSession): string {
     `jokers ${s.jokers.map((j) => j.id).join(',')} capacity ${SKILLS.map((sk: Skill) => run.capability()[sk]).join(' ')} (${totalSkills(run.capability())})`,
     `known jokers ${JOKERS.length}, editions ${Object.keys(EDITION_NAMES).length}`,
   ].join('\n');
+}
+
+/** what a Power Card of the run is at now: the colour on the Checklist, the sell value it gained, the Trainings */
+function jokerState(j: JokerInstance): string[] {
+  const d = jokerDef(j.id);
+  const lines: string[] = [];
+  if (d.afterLevel === 'checklist') lines.push(`On the list: ${COLOR_NAMES[j.color ?? 'red']} clothes.`);
+  if (d.countsTraining) lines.push(`Now X${(1 + 0.1 * (j.counter ?? 0)).toFixed(1)} Rescues.`);
+  if (j.sellBonus) lines.push(`Sells for $${jokerSellValue(j)}.`);
+  return lines.length ? ['', ...lines] : [];
 }

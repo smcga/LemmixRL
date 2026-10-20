@@ -1,0 +1,1787 @@
+{
+  "version": 2,
+  "cards": [
+    {
+      "id": "toolkit",
+      "name": "Illegal Toolkit",
+      "rarity": "rare",
+      "price": 8,
+      "description": "+1 Builder above the level maximum.",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "build",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "smuggler",
+      "name": "Smuggler",
+      "rarity": "rare",
+      "price": 8,
+      "description": "Every level: +1 of a random skill above the level maximum.",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "bash",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "overtime",
+      "name": "Overtime",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "+1 minute on the clock.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "text",
+            "text": "+1:00",
+            "color": "#f3b958",
+            "scale": 1.8571428571428572,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "ladder",
+      "name": "Rope Ladder",
+      "rarity": "uncommon",
+      "price": 7,
+      "description": "The first 3 lemmings of every level are Climbers.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "climb",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "umbrellas",
+      "name": "Umbrella Stand",
+      "rarity": "uncommon",
+      "price": 7,
+      "description": "The first 3 lemmings of every level are Floaters.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "float",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "hardhat",
+      "name": "Hard Hat",
+      "rarity": "common",
+      "price": 5,
+      "description": "The first lemming that dies in a level returns to the colony.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "block",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "disposal",
+      "name": "Bomb Disposal",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "Lemmings you turn into Bombers return to the colony.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "ohno",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "shelter",
+      "name": "Fallout Shelter",
+      "rarity": "common",
+      "price": 4,
+      "description": "Lemmings killed by the nuke return to the colony.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "nuke",
+            "scale": 2,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "lifeguard",
+      "name": "Lifeguard",
+      "rarity": "common",
+      "price": 4,
+      "description": "Drowned lemmings return to the colony.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "drown",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "crashmats",
+      "name": "Crash Mats",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "Splatted lemmings return to the colony.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "splat",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "scout",
+      "name": "Talent Scout",
+      "rarity": "common",
+      "price": 4,
+      "description": "2 lemmings join the colony after every level.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "unionrep",
+      "name": "Union Rep",
+      "rarity": "common",
+      "price": 5,
+      "description": "+$1 for every 10% of the squad rescued above the requirement.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "shrug",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "nolem",
+      "name": "Leave No Lem Behind",
+      "rarity": "common",
+      "price": 4,
+      "description": "+$3 for a perfect rescue.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "exit",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "piggy",
+      "name": "Piggy Bank",
+      "rarity": "common",
+      "price": 5,
+      "description": "The interest cap is $5 higher.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "text",
+            "text": "$$",
+            "color": "#f3b958",
+            "scale": 3,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "speedrun",
+      "name": "Speedrunner",
+      "rarity": "common",
+      "price": 5,
+      "description": "+$1 for every full minute left on the clock.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "fall",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "minimalist",
+      "name": "Minimalist",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "+$4 if you used at most half of the skills you had.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "shrug",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {
+              "#00b000": "#009a00",
+              "#f0d0d0": "#a5b6d0",
+              "#4040e0": "#2c38e0"
+            },
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "headcount",
+      "name": "Head Count",
+      "rarity": "common",
+      "price": 5,
+      "description": "+$1 for every 20 lemmings in the colony.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walkLeft",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "guild",
+      "name": "Builders' Guild",
+      "rarity": "common",
+      "price": 4,
+      "description": "+2 Builder ability.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "builder",
+            "scale": 2,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "demolition",
+      "name": "Demolition Crew",
+      "rarity": "common",
+      "price": 5,
+      "description": "+1 Basher, Miner and Digger ability.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "basher",
+            "scale": 2,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "climbclub",
+      "name": "Climbing Club",
+      "rarity": "common",
+      "price": 4,
+      "description": "+2 Climber and Floater ability.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "climber",
+            "scale": 2,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "bombsquad",
+      "name": "Bomb Squad",
+      "rarity": "common",
+      "price": 4,
+      "description": "+2 Bomber and Blocker ability.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "bomber",
+            "scale": 2,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "trainer",
+      "name": "Personal Trainer",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "+5 ability points to assign after every round.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "text",
+            "text": "+5",
+            "color": "#39c5bb",
+            "scale": 3,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "advisor",
+      "name": "Careers Advisor",
+      "rarity": "common",
+      "price": 4,
+      "description": "After every round, 5 more ability points can be moved.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walkLeft",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {
+              "#00b000": "#008f00",
+              "#f0d0d0": "#95a9d0",
+              "#4040e0": "#2734e0"
+            },
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "stowaway",
+      "name": "Stowaway",
+      "rarity": "common",
+      "price": 4,
+      "description": "+1 lemming drops into every level (it is not of your colony: lose it and nothing is lost).",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "fall",
+            "scale": 3,
+            "x": 0,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+1",
+            "color": "#f3b958",
+            "scale": 2.2,
+            "x": 0,
+            "y": -22
+          }
+        ]
+      }
+    },
+    {
+      "id": "hitchhikers",
+      "name": "Hitchhikers",
+      "rarity": "common",
+      "price": 5,
+      "description": "+2 lemmings drop into every level (they are not of your colony).",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "fall",
+            "scale": 3,
+            "x": 0,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+2",
+            "color": "#f3b958",
+            "scale": 2.2,
+            "x": 0,
+            "y": -22
+          }
+        ]
+      }
+    },
+    {
+      "id": "gatecrashers",
+      "name": "Gatecrashers",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "+3 lemmings drop into every level (they are not of your colony).",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "fall",
+            "scale": 3,
+            "x": 0,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+3",
+            "color": "#f3b958",
+            "scale": 2.2,
+            "x": 0,
+            "y": -22
+          }
+        ]
+      }
+    },
+    {
+      "id": "coachtrip",
+      "name": "Coach Trip",
+      "rarity": "uncommon",
+      "price": 7,
+      "description": "+4 lemmings drop into every level (they are not of your colony).",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "fall",
+            "scale": 3,
+            "x": 0,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+4",
+            "color": "#f3b958",
+            "scale": 2.2,
+            "x": 0,
+            "y": -22
+          }
+        ]
+      }
+    },
+    {
+      "id": "rushhour",
+      "name": "Rush Hour",
+      "rarity": "rare",
+      "price": 8,
+      "description": "+5 lemmings drop into every level (they are not of your colony).",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "fall",
+            "scale": 3,
+            "x": 0,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+5",
+            "color": "#f3b958",
+            "scale": 2.2,
+            "x": 0,
+            "y": -22
+          }
+        ]
+      }
+    },
+    {
+      "id": "orangehair",
+      "name": "Carrot Tops",
+      "rarity": "common",
+      "price": 5,
+      "description": "Lemmings with Orange hair count as 2 lemmings when they are saved: +1 Rescues each.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 4,
+            "colors": {
+              "#00b000": "#f08820"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "x2",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "redhair",
+      "name": "Redheads",
+      "rarity": "common",
+      "price": 5,
+      "description": "Lemmings with Red hair count as 2 lemmings when they are saved: +1 Rescues each.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 4,
+            "colors": {
+              "#00b000": "#e03030"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "x2",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "purplehair",
+      "name": "Purple Haze",
+      "rarity": "common",
+      "price": 5,
+      "description": "Lemmings with Purple hair count as 2 lemmings when they are saved: +1 Rescues each.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 4,
+            "colors": {
+              "#00b000": "#a040e0"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "x2",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "greenhair",
+      "name": "Green Thumbs",
+      "rarity": "uncommon",
+      "price": 7,
+      "description": "Lemmings with Green hair count as 2 lemmings when they are saved: +1 Rescues each.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 4,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "x2",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "firstpast",
+      "name": "First Past the Post",
+      "rarity": "common",
+      "price": 3,
+      "description": "The first lemming saved in a level counts as 2 lemmings: +1 Rescues.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "exit",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "1st",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "podium",
+      "name": "Podium",
+      "rarity": "common",
+      "price": 4,
+      "description": "The first two lemmings saved in a level count as 2 lemmings each: up to +2 Rescues.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "exit",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "1-2",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "medals",
+      "name": "Medal Table",
+      "rarity": "uncommon",
+      "price": 5,
+      "description": "The first three lemmings saved in a level count as 2 lemmings each: up to +3 Rescues.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "exit",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "1-3",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "fewgood",
+      "name": "A Few Good Lemmings",
+      "rarity": "uncommon",
+      "price": 5,
+      "description": "If 3 or fewer lemmings are saved in a level, each counts as 5 lemmings: +4 Rescues each.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 2,
+            "x": -14,
+            "y": 10,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 2,
+            "x": 0,
+            "y": 10,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 2,
+            "x": 14,
+            "y": 10,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "x5",
+            "color": "#f3b958",
+            "scale": 1.6,
+            "x": 0,
+            "y": -20
+          }
+        ]
+      }
+    },
+    {
+      "id": "personalspace",
+      "name": "Personal Space",
+      "rarity": "uncommon",
+      "price": 7,
+      "description": "X1 Rescues for every empty Power Card slot (at least X1).",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "shrug",
+            "scale": 3,
+            "x": 0,
+            "y": 10,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "[ ]",
+            "color": "#39c5bb",
+            "scale": 1.6,
+            "x": 0,
+            "y": -22
+          }
+        ]
+      }
+    },
+    {
+      "id": "wastenot",
+      "name": "Waste Not",
+      "rarity": "uncommon",
+      "price": 5,
+      "description": "After a level: 1 in 2 chance of +$1 for every skill with no uses left.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "digger",
+            "scale": 2,
+            "x": 0,
+            "y": 6
+          },
+          {
+            "type": "text",
+            "text": "$",
+            "color": "#f3b958",
+            "scale": 1.6,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "paydayloan",
+      "name": "Payday Loan",
+      "rarity": "common",
+      "price": 4,
+      "description": "You can spend money you do not have: up to $25 into debt.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "text",
+            "text": "-$25",
+            "color": "#fe5f55",
+            "scale": 1.6,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "recycler",
+      "name": "Recycling Plant",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "When a level begins: destroys the Power Card to its left, and adds its sell value to a random ability.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "ohno",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "<",
+            "color": "#f3b958",
+            "scale": 1.6,
+            "x": 0,
+            "y": -24
+          }
+        ]
+      }
+    },
+    {
+      "id": "goingup",
+      "name": "Going Up!",
+      "rarity": "common",
+      "price": 5,
+      "description": "A Climber joins the colony after every level.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "climb",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "goingdown",
+      "name": "Going Down!",
+      "rarity": "common",
+      "price": 5,
+      "description": "A Floater joins the colony after every level.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "float",
+            "scale": 3,
+            "x": 0,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "purplerain",
+      "name": "Purple Rain",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "Whenever a lemming with Purple hair is saved, 2 more lemmings with Purple hair join the colony.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "float",
+            "scale": 2,
+            "x": -14,
+            "y": -6,
+            "colors": {
+              "#00b000": "#a040e0"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "float",
+            "scale": 2,
+            "x": 14,
+            "y": 2,
+            "colors": {
+              "#00b000": "#a040e0"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "float",
+            "scale": 2,
+            "x": 0,
+            "y": 16,
+            "colors": {
+              "#00b000": "#a040e0"
+            },
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "sunset",
+      "name": "Sunset",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "If the last lemming saved in a level has Orange hair, it counts as 10 lemmings: +9 Rescues.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "exit",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#00b000": "#f08820"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "x10",
+            "color": "#f3b958",
+            "scale": 1.3,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "marmalade",
+      "name": "Marmalade",
+      "rarity": "common",
+      "price": 5,
+      "description": "Lemmings with Orange hair give +$1 when they are saved.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#00b000": "#f08820"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "$1",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "unblocked",
+      "name": "Unblocked",
+      "rarity": "common",
+      "price": 4,
+      "description": "+1 Rescues for every Blocker used in the level.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "blocker",
+            "scale": 2,
+            "x": 0,
+            "y": 6
+          },
+          {
+            "type": "text",
+            "text": "+1",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "clown",
+      "name": "Generous Clown",
+      "rarity": "common",
+      "price": 5,
+      "description": "2 free rerolls in every shop.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "shrug",
+            "scale": 3,
+            "x": 0,
+            "y": 10,
+            "colors": {
+              "#00b000": "#e03030",
+              "#4040e0": "#f0e040"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "FREE",
+            "color": "#f3b958",
+            "scale": 1.2,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "elders",
+      "name": "Council of Elders",
+      "rarity": "uncommon",
+      "price": 7,
+      "description": "X0.2 Rescues for every Wise lemming in your colony (X1 with none).",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 2,
+            "x": -12,
+            "y": 6,
+            "colors": {
+              "#f0d0d0": "#e0e0e8"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "walkLeft",
+            "scale": 2,
+            "x": 12,
+            "y": 6,
+            "colors": {
+              "#f0d0d0": "#e0e0e8"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "X",
+            "color": "#39c5bb",
+            "scale": 1.6,
+            "x": 0,
+            "y": -24
+          }
+        ]
+      }
+    },
+    {
+      "id": "stpatrick",
+      "name": "St. Patrick",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "Fully Green lemmings give +4 Rescues when they are saved.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#4040e0": "#20a040"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+4",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "abstract",
+      "name": "Abstract Lemming",
+      "rarity": "common",
+      "price": 5,
+      "description": "+3 Rescues for every Power Card you have.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "text",
+            "text": "+3",
+            "color": "#39c5bb",
+            "scale": 2.4,
+            "x": 0,
+            "y": -10
+          },
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 2,
+            "x": 0,
+            "y": 18,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "ginger",
+      "name": "Ginger Lemming",
+      "rarity": "common",
+      "price": 4,
+      "description": "Red hair counts as Orange hair, and Orange hair as Red hair.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 2,
+            "x": -12,
+            "y": 8,
+            "colors": {
+              "#00b000": "#e03030"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "walkLeft",
+            "scale": 2,
+            "x": 12,
+            "y": 8,
+            "colors": {
+              "#00b000": "#f08820"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "=",
+            "color": "#f3b958",
+            "scale": 1.6,
+            "x": 0,
+            "y": -18
+          }
+        ]
+      }
+    },
+    {
+      "id": "bigmike",
+      "name": "Big Mike the Banana",
+      "rarity": "common",
+      "price": 5,
+      "description": "+15 Respawns in every level. 1 in 6 chance to be destroyed after a level.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 4,
+            "x": 0,
+            "y": 6,
+            "colors": {
+              "#00b000": "#f0e040",
+              "#4040e0": "#f0e040"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "15",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -28
+          }
+        ]
+      }
+    },
+    {
+      "id": "rainyday",
+      "name": "Rainy Day Fund",
+      "rarity": "common",
+      "price": 4,
+      "description": "After a level: 1 in 2 chance of +$1 for every Floater that dropped into it.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "float",
+            "scale": 3,
+            "x": 0,
+            "y": 4,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "$",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -28
+          }
+        ]
+      }
+    },
+    {
+      "id": "bluebombers",
+      "name": "Blue Bombers",
+      "rarity": "uncommon",
+      "price": 5,
+      "description": "A lemming with Blue clothes that explodes respawns.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "ohno",
+            "scale": 3,
+            "x": 0,
+            "y": 4,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "inversecurve",
+      "name": "Inverse Curve",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "The rescue requirement is 1% lower for every level beaten in this run.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "text",
+            "text": "-1%",
+            "color": "#39c5bb",
+            "scale": 1.8,
+            "x": 0,
+            "y": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "streak",
+      "name": "Clean Streak",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "+1 Rescues for every lemming that drops into the level after the last one with Orange clothes.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+1",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "omelette",
+      "name": "Omelette",
+      "rarity": "common",
+      "price": 4,
+      "description": "Gains $3 of sell value whenever a lemming splats.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "splat",
+            "scale": 3,
+            "x": 0,
+            "y": 4,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+$3",
+            "color": "#f3b958",
+            "scale": 1.3,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "sneak",
+      "name": "Sneak Attack",
+      "rarity": "rare",
+      "price": 8,
+      "description": "All lemmings drop at once (release rate 99), with 3 times the skills, above the level maximum.",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "fall",
+            "scale": 2,
+            "x": -14,
+            "y": 4,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "fall",
+            "scale": 2,
+            "x": 0,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "fall",
+            "scale": 2,
+            "x": 14,
+            "y": 4,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "x3",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "checklist",
+      "name": "Checklist",
+      "rarity": "common",
+      "price": 5,
+      "description": "+$1 for every lemming saved with clothes of the colour on the list. The colour changes after every level.",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#4040e0": "#c02828"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "[x]",
+            "color": "#f3b958",
+            "scale": 1.3,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "changeling",
+      "name": "Changeling",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "If the first lemming saved in a level has Purple clothes, it leaves the colony and a Super Lemming joins.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#4040e0": "#8030c0"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "?",
+            "color": "#39c5bb",
+            "scale": 1.6,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "gym",
+      "name": "Gym Membership",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "Gains X0.1 Rescues every time you use a Training (X1 to start with).",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "builder",
+            "scale": 2,
+            "x": 0,
+            "y": 6
+          },
+          {
+            "type": "text",
+            "text": "X",
+            "color": "#39c5bb",
+            "scale": 1.6,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "selfrep",
+      "name": "Self Replication",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "If only one lemming is out 10 seconds into a level, a copy of it joins the colony for good.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 2,
+            "x": -10,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "walkLeft",
+            "scale": 2,
+            "x": 10,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    }
+  ]
+}

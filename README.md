@@ -13,11 +13,16 @@ TypeScript engine on hundreds of thousands of randomly generated game situations
 ```
 npm install
 npm run dev          # the game: http://localhost:5173
+npm run designer     # Power Card Designer: animations, palette, layout and JSON import/export
 npm run build        # the game as static files in dist/ (any web server can serve them)
 npm test             # unit tests and the regression cases
 npm run oracle:build # compile the original game units with Free Pascal (fpc 3.2.2)
 npm run difftest     # compare the TypeScript engine with the original on every level
 ```
+
+Use the [Power Card Designer](docs/power-card-designer.md) to create and edit card
+artwork and metadata. Exported JSON is the game's card presentation source; new
+designs stay out of gameplay until their effects are implemented.
 
 ## Layout
 
@@ -158,6 +163,8 @@ skill.
 | Hand levels | Abilities: 60 points you spread over the eight skills at the start (at most 20 in one); a level gets **min(your ability, the level's allocation)** of every skill |
 | Destroyed cards | Lemmings that die in an accepted result leave the colony for good; survivors and rescued lemmings stay |
 | Card editions | Gold ($2 when it exits), Lucky (chance of $4 or a tarot), Mentor (+1 ability when it exits), Champion (multiplies the rescue bonus when it exits), Insured (comes back once), permanent Climbers and Floaters |
+| Score, chips and mult | The rescue count: the lemmings saved, then the Power Cards from left to right add their **+Rescues** and multiply by their **X Rescues**. It has to reach the requirement, which grows with the rounds (the level's own up to round 2, then ×1.1, 1.25, 1.4, 1.6, 1.8 and ×2 in round 8), so later rounds need Power Cards |
+| Suits | Every lemming has a colour of hair and a colour of clothes (Green, Orange, Red, Purple, Blue), drawn in the level and the colony; Power Cards count them (Fully: hair and clothes of one colour) |
 | Jokers (5) | Passive Power Cards: protection against kinds of deaths, money for performance, abilities (also more points to place or move after every boss), and a few rule breakers (+1 Builder above the level maximum, +1 minute, starting climbers or floaters) |
 | Tarots (2) | Consumables that change selected lemmings (floaters, climbers, gold, lucky, mentor, champion, insured, clones, retraining into abilities) or the abilities (5 new points, moving 10) |
 | Skip | The small and big blind can be skipped for a tag (recruits, floaters, a doubled boss payout, a free shop, ...) |
@@ -189,6 +196,12 @@ of lemmings, so big levels are not worth more), a perfect rescue bonus, gold lem
 up to $5). A level that was not won is the end of the run. The shop sells training (abilities), recruitment drives, jokers,
 tarots and two packs: a pack is opened when it is bought (drag it up, or tap it and Open), the shop makes way for its
 cards, and one of them is taken by a tap and Take, or by dragging it up.
+
+Power Cards with a keyword in their description (+Rescues, X Rescues, Respawns, Fully, Wise, Super Lemming) show a box
+explaining it next to their tooltip, as in Balatro. The cash out shows how the rescue count was made, card by card.
+Some Power Cards make lemmings drop in besides the squad (they are not of your colony), let the money go into debt
+(the Payday Loan), give free rerolls, gain sell value or X Rescues as the run goes on, or act after a level (lemmings
+join, money for colours, a copy of a lone lemming).
 
 In a level, special lemmings of the squad carry a small mark in the colour of their card. Pressing Escape (or E) ends
 a level as in Lemmix: the lemmings that are still out survive (no need to nuke your blockers). The run is saved after

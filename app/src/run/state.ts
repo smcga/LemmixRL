@@ -1,4 +1,5 @@
 /** The saved state of a roguelike run. Everything the run needs to continue is in here (it is stored as JSON). */
+import type { LemmingColor } from './colors.ts';
 import type { Edition, Fate, PackKind } from './content.ts';
 import type { Skill, SkillCounts } from './skills.ts';
 
@@ -50,6 +51,9 @@ export interface LemmingCard {
   insured: boolean;
   /** how often it reached the exit */
   saves: number;
+  /** its colours (lemmings of runs saved before they had colours get theirs from their id: see colors.ts) */
+  hair?: LemmingColor;
+  clothes?: LemmingColor;
 }
 
 export type BlindKind = 'small' | 'big' | 'boss';
@@ -69,6 +73,12 @@ export interface BlindState {
 export interface JokerInstance {
   uid: number;
   id: string;
+  /** sell value it has gained (the Omelette) */
+  sellBonus?: number;
+  /** what it has counted (the Trainings of the Gym Membership) */
+  counter?: number;
+  /** the colour on its list (the Checklist) */
+  color?: LemmingColor;
 }
 
 export interface TarotInstance {
@@ -97,6 +107,8 @@ export interface ShopState {
   /** the packs of the shop (they are not rerolled); runs saved before packs existed do not have them */
   packs?: ShopOffer[];
   rerolls: number;
+  /** rerolls left that cost nothing (the Generous Clown) */
+  freeRerolls?: number;
 }
 
 /** what can be chosen from an open pack */
@@ -114,7 +126,7 @@ export type PackChoice =
   /** a gadget */
   | { type: 'joker'; id: string };
 
-export type SpecialTrait = 'floater' | 'climber' | 'athlete' | 'gold' | 'lucky' | 'mentor' | 'champion' | 'insured';
+export type SpecialTrait = 'floater' | 'climber' | 'athlete' | 'gold' | 'lucky' | 'mentor' | 'champion' | 'insured' | 'wise';
 
 /** a pack that has been bought and opened: choose one of its cards (or skip it) */
 export interface PackState {
@@ -142,6 +154,21 @@ export interface BlindSetup {
   startFloaters: number;
   /** finished attempts */
   attempts: number;
+  /** lemmings that drop in besides the squad (Power Cards), after the squad */
+  extra?: number;
+  /** the level has begun (the Power Cards that act when a level begins have acted) */
+  begun?: boolean;
+  /** the lemming of the squad (card id) that was the only one out 10 seconds in (Self Replication) */
+  selfCopy?: number | null;
+}
+
+/** a line of the rescue count: the lemmings saved, then the Power Cards that add (+) or multiply (X) */
+export interface RescueLine {
+  label: string;
+  plus?: number;
+  times?: number;
+  /** the count after it */
+  total: number;
 }
 
 export interface AttemptOutcome {
@@ -158,6 +185,14 @@ export interface AttemptOutcome {
   /** rescued and required in %, like the original result screen */
   done: number;
   target: number;
+  /** the rescue count (the lemmings saved, with what the Power Cards add and multiply), against required */
+  score?: number;
+  scoring?: RescueLine[];
+  /** the lemmings that dropped in (not of the colony), and how many of them were saved */
+  extra?: number;
+  extraSaved?: number;
+  /** the release indexes of the lemmings saved, in the order they were saved */
+  exitOrder?: number[];
 }
 
 export interface PayoutLine {
@@ -183,6 +218,9 @@ export interface CashoutResult {
   deaths: string;
   /** the special lemmings of the squad: what happened to them */
   specials: { title: string; edition: Edition; fate: Fate }[];
+  /** the rescue count and how it was made */
+  score?: number;
+  scoring?: RescueLine[];
 }
 
 export type RunPhase = 'assign' | 'blinds' | 'playing' | 'result' | 'cashout' | 'shop' | 'pack' | 'over';

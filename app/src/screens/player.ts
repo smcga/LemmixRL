@@ -152,7 +152,11 @@ export class PlayerScreen implements GameView {
     });
     this.alwaysRegainControlOnMouseClick = cfg.gameOptions.has(GameOption.AlwaysRegainControlOnMouseClick);
     // LemmixRL: the lemmings of the run's squad get the abilities of their cards (the game is shared: always set)
-    this.game.onLemmingReleased = app.inRun && app.run ? app.run.releaseHook(this.game) : null;
+    const run = app.inRun ? app.run : null;
+    this.game.onLemmingReleased = run ? run.releaseHook(this.game) : null;
+    // (the order the lemmings are saved in, for the Power Cards; the lemmings in the colours of their cards)
+    this.game.onLemmingExited = run ? run.exitHook() : null;
+    this.game.lemmingBitmap = run ? run.lemmingBitmapHook() : null;
 
     // init timers
     this.scrollTimer.reset(0);
@@ -254,6 +258,7 @@ export class PlayerScreen implements GameView {
     for (let n = 0; n < 8 && this.frameTimer.check(now); n++) {
       this.frameTimer.reset(now);
       this.game.update();
+      if (this.app.inRun) this.app.run?.tick(this.game);
       if (this.closing || this.game.isFinished || !this.game.playing) break;
     }
   }

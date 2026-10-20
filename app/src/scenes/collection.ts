@@ -33,7 +33,10 @@ interface Entry {
   pack?: string;
 }
 
-const TRAITS: SpecialTrait[] = ['gold', 'lucky', 'mentor', 'champion', 'climber', 'floater', 'athlete', 'insured'];
+const TRAITS: SpecialTrait[] = ['gold', 'lucky', 'mentor', 'champion', 'wise', 'climber', 'floater', 'athlete', 'insured'];
+
+/** the cards of a page: 3 rows of 8 */
+const PAGE = 24;
 
 const TABS: { name: string; color: number; entries: () => Entry[] }[] = [
   {
@@ -70,6 +73,7 @@ export class CollectionScene extends Phaser.Scene {
   /** the scene it was opened from (paused meanwhile) */
   private from = 'title';
   private tab = 0;
+  private page = 0;
   private objs: Phaser.GameObjects.GameObject[] = [];
   private tip!: Tooltip;
   private table!: CardTable;
@@ -99,6 +103,7 @@ export class CollectionScene extends Phaser.Scene {
     listen(this, 'keydown', (e) => {
       if (e.key === 'Escape') this.close();
       else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') this.show((this.tab + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length);
+      else if (e.key === 'PageDown' || e.key === 'PageUp') this.turn(e.key === 'PageDown' ? 1 : -1);
     });
     this.input.on('pointerdown', (_p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
       if (over.length === 0) this.tip.hide();
@@ -130,8 +135,9 @@ export class CollectionScene extends Phaser.Scene {
   }
 
   /** Shows a tab: its cards, the ones not seen yet face down. */
-  private show(tab: number): void {
+  private show(tab: number, page = 0): void {
     this.tab = tab;
+    this.page = page;
     this.tip.hide();
     this.table.clear();
     this.tweens.killTweensOf(this.objs);
@@ -157,8 +163,9 @@ export class CollectionScene extends Phaser.Scene {
       if (i === tab) b.setY(98);
     });
 
-    // the cards, up to 8 in a row
-    const entries = all[tab];
+    // the cards, up to 8 in a row, 3 rows a page
+    const pages = Math.max(1, Math.ceil(all[tab].length / PAGE));
+    const entries = all[tab].slice(page * PAGE, page * PAGE + PAGE);
     const cols = 8;
     const pitchX = CARD_W + 26;
     const pitchY = CARD_H + 14;
@@ -174,7 +181,7 @@ export class CollectionScene extends Phaser.Scene {
       const card = k(
         new CardView(this, x, y, known ? { color: e.color, art: e.art, pack: e.pack } : { color: COLORS.border, art: { text: '?', color: COLORS.dim } }),
       );
-      this.spots[`card:${i}`] = { x, y };
+      this.spots[`card:${page * PAGE + i}`] = { x, y };
       this.table.add(card, {
         tip: () =>
           known
@@ -186,16 +193,31 @@ export class CollectionScene extends Phaser.Scene {
       this.tweens.add({ targets: card, alpha: 1, duration: 140, delay: i * 18 });
     });
 
+    // the pages (as in Balatro: < Page 1/3 >)
+    if (pages > 1) {
+      this.spots.prevPage = { x: 80, y: 494 };
+      this.spots.nextPage = { x: 236, y: 494 };
+      k(new Button(this, 60, 480, 40, 28, '<', COLORS.red, () => this.turn(-1), { big: true }));
+      k(label(this, 158, 494, `Page ${page + 1}/${pages}`, { color: COLORS.text, originX: 0.5, originY: 0.5 }));
+      k(new Button(this, 216, 480, 40, 28, '>', COLORS.red, () => this.turn(1), { big: true }));
+    }
+
     // (for development: everything turned over)
     this.spots.unlock = { x: 838, y: 494 };
     k(
       new Button(this, 776, 480, 124, 28, 'Unlock all', COLORS.gray, () => {
         markSeen(TABS.flatMap((t) => t.entries().map((e) => e.key)));
-        this.show(this.tab);
+        this.show(this.tab, this.page);
       }),
     );
     this.spots.back = { x: W / 2, y: 494 };
     k(new Button(this, W / 2 - 110, 476, 220, 36, 'Back', COLORS.orange, () => this.close(), { big: true }));
+  }
+
+  /** the next or the previous page of the tab (round and round) */
+  private turn(d: number): void {
+    const pages = Math.max(1, Math.ceil(TABS[this.tab].entries().length / PAGE));
+    if (pages > 1) this.show(this.tab, (this.page + d + pages) % pages);
   }
 
   private well(x: number, y: number, w: number, h: number): void {
