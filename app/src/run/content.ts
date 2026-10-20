@@ -245,9 +245,21 @@ export interface JokerDef {
   /** counts the Trainings used */
   countsTraining?: boolean;
   /** what it does after a level (see RunSession.accept) */
-  afterLevel?: 'wasteNot' | 'rainyDay' | 'purpleRain' | 'marmalade' | 'checklist' | 'changeling';
+  afterLevel?: 'wasteNot' | 'rainyDay' | 'purpleRain' | 'purpleBoost' | 'marmalade' | 'checklist' | 'changeling' | 'finalLap';
   /** a copy of the only lemming out after 10 seconds joins the colony */
   selfReplication?: boolean;
+  /** in the level (see level-rules.ts): 0 to 6 lemmings drop in at the first splat */
+  splngErr?: boolean;
+  /** in the level: every explosion makes the walkers faster */
+  jogging?: boolean;
+  /** in the level: 4 hair colours saved within 10 seconds bring a skill back */
+  spectrum?: boolean;
+  /** in the level: the Floaters of the colony drop in after 10 seconds */
+  paratroopers?: boolean;
+  /** in the level: the last 30 seconds 5 times as fast */
+  finalLap?: boolean;
+  /** in the level: a skill used goes to the closest other lemming too */
+  mirror?: boolean;
 }
 
 /** Gameplay stays in code. A JSON design enters the game only when its ID has an implemented effect here. */
@@ -326,6 +338,13 @@ export const POWER_CARD_EFFECTS: Record<string, Omit<JokerDef, 'id' | 'name' | '
   changeling: { afterLevel: 'changeling' },
   gym: { countsTraining: true, rescues: (c) => ({ times: 1 + 0.1 * c.counter }) },
   selfrep: { selfReplication: true },
+  splngerr: { splngErr: true },
+  jogging: { jogging: true },
+  spectrum: { spectrum: true },
+  purplereign: { afterLevel: 'purpleBoost' },
+  paratroopers: { paratroopers: true },
+  finallap: { finalLap: true, afterLevel: 'finalLap' },
+  sgnimmel: { mirror: true },
 };
 
 export function playablePowerCards(library: PowerCardLibrary): readonly JokerDef[] {

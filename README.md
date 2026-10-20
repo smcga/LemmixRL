@@ -201,7 +201,10 @@ Power Cards with a keyword in their description (+Rescues, X Rescues, Respawns, 
 explaining it next to their tooltip, as in Balatro. The cash out shows how the rescue count was made, card by card.
 Some Power Cards make lemmings drop in besides the squad (they are not of your colony), let the money go into debt
 (the Payday Loan), give free rerolls, gain sell value or X Rescues as the run goes on, or act after a level (lemmings
-join, money for colours, a copy of a lone lemming).
+join, money for colours, a copy of a lone lemming). A few change the level itself (`app/src/run/level-rules.ts`,
+through opt-in hooks of the engine that are off outside a run, and replayed exactly by a rewind): lemmings that drop in
+at the first splat or across the level (Paratroopers), walkers that speed up after explosions, the last 30 seconds at
+five times the speed, a skill used that goes to the closest lemming too, and skills that come back.
 
 In a level, special lemmings of the squad carry a small mark in the colour of their card. Pressing Escape (or E) ends
 a level as in Lemmix: the lemmings that are still out survive (no need to nuke your blockers). The run is saved after
