@@ -1782,6 +1782,301 @@
           }
         ]
       }
+    },
+    {
+      "id": "splngerr",
+      "name": "SplngErr",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "The first time a lemming splats in a level, 0 to 6 lemmings drop in (they are not of your colony).",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "splat",
+            "scale": 3,
+            "x": 0,
+            "y": 10,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "0-6",
+            "color": "#f3b958",
+            "scale": 1.5,
+            "x": 0,
+            "y": -24
+          }
+        ]
+      }
+    },
+    {
+      "id": "jogging",
+      "name": "Dead Lemmings Jogging Club",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "Whenever a lemming explodes, the walking lemmings walk 0.2x faster for the rest of the level.",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "explode",
+            "scale": 2,
+            "x": -14,
+            "y": 0,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 10,
+            "y": 14,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+0.2",
+            "color": "#39c5bb",
+            "scale": 1.3,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "spectrum",
+      "name": "Full Spectrum",
+      "rarity": "rare",
+      "price": 8,
+      "description": "Whenever you save 4 lemmings with different hair colours within 10 seconds, one used skill is available again.",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "exit",
+            "scale": 2,
+            "x": -18,
+            "y": 8,
+            "colors": {
+              "#00b000": "#f08820"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "exit",
+            "scale": 2,
+            "x": -6,
+            "y": 8,
+            "colors": {
+              "#00b000": "#e03030"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "exit",
+            "scale": 2,
+            "x": 6,
+            "y": 8,
+            "colors": {
+              "#00b000": "#a040e0"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "exit",
+            "scale": 2,
+            "x": 18,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+1",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -24
+          }
+        ]
+      }
+    },
+    {
+      "id": "purplereign",
+      "name": "Purple Reign",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "Whenever a lemming with Purple hair is saved, 1 in 4 chance of a random Boost (if there is room).",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "exit",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#00b000": "#a040e0"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "1 in 4",
+            "color": "#f3b958",
+            "scale": 1.2,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "paratroopers",
+      "name": "Paratroopers",
+      "rarity": "rare",
+      "price": 8,
+      "description": "10 seconds into a level, every Floater of your colony that is not in the squad drops in somewhere across the level (up to 20). They are of your colony: lose one and it is gone.",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "float",
+            "scale": 2,
+            "x": -16,
+            "y": -8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "float",
+            "scale": 2,
+            "x": 14,
+            "y": -2,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "float",
+            "scale": 2,
+            "x": -2,
+            "y": 14,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "finallap",
+      "name": "Final Lap",
+      "rarity": "rare",
+      "price": 7,
+      "description": "In the last 30 seconds of a level every lemming moves 5 times as fast, and every Gold lemming saved then gives +$5.",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 10,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "x5",
+            "color": "#fe5f55",
+            "scale": 1.6,
+            "x": -12,
+            "y": -24
+          },
+          {
+            "type": "text",
+            "text": "$5",
+            "color": "#f3b958",
+            "scale": 1.3,
+            "x": 14,
+            "y": -24
+          }
+        ]
+      }
+    },
+    {
+      "id": "sgnimmel",
+      "name": "sgnimmeL",
+      "rarity": "rare",
+      "price": 8,
+      "description": "Whenever you use a skill, the closest other lemming gets it too, for free.",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "build",
+            "scale": 2,
+            "x": -12,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "buildLeft",
+            "scale": 2,
+            "x": 12,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "sgnimmeL",
+            "color": "#39c5bb",
+            "scale": 0.9,
+            "x": 0,
+            "y": -24
+          }
+        ]
+      }
     }
   ]
 }

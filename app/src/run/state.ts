@@ -191,8 +191,14 @@ export interface AttemptOutcome {
   /** the lemmings that dropped in (not of the colony), and how many of them were saved */
   extra?: number;
   extraSaved?: number;
-  /** the release indexes of the lemmings saved, in the order they were saved */
+  /** the lemmings saved, in the order they were saved: their index in squad (-1: one that dropped in) */
   exitOrder?: number[];
+  /** the cards of the fates: the squad, then the Paratroopers (ids; older saves: the hand) */
+  squad?: number[];
+  /** Final Lap: Gold lemmings saved in the last 30 seconds */
+  lapGold?: number;
+  /** what the Power Cards did in the level (for the cash out) */
+  events?: string[];
 }
 
 export interface PayoutLine {

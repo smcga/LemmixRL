@@ -19,7 +19,7 @@ function playIdle(run: RunSession) {
     (level) => run.applyToLevel(level),
   );
   const game = session.game;
-  game.onLemmingReleased = run.releaseHook(game);
+  run.attach(game);
   game.start(false);
   for (let n = 0; n < 30000 && !game.isFinished; n++) game.update();
   return { game, outcome: run.finishAttempt(game) };

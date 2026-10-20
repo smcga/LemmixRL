@@ -26,6 +26,7 @@ import { speak, voice, VoiceOption } from '../voice.ts';
 import { ScreenType } from './base.ts';
 import { SkillPanel } from './skillpanel.ts';
 import { touchTapAt } from './touchgame.ts';
+import { LevelPlay } from '../run/level-rules.ts';
 
 export enum GameScroll {
   None,
@@ -152,11 +153,10 @@ export class PlayerScreen implements GameView {
     });
     this.alwaysRegainControlOnMouseClick = cfg.gameOptions.has(GameOption.AlwaysRegainControlOnMouseClick);
     // LemmixRL: the lemmings of the run's squad get the abilities of their cards (the game is shared: always set)
+    // (the Power Cards of the run in the level: see level-rules.ts; outside a run the original game)
     const run = app.inRun ? app.run : null;
-    this.game.onLemmingReleased = run ? run.releaseHook(this.game) : null;
-    // (the order the lemmings are saved in, for the Power Cards; the lemmings in the colours of their cards)
-    this.game.onLemmingExited = run ? run.exitHook() : null;
-    this.game.lemmingBitmap = run ? run.lemmingBitmapHook() : null;
+    if (run) run.attach(this.game);
+    else LevelPlay.detach(this.game);
 
     // init timers
     this.scrollTimer.reset(0);
@@ -258,7 +258,6 @@ export class PlayerScreen implements GameView {
     for (let n = 0; n < 8 && this.frameTimer.check(now); n++) {
       this.frameTimer.reset(now);
       this.game.update();
-      if (this.app.inRun) this.app.run?.tick(this.game);
       if (this.closing || this.game.isFinished || !this.game.playing) break;
     }
   }

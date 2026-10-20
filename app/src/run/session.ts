@@ -9,8 +9,9 @@
  *   accepting = the result of an attempt becomes canonical: dead lemmings leave the colony, survivors stay
  *   cash out  = blind reward + rescue bonus + card and joker money + interest, then the shop
  */
-import { Bitmap32, type Lemming, LEMMING_MAX_Y, LemmingAction, type LemmingGame, type Level, raf_SkillAssignment } from '../../../engine/src/index.ts';
-import { clothesOf, COLOR_NAMES, hasHair, LEMMING_COLORS, type LemmingColor, lemmingPalette, paletteKey, randomColors, remapColor } from './colors.ts';
+import { type Lemming, LEMMING_MAX_Y, LemmingAction, type LemmingGame, type Level, raf_SkillAssignment } from '../../../engine/src/index.ts';
+import { clothesOf, COLOR_NAMES, hasHair, LEMMING_COLORS, type LemmingColor, randomColors } from './colors.ts';
+import { FINAL_LAP_SECONDS, LevelPlay } from './level-rules.ts';
 import { type LevelCatalog, type RunLevel } from './catalog.ts';
 import {
   type Edition,
@@ -460,79 +461,20 @@ export class RunSession {
     return id === undefined ? undefined : this.card(id);
   }
 
-  /** Gives the released lemmings the permanent abilities of their cards (and of the jokers). */
-  releaseHook(game: LemmingGame): (l: Lemming, releaseIndex: number) => void {
-    return (l, i) => {
-      const setup = this.state.setup;
-      if (!setup) return;
-      // (a new start of the level: the order of the saves starts again)
-      if (i === 0) {
-        this.exits = [];
-        this.tickFrom = -1;
-        setup.selfCopy = null;
-      }
-      this.releaseIndex.set(l, i);
-      const card = this.cardAt(i);
-      const climber = (card?.climber ?? false) || i < setup.startClimbers;
-      const floater = (card?.floater ?? false) || i < setup.startFloaters;
-      if (climber || floater) game.grantPermanentAbilities(l, climber, floater);
-    };
+  /** the Power Cards in the game being played (see attach) */
+  private play: LevelPlay | null = null;
+
+  /** Sets the hooks of a game of the current level: the Power Cards of the run act in it (see level-rules.ts). */
+  attach(game: LemmingGame): LevelPlay {
+    this.play = new LevelPlay(this, game);
+    this.play.attach();
+    return this.play;
   }
 
-  /** the lemmings of the game being played: their release indexes, and the order they are saved in */
-  private releaseIndex = new WeakMap<Lemming, number>();
-  private exits: number[] = [];
-  /** Self Replication: the iteration the clock was checked from (-1: not yet) */
-  private tickFrom = -1;
-  /** the lemming animations in the colours of the lemmings (see lemmingBitmapHook) */
-  private recoloured = new Map<Bitmap32, Map<string, Bitmap32>>();
-
-  /** Notes the order the lemmings of the level are saved in. */
-  exitHook(): (l: Lemming) => void {
-    return (l) => {
-      const i = this.releaseIndex.get(l);
-      if (i !== undefined) this.exits.push(i);
-    };
-  }
-
-  /** Draws a lemming of the colony in its own colours (the ones that dropped in look like lemmings). */
-  lemmingBitmapHook(): (l: Lemming, bitmap: Bitmap32) => Bitmap32 {
-    return (l, bitmap) => {
-      const i = this.releaseIndex.get(l);
-      const card = i === undefined ? undefined : this.cardAt(i);
-      if (!card) return bitmap;
-      const palette = lemmingPalette(card);
-      const key = paletteKey(palette);
-      if (!key) return bitmap;
-      let byPalette = this.recoloured.get(bitmap);
-      if (!byPalette) this.recoloured.set(bitmap, (byPalette = new Map()));
-      let copy = byPalette.get(key);
-      if (!copy) {
-        copy = new Bitmap32();
-        copy.assign(bitmap);
-        for (let p = 0; p < copy.bits.length; p++) copy.bits[p] = remapColor(copy.bits[p], palette);
-        byPalette.set(key, copy);
-      }
-      return copy;
-    };
-  }
-
-  /**
-   * Every frame of the level: Self Replication looks 10 seconds in (17 frames a second) whether only one lemming is
-   * out.
-   */
-  tick(game: LemmingGame): void {
-    const setup = this.state.setup;
-    if (!setup || !this.state.jokers.some((j) => jokerDef(j.id).selfReplication)) return;
-    const it = game.currentIteration;
-    if (it < this.tickFrom) this.tickFrom = -1; // (back in time: a restart)
-    if (this.tickFrom >= 0 || it < 170) return;
-    this.tickFrom = it;
-    const out = game.lemmingList.filter((l) => !l.isRemoved);
-    setup.selfCopy = null;
-    if (out.length !== 1) return;
-    const i = this.releaseIndex.get(out[0]);
-    if (i !== undefined && i < setup.hand.length) setup.selfCopy = setup.hand[i];
+  /** the card of the squad (and the Paratroopers) of an outcome, by its index in the fates */
+  squadCard(out: AttemptOutcome, i: number): LemmingCard | undefined {
+    const id = (out.squad ?? this.state.setup?.hand ?? [])[i];
+    return id === undefined ? undefined : this.card(id);
   }
 
   /**
@@ -580,20 +522,50 @@ export class RunSession {
     const bombed = new Set<number>();
     for (const item of game.recorder.list)
       if (item && (item.actionFlags & raf_SkillAssignment) !== 0 && item.assignedSkill === SKILL_ACTIONS.bomber) bombed.add(item.lemmingIndex);
-    const fates: Fate[] = setup.hand.map((_, i) => fateOf(game.lemmingList[i], bombed.has(i), game.isNukedByUser));
+    // the lemmings of the squad (by release index) and the Paratroopers; the others dropped in
+    const play = this.play?.game === game ? this.play : null;
+    const paratroopers = play?.paratroopers ?? [];
+    const squad = [...setup.hand, ...paratroopers];
+    const squadIndex = new Map<Lemming, number>();
+    for (const l of game.lemmingList) {
+      if (!play) {
+        if (l.listIndex < setup.hand.length) squadIndex.set(l, l.listIndex);
+        continue;
+      }
+      const r = play.releaseIndex.get(l);
+      if (r !== undefined && r < setup.hand.length) squadIndex.set(l, r);
+      const p = play.dropIns.get(l);
+      if (p !== undefined) squadIndex.set(l, setup.hand.length + paratroopers.indexOf(p));
+    }
+    const lemmingOf: (Lemming | undefined)[] = squad.map(() => undefined);
+    for (const [l, i] of squadIndex) lemmingOf[i] = l;
+    const fates: Fate[] = lemmingOf.map((l) => fateOf(l, !!l && bombed.has(l.listIndex), game.isNukedByUser));
     const used = zeroSkills();
     const left = remainingSkills(game);
     for (const sk of SKILLS) used[sk] = Math.max(0, setup.usable[sk] - left[sk]);
     // the lemmings that dropped in besides the squad: saved or not
-    const extra = setup.extra ?? 0;
-    let extraSaved = 0;
-    for (let i = setup.hand.length; i < game.lemmingList.length; i++) if (fateOf(game.lemmingList[i], false, false) === 'saved') extraSaved++;
-    // the saves in their order (the ones the hook missed, at the end), the releases in theirs
-    const exitOrder = this.exits.filter((i) => i < game.lemmingList.length && fateOf(game.lemmingList[i], false, false) === 'saved');
-    for (let i = 0; i < game.lemmingList.length; i++) if (!exitOrder.includes(i) && fateOf(game.lemmingList[i], false, false) === 'saved') exitOrder.push(i);
-    const cards = (i: number) => (i < setup.hand.length ? (this.cardAt(i) ?? null) : null);
-    const released = game.lemmingList.map((_, i) => cards(i));
-    const { score, lines } = this.rescueCount(exitOrder.map(cards), released, used);
+    const others = game.lemmingList.filter((l) => !squadIndex.has(l));
+    const extra = others.length;
+    const extraSaved = others.filter((l) => fateOf(l, false, false) === 'saved').length;
+    // the saves in their order (the ones the hook missed, at the end): squad indexes, -1 for the others
+    const savedLemmings = (play?.exits.map((e) => e.l) ?? []).filter((l) => fateOf(l, false, false) === 'saved');
+    for (const l of game.lemmingList) if (!savedLemmings.includes(l) && fateOf(l, false, false) === 'saved') savedLemmings.push(l);
+    const exitOrder = savedLemmings.map((l) => squadIndex.get(l) ?? -1);
+    const cardOfIndex = (i: number) => (i >= 0 ? (this.card(squad[i]) ?? null) : null);
+    const released = game.lemmingList.map((l) => {
+      const i = squadIndex.get(l);
+      return i === undefined ? null : cardOfIndex(i);
+    });
+    const { score, lines } = this.rescueCount(exitOrder.map(cardOfIndex), released, used);
+    // Final Lap: the Gold lemmings saved in the last 30 seconds
+    const lapGold = (play?.exits ?? []).filter((e) => e.secondsLeft <= FINAL_LAP_SECONDS && fateOf(e.l, false, false) === 'saved' && this.cardOfLemming(e.l, squadIndex, squad)?.edition === 'gold').length;
+    // what happened in the level, for the notes of the cash out
+    const events: string[] = [];
+    if (play?.refunds) events.push(`Full Spectrum: ${play.refunds} skill${play.refunds === 1 ? '' : 's'} came back.`);
+    if (play?.mirrored) events.push(`sgnimmeL: ${play.mirrored} skill${play.mirrored === 1 ? '' : 's'} copied to a neighbour.`);
+    if (play?.splngDrops) events.push(`SplngErr: ${play.splngDrops} lemming${play.splngDrops === 1 ? '' : 's'} dropped in.`);
+    if (paratroopers.length) events.push(`Paratroopers: ${paratroopers.length} Floater${paratroopers.length === 1 ? '' : 's'} dropped in.`);
+    setup.selfCopy = play?.selfCopy ?? null;
     const outcome: AttemptOutcome = {
       success: score >= setup.rescue && !g.cheated,
       score,
@@ -601,9 +573,12 @@ export class RunSession {
       extra,
       extraSaved,
       exitOrder,
+      squad,
+      lapGold,
+      events,
       rescued: fates.filter((f) => f === 'saved').length,
       required: setup.rescue,
-      hand: setup.hand.length,
+      hand: squad.length,
       fates,
       skillsUsed: used,
       secondsLeft: game.minutes * 60 + game.seconds,
@@ -619,6 +594,11 @@ export class RunSession {
     if (outcome.success) s.phase = 'result';
     else this.giveUp();
     return outcome;
+  }
+
+  private cardOfLemming(l: Lemming, squadIndex: Map<Lemming, number>, squad: number[]): LemmingCard | undefined {
+    const i = squadIndex.get(l);
+    return i === undefined ? undefined : this.card(squad[i]);
   }
 
   /** Back from the level without a result (the attempt does not count). */
@@ -654,7 +634,7 @@ export class RunSession {
       required: out.required,
       lost: out.fates.filter(isDeath).length,
       deaths: [...deathCounts].map(([f, n]) => `${n} ${FATE_TEXTS[f]}`).join(', '),
-      specials: setup.hand.flatMap((id, i) => {
+      specials: (out.squad ?? setup.hand).flatMap((id, i) => {
         const c = this.card(id);
         return c && isSpecial(c) ? [{ title: cardTitle(c), edition: c.edition, fate: out.fates[i] }] : [];
       }),
@@ -670,10 +650,10 @@ export class RunSession {
     const exploded = new Set<Fate>(['bombed', 'exploded', 'nuked']);
     // the hard hat saves the most valuable lemming
     const value = (c: LemmingCard | undefined) => (c ? (c.edition !== 'plain' ? 4 : 0) + (c.climber ? 1 : 0) + (c.floater ? 1 : 0) + (c.insured ? -2 : 0) : 0);
-    deadIdx.sort((a, b) => value(this.cardAt(b)) - value(this.cardAt(a)));
+    deadIdx.sort((a, b) => value(this.squadCard(out, b)) - value(this.squadCard(out, a)));
     const lost = new Set<number>();
     for (const i of deadIdx) {
-      const card = this.cardAt(i);
+      const card = this.squadCard(out, i);
       if (!card) continue;
       const f = out.fates[i];
       const who = cardTitle(card);
@@ -708,7 +688,7 @@ export class RunSession {
       const room = Math.max(1, out.hand + (out.extra ?? 0) - out.required, Math.ceil(out.required / 4));
       const bonus = Math.min(8, Math.floor((4 * (score - out.required)) / room + 1e-9));
       // champions that reached the exit multiply it
-      const champions = out.fates.filter((f, i) => f === 'saved' && this.cardAt(i)?.edition === 'champion').length;
+      const champions = out.fates.filter((f, i) => f === 'saved' && this.squadCard(out, i)?.edition === 'champion').length;
       if (bonus > 0) lines.push({ label: `Rescue bonus (${percentOf(out.rescued, out.hand)}%)${champions ? ` x${champions + 1}` : ''}`, amount: bonus * (champions + 1) });
     }
     const perfect = out.rescued === out.hand;
@@ -719,7 +699,7 @@ export class RunSession {
     const mentorSkill = mostUsed(out.skillsUsed, rng);
     for (let i = 0; i < out.fates.length; i++) {
       if (out.fates[i] !== 'saved') continue;
-      const card = this.cardAt(i);
+      const card = this.squadCard(out, i);
       if (!card) continue;
       card.saves++;
       if (card.edition === 'gold') gold++;
@@ -754,7 +734,8 @@ export class RunSession {
       if (n > 0) lines.push({ label: d.name, amount: n });
     }
 
-    // the Power Cards that act after a level
+    // what happened in the level, then the Power Cards that act after a level
+    notes.push(...(out.events ?? []));
     this.afterLevel(out, setup, lines, notes, rng);
 
     // boss tags
@@ -792,7 +773,7 @@ export class RunSession {
     const colors = this.random.stream('colors');
     const saved: LemmingCard[] = [];
     for (const i of out.exitOrder ?? []) {
-      const c = i < setup.hand.length ? this.cardAt(i) : undefined;
+      const c = i >= 0 ? this.squadCard(out, i) : undefined;
       if (c) saved.push(c);
     }
     const ginger = s.jokers.some((j) => jokerDef(j.id).ginger);
@@ -852,9 +833,20 @@ export class RunSession {
           j.color = colors.pick(LEMMING_COLORS.filter((c) => c !== color));
           break;
         }
+        case 'purpleBoost':
+          for (const c of saved)
+            if (hasHair(c, 'purple', ginger) && s.tarots.length < TAROT_SLOTS && rng.chance(1 / 4)) {
+              const t = this.newTarot(rng);
+              s.tarots.push(t);
+              notes.push(`${c.name} found ${tarotDef(t.id).name} (${d.name}).`);
+            }
+          break;
+        case 'finalLap':
+          if (out.lapGold) lines.push({ label: `${d.name} (${out.lapGold} Gold)`, amount: 5 * out.lapGold });
+          break;
         case 'changeling': {
           const first = saved[0];
-          if (first && first === this.cardAt((out.exitOrder ?? [])[0]) && clothesOf(first) === 'purple') {
+          if (first && (out.exitOrder ?? [])[0] >= 0 && first === this.squadCard(out, out.exitOrder![0]) && clothesOf(first) === 'purple') {
             s.colony = s.colony.filter((c) => c.id !== first.id);
             const c = join((c) => randomSpecial(c, colors));
             notes.push(`${first.name} left the colony; ${cardTitle(c)} joined (${d.name}).`);

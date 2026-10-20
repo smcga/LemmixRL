@@ -414,6 +414,8 @@ export interface GameView {
 ================================================================================================ */
 
 export class Lemming {
+  /** LemmixRL: the fraction of an extra step carried to the next frame (see LemmingGame.lemmingSpeed) */
+  speedCarry = 0;
   pixelCombine: PixelCombine | null = null; // effects
   readonly savedMap = new Uint8Array(9); // saves part of the object map when blocking
   rectToErase: Rect = rect(0, 0, 0, 0); // the rectangle of the last draw action
@@ -719,6 +721,31 @@ export class LemmingGame {
    * is not set the game is exactly the original.
    */
   lemmingBitmap: ((l: Lemming, bitmap: Bitmap32) => Bitmap32) | null = null;
+  /**
+   * LemmixRL, not in the original: called whenever a lemming changes its action (it splats, explodes, ...). When it is
+   * not set the game is exactly the original.
+   */
+  onLemmingAction: ((l: Lemming, action: LemmingAction) => void) | null = null;
+  /**
+   * LemmixRL, not in the original: called after a skill was assigned to a lemming (by the player or a replay, not by
+   * assignSkillFree). When it is not set the game is exactly the original.
+   */
+  onSkillAssigned: ((l: Lemming, skill: LemmingAction) => void) | null = null;
+  /**
+   * LemmixRL, not in the original: called once every frame of the game, after the lemmings moved (also while a
+   * rewind replays the frames, so what it does happens again the same way). When it is not set the game is exactly
+   * the original.
+   */
+  onIteration: (() => void) | null = null;
+  /**
+   * LemmixRL, not in the original: how fast a lemming moves (1: as in the original, 5: five steps a frame, 1.2: an
+   * extra step every five frames). When it is not set the game is exactly the original.
+   */
+  lemmingSpeed: ((l: Lemming) => number) | null = null;
+  /** LemmixRL: the lemmings that did not come out of an entrance (spawnLemming) */
+  private spawnedCount = 0;
+  /** LemmixRL: a free assignment (assignSkillFree) is not recorded in the replay */
+  private freeAssignment = false;
 
   // owned objects
   readonly lemmingList: Lemming[] = [];
@@ -1111,6 +1138,7 @@ export class LemmingGame {
 
     this.replayIndex = 0;
     this.lemmingsReleased = 0;
+    this.spawnedCount = 0;
     this.lemmingsOut = 0;
     this.lemmingsSaved = 0;
     this.lemmingsRemoved = 0;
@@ -1451,6 +1479,7 @@ export class LemmingGame {
     }
 
     if (oldFlags !== l.combineFlags) this.updatePixelCombine(l);
+    this.onLemmingAction?.(l, aAction);
   }
 
   /** we assume that the mirrored animations at least have the same framecount */
@@ -1479,7 +1508,86 @@ export class LemmingGame {
       }
     }
     this.assignmentIsRightClickGlitch = false;
+    if (result && !this.freeAssignment) this.onSkillAssigned?.(result, aSkill);
     return result;
+  }
+
+  /**
+   * LemmixRL, not in the original: assigns a skill to a lemming without using one of the skill (and without a record in
+   * the replay: what calls it does it again when the replay is played). Returns whether the lemming took it.
+   */
+  assignSkillFree(l: Lemming, aSkill: LemmingAction): boolean {
+    const before = this.skillCount(aSkill);
+    if (before === null) return false;
+    this.setSkillCount(aSkill, Math.max(1, before));
+    this.freeAssignment = true;
+    const result = this.assignSkill(l, null, aSkill);
+    this.freeAssignment = false;
+    this.setSkillCount(aSkill, before);
+    return result === l;
+  }
+
+  /** LemmixRL: the uses left of a skill (null: not a skill) */
+  skillCount(aSkill: LemmingAction): number | null {
+    switch (aSkill) {
+      case LemmingAction.Climbing:
+        return this.currClimberCount;
+      case LemmingAction.Floating:
+        return this.currFloaterCount;
+      case LemmingAction.Exploding:
+        return this.currBomberCount;
+      case LemmingAction.Blocking:
+        return this.currBlockerCount;
+      case LemmingAction.Building:
+        return this.currBuilderCount;
+      case LemmingAction.Bashing:
+        return this.currBasherCount;
+      case LemmingAction.Mining:
+        return this.currMinerCount;
+      case LemmingAction.Digging:
+        return this.currDiggerCount;
+    }
+    return null;
+  }
+
+  /** LemmixRL: sets the uses left of a skill (99 at most), on the skill panel too */
+  setSkillCount(aSkill: LemmingAction, n: number): void {
+    const v = Math.max(0, Math.min(99, n));
+    const t = this.hyperSpeed ? { drawSkillCount: (_b: SkillPanelButton, _n: number) => {} } : this.toolbar;
+    switch (aSkill) {
+      case LemmingAction.Climbing:
+        this.currClimberCount = v;
+        t.drawSkillCount(SkillPanelButton.Climber, v);
+        break;
+      case LemmingAction.Floating:
+        this.currFloaterCount = v;
+        t.drawSkillCount(SkillPanelButton.Umbrella, v);
+        break;
+      case LemmingAction.Exploding:
+        this.currBomberCount = v;
+        t.drawSkillCount(SkillPanelButton.Explode, v);
+        break;
+      case LemmingAction.Blocking:
+        this.currBlockerCount = v;
+        t.drawSkillCount(SkillPanelButton.Blocker, v);
+        break;
+      case LemmingAction.Building:
+        this.currBuilderCount = v;
+        t.drawSkillCount(SkillPanelButton.Builder, v);
+        break;
+      case LemmingAction.Bashing:
+        this.currBasherCount = v;
+        t.drawSkillCount(SkillPanelButton.Basher, v);
+        break;
+      case LemmingAction.Mining:
+        this.currMinerCount = v;
+        t.drawSkillCount(SkillPanelButton.Miner, v);
+        break;
+      case LemmingAction.Digging:
+        this.currDiggerCount = v;
+        t.drawSkillCount(SkillPanelButton.Digger, v);
+        break;
+    }
   }
 
   // NB: like the original, the assign methods dereference Lemming1 without a nil check. A nil Lemming1 is
@@ -2539,6 +2647,7 @@ export class LemmingGame {
 
     this.checkSpawnLemming();
     this.checkLemmings();
+    this.onIteration?.();
     this.checkUpdateNuking();
     this.updateInteractiveObjects();
     this.updateMessages();
@@ -2928,9 +3037,11 @@ export class LemmingGame {
 
     if (this.nextLemmingCountDown === 0) {
       this.nextLemmingCountDown = calculateNextLemmingCountdown();
-      if (this.lemmingsReleased < this.maxNumLemmings) {
+      // (LemmixRL: the lemmings of spawnLemming do not count here; without them this is the original)
+      const released = this.lemmingsReleased - this.spawnedCount;
+      if (released < this.maxNumLemmings - this.spawnedCount) {
         if (this.entrances.length === 0) return; // prevent error when there are no entrances
-        const entranceIndex = this.lemmingsReleased % 4;
+        const entranceIndex = released % 4;
         const ix = this.dosEntranceOrderTable[entranceIndex];
         const newLemming = new Lemming();
         newLemming.pixelCombine = this.combineLemming;
@@ -2948,9 +3059,40 @@ export class LemmingGame {
         newLemming.objectBelow = DOM_NONE;
         this.lemmingsReleased++;
         this.lemmingsOut++;
-        this.onLemmingReleased?.(newLemming, this.lemmingsReleased - 1);
+        this.onLemmingReleased?.(newLemming, released);
       }
     }
+  }
+
+  /**
+   * LemmixRL, not in the original: a lemming that drops in at x, y (feet), one more lemming in the level. It does not
+   * come out of an entrance (onLemmingReleased is not called for it, and the entrances release as many as before).
+   */
+  spawnLemming(x: number, y: number, xDelta: 1 | -1 = 1): Lemming {
+    const l = new Lemming();
+    l.pixelCombine = this.combineLemming;
+    this.lemmingList.push(l);
+    l.listIndex = this.lemmingList.length - 1;
+    l.born = this.currentIteration;
+    this.transition(l, LemmingAction.Falling);
+    l.xPos = x;
+    l.yPos = y;
+    l.xDelta = xDelta;
+    l.objectInFront = DOM_NONE;
+    l.objectBelow = DOM_NONE;
+    this.spawnedCount++;
+    this.maxNumLemmings++;
+    this.lemmingsReleased++;
+    this.lemmingsOut++;
+    this.toolbar.setInfoLemmingsOut(this.lemmingsOut);
+    return l;
+  }
+
+  /** LemmixRL: where the lemmings of an entrance appear (its feet), entrance i of the release order */
+  entrancePoint(i: number): { x: number; y: number } | null {
+    if (this.entrances.length === 0) return null;
+    const e = this.entrances[this.dosEntranceOrderTable[i % 4]];
+    return { x: e.obj.left + 24 + (hasMechanic(this.mechanics, Mechanic.EntranceX25) ? 1 : 0), y: e.obj.top + 14 };
   }
 
   /**
@@ -3157,7 +3299,7 @@ export class LemmingGame {
 
   /** Always add new record. */
   private recordSkillAssignment(l: Lemming, aSkill: LemmingAction, usedLemming2: boolean, rightMouseGlitched: boolean): void {
-    if (!this.playing || this.replaying) return;
+    if (!this.playing || this.replaying || this.freeAssignment) return;
     const item = this.recorder.add();
     item.iteration = this.currentIteration;
     item.actionFlags = raf_SkillAssignment;
@@ -3265,6 +3407,14 @@ export class LemmingGame {
       if (countDownReachedZero) continue;
       const handleInteractiveObjects = this.handleLemming(l);
       if (handleInteractiveObjects) this.checkForInteractiveObjects(l);
+      // LemmixRL: a faster lemming takes extra steps (only when lemmingSpeed is set)
+      if (this.lemmingSpeed) {
+        l.speedCarry += Math.max(0, this.lemmingSpeed(l) - 1);
+        while (l.speedCarry >= 1 && !l.isRemoved) {
+          l.speedCarry--;
+          if (this.handleLemming(l)) this.checkForInteractiveObjects(l);
+        }
+      }
     }
   }
 
