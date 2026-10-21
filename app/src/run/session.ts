@@ -471,6 +471,11 @@ export class RunSession {
     return this.play;
   }
 
+  /** the card of a lemming of the game being played (of the squad, a Paratrooper; none: one that dropped in) */
+  cardOfLemming(l: Lemming): LemmingCard | undefined {
+    return this.play ? this.play.cardOf(l) : this.cardAt(l.listIndex);
+  }
+
   /** the card of the squad (and the Paratroopers) of an outcome, by its index in the fates */
   squadCard(out: AttemptOutcome, i: number): LemmingCard | undefined {
     const id = (out.squad ?? this.state.setup?.hand ?? [])[i];
@@ -558,7 +563,7 @@ export class RunSession {
     });
     const { score, lines } = this.rescueCount(exitOrder.map(cardOfIndex), released, used);
     // Final Lap: the Gold lemmings saved in the last 30 seconds
-    const lapGold = (play?.exits ?? []).filter((e) => e.secondsLeft <= FINAL_LAP_SECONDS && fateOf(e.l, false, false) === 'saved' && this.cardOfLemming(e.l, squadIndex, squad)?.edition === 'gold').length;
+    const lapGold = (play?.exits ?? []).filter((e) => e.secondsLeft <= FINAL_LAP_SECONDS && fateOf(e.l, false, false) === 'saved' && this.squadCardOf(e.l, squadIndex, squad)?.edition === 'gold').length;
     // what happened in the level, for the notes of the cash out
     const events: string[] = [];
     if (play?.refunds) events.push(`Full Spectrum: ${play.refunds} skill${play.refunds === 1 ? '' : 's'} came back.`);
@@ -596,7 +601,7 @@ export class RunSession {
     return outcome;
   }
 
-  private cardOfLemming(l: Lemming, squadIndex: Map<Lemming, number>, squad: number[]): LemmingCard | undefined {
+  private squadCardOf(l: Lemming, squadIndex: Map<Lemming, number>, squad: number[]): LemmingCard | undefined {
     const i = squadIndex.get(l);
     return i === undefined ? undefined : this.card(squad[i]);
   }

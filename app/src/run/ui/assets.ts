@@ -19,6 +19,16 @@ export const FONT_BIG = 'rl-font';
 export const FONT_PURPLE = 'rl-font-purple';
 export const SKILL_ICONS = 'rl-skills';
 export const BACKGROUND = 'rl-background';
+/** the trapdoor and the exit of the Dirt graphic set (as in Fun 1): the exit is an arch and its flames above it */
+export const ENTRANCE = 'rl-entrance';
+export const EXIT = 'rl-exit';
+export const EXIT_TOP = 'rl-exit-top';
+/** the objects of a DOS graphic set: 0 the exit, 1 the trapdoor, 7 (Dirt) the flames of the exit */
+const DIRT_OBJECTS: [string, number][] = [
+  [EXIT, 0],
+  [ENTRANCE, 1],
+  [EXIT_TOP, 7],
+];
 
 import { LEMMING_ANIMS, type LemmingAnim } from '../power-cards/animations.ts';
 import { lemmingPalette, paletteKey, remapColor } from '../colors.ts';
@@ -210,6 +220,17 @@ export function ensureRunAssets(scene: Phaser.Scene, app: LemmixApp): void {
         frameRate: 12,
         repeat: -1,
       });
+  }
+
+  // the trapdoor (it opens: frames 1 to 9) and the exit (its flames flicker), as the game draws them
+  for (const [key, ix] of DIRT_OBJECTS) {
+    const m = gs.metaObjectList[ix];
+    const f: [string, number, number, number, number][] = [];
+    for (let i = 0; i < m.animationFrameCount; i++) f.push([String(i), 0, i * m.height, m.width, m.height]);
+    addFramedTexture(scene, key, gs.objectBitmaps[ix], f);
+    const frames = f.map(([fr]) => ({ key, frame: fr }));
+    if (key === ENTRANCE && !scene.anims.exists(key)) scene.anims.create({ key, frames: frames.slice(1), frameRate: 17, repeat: 0 });
+    if (key === EXIT_TOP && !scene.anims.exists(key)) scene.anims.create({ key, frames, frameRate: 12, repeat: -1 });
   }
 }
 

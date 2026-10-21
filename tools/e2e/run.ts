@@ -231,6 +231,11 @@ try {
   await clickSpot('deck', 800);
   const walkers = await ev<number>(`${scene}.overlay.filter((o) => o.type === 'Sprite').length`);
   if (walkers < (await state()).colony.length) fail(`the colony shows ${walkers} lemmings of ${(await state()).colony.length}`);
+  // Next picks the first lemming (the special ones come first), and shows who it is
+  await clickSpot('colonyNext', 300);
+  await clickSpot('colonyNext', 300);
+  const position = await ev<string>(`${scene}.overlay.map((o) => o.text ?? '').find((t) => t.includes(' / ')) ?? ''`);
+  if (!position.startsWith('2 / ')) fail(`Next did not browse the colony (${position})`);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
   if ((await ev<number>(`${scene}.overlay.length`)) !== 0) fail('Escape did not close the colony');

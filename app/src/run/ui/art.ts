@@ -6,7 +6,21 @@ import type { Art } from './cards.ts';
 import { POWER_CARD_LIBRARY } from '../power-cards/catalogue.ts';
 import { COLORS } from './widgets.ts';
 import type { PackKind, Rarity } from '../content.ts';
-import type { SpecialTrait } from '../state.ts';
+import type { LemmingCard, SpecialTrait } from '../state.ts';
+
+/** the colour of the small mark above a special lemming (in a level and in the colony), or none */
+export function markerColor(c: LemmingCard): number | null {
+  if (c.edition === 'gold') return 0xf5c542;
+  if (c.edition === 'lucky') return 0x50e050;
+  if (c.edition === 'mentor') return 0x60c0ff;
+  if (c.edition === 'champion') return 0xc070ff;
+  if (c.edition === 'wise') return 0xb8b8c8;
+  if (c.insured) return 0xffffff;
+  if (c.climber && c.floater) return 0xff4500;
+  if (c.climber) return 0x00ff00;
+  if (c.floater) return 0x6495ed;
+  return null;
+}
 
 export const RARITY_COLORS: Record<Rarity, number> = { common: COLORS.blue, uncommon: COLORS.green, rare: COLORS.red };
 export const RARITY_NAMES: Record<Rarity, string> = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare' };

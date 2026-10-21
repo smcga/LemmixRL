@@ -9,8 +9,9 @@
  */
 import * as Phaser from 'phaser';
 import type { LemmingCard } from '../state.ts';
-import { type LemmingAnim, lemmingAnimKey, lemmingSprite } from './assets.ts';
-import { COLORS, label } from './widgets.ts';
+import { markerColor } from './art.ts';
+import { ENTRANCE, EXIT, EXIT_TOP, type LemmingAnim, lemmingAnimKey, lemmingSprite } from './assets.ts';
+import { COLORS } from './widgets.ts';
 
 export interface HabitatRect {
   x: number;
@@ -36,6 +37,8 @@ type Mode = 'walk' | 'fall' | 'float' | 'climb' | 'exit' | 'gone' | 'lifted';
 interface Walker {
   card: LemmingCard;
   sprite: Phaser.GameObjects.Sprite;
+  /** the small mark above a special lemming, in the colour of its card (as in a level) */
+  pip: Phaser.GameObjects.Rectangle | null;
   x: number;
   y: number;
   /** +1 right, -1 left */
@@ -65,6 +68,8 @@ const CLIMB_SPEED = 22;
 const LIFT_SPEED = 420;
 /** the room of a lemming in the sky */
 const SKY_PITCH = 44;
+/** the lemmings and the objects of the level, twice their size in the game */
+const SCALE = 2;
 
 export class Habitat {
   private readonly walkers: Walker[] = [];
@@ -72,6 +77,7 @@ export class Habitat {
   private readonly left: number;
   private readonly right: number;
   private readonly entrance: { x: number; y: number };
+  private readonly entranceAt: { x: number; y: number };
   private readonly exit: { x: number; y: number };
   private readonly skyArea: HabitatRect | null = null;
   /** the mark around the lemming picked */
@@ -98,7 +104,10 @@ export class Habitat {
       { y: fy(1), pieces: [[x + 90, x + w - 90]] },
       { y: fy(2), pieces: [[this.left, this.right]] },
     ];
-    this.entrance = { x: x + 70, y: y + 18 };
+    // the trapdoor at the top left (a lemming comes out of it 24 pixels in, 14 down), the exit on the bottom floor
+    // (its door 26 pixels in): the places of the objects of the game
+    this.entranceAt = { x: x + 40, y: y + 4 };
+    this.entrance = { x: this.entranceAt.x + 24 * SCALE, y: this.entranceAt.y + 14 * SCALE };
     this.exit = { x: x + w - 90, y: fy(2) };
     if (opts.sky) {
       const sw = Math.min(w - 180, Math.max(220, opts.sky * SKY_PITCH + 40));
@@ -121,9 +130,12 @@ export class Habitat {
       sprite.on('pointerup', () => opts.onPick?.(card));
       sprite.on('pointerover', () => opts.onHover?.(card, sprite.x, sprite.y));
       sprite.on('pointerout', () => opts.onOut?.(card));
+      const color = markerColor(card);
+      const pip = color === null ? null : this.add(scene.add.rectangle(wx, 0, 3 * SCALE, 3 * SCALE, color).setStrokeStyle(SCALE, 0x000000));
       this.walkers.push({
         card,
         sprite,
+        pip,
         x: wx,
         y: this.floors[floor].y,
         dir,
@@ -137,6 +149,8 @@ export class Habitat {
       });
       opts.spot?.(index, wx, this.floors[floor].y - 10);
     });
+    // (the marks over every lemming, as in a level)
+    for (const w of this.walkers) if (w.pip) scene.children.bringToTop(w.pip);
     this.marker = this.add(scene.add.graphics());
     scene.events.on('update', this.update, this);
   }
@@ -229,22 +243,18 @@ export class Habitat {
     g.fillStyle(dark, 1);
     g.fillRect(area.x + 2, area.y + 30, 10, area.h - 30);
     g.fillRect(area.x + area.w - 12, area.y + 30, 10, area.h - 30);
-    // the trapdoor
-    const e = this.entrance;
-    g.fillStyle(0x6a4a2a, 1);
-    g.fillRect(e.x - 26, e.y - 10, 52, 14);
-    g.fillStyle(0x2a1a0a, 1);
-    g.fillRect(e.x - 18, e.y + 4, 36, 4);
-    // the exit: an arch with a dark door, and torches
-    const x = this.exit;
-    g.fillStyle(0x9a8a7a, 1);
-    g.fillRect(x.x - 20, x.y - 40, 40, 40);
-    g.fillStyle(0x101018, 1);
-    g.fillRect(x.x - 10, x.y - 26, 20, 26);
-    g.fillStyle(0xffa020, 1);
-    g.fillRect(x.x - 24, x.y - 48, 4, 8);
-    g.fillRect(x.x + 20, x.y - 48, 4, 8);
-    this.add(label(this.scene, x.x, x.y - 52, 'EXIT', { color: COLORS.gold, originX: 0.5, originY: 1 }));
+    // the trapdoor and the exit of the game (the Dirt set, as in Fun 1): the trapdoor opens, the exit's flames flicker
+    const scene = this.scene;
+    const e = this.entranceAt;
+    const trapdoor = this.add(scene.add.sprite(e.x, e.y, ENTRANCE, '0').setOrigin(0, 0).setScale(SCALE));
+    scene.time.delayedCall(350, () => {
+      if (trapdoor.active) trapdoor.play(ENTRANCE);
+    });
+    // the arch (48 x 17) stands on the floor, its door at 26; the flames (48 x 8) on top of it
+    const ax = this.exit.x - 26 * SCALE;
+    const ay = this.exit.y - 17 * SCALE + 2;
+    this.add(scene.add.image(ax, ay, EXIT, '0').setOrigin(0, 0).setScale(SCALE));
+    this.add(scene.add.sprite(ax, ay - 8 * SCALE, EXIT_TOP, '0').setOrigin(0, 0).setScale(SCALE)).play(EXIT_TOP);
   }
 
   private play(w: Walker, anim: LemmingAnim, flip = false): void {
@@ -265,6 +275,8 @@ export class Habitat {
       if (!w.sprite.active) return;
       this.move(w, dt);
       w.sprite.setPosition(Math.round(w.x), Math.round(w.y));
+      // (the mark 13 pixels above the feet, as in a level)
+      w.pip?.setPosition(Math.round(w.x), Math.round(w.y) - 13 * SCALE).setVisible(w.sprite.visible);
       this.opts.spot?.(index, w.x, w.y - 10);
     });
     // the mark: the corners of a box around the lemming picked (like the cursor of Lemmings), bobbing a little
@@ -394,7 +406,7 @@ export class Habitat {
         if (w.timer <= 0) {
           // back in by the trapdoor
           w.x = this.entrance.x + Phaser.Math.FloatBetween(-8, 8);
-          w.y = this.entrance.y + 8;
+          w.y = this.entrance.y;
           w.fallFrom = w.y;
           w.dir = Math.random() < 0.5 ? -1 : 1;
           w.mode = 'fall';
