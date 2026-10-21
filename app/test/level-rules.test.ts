@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Bitmap32, createSessionFromInfo, getStyle, Lemming, LemmingAction, type LemmingGame, StyleDef } from '../../engine/src/index.ts';
 import { repoDataProvider } from '../../engine/src/node/repoData.ts';
 import { LevelCatalog } from '../src/run/catalog.ts';
+import { hazardsText, levelHazards } from '../src/run/hazards.ts';
 import { FINAL_LAP_SPEED, TEN_SECONDS } from '../src/run/level-rules.ts';
 import { RunSession } from '../src/run/session.ts';
 import { SKILLS, type SkillCounts } from '../src/run/skills.ts';
@@ -191,5 +192,17 @@ describe('Power Cards in the level', () => {
     const g2 = startGame(plain);
     expect(g2.onSkillAssigned).toBeNull();
     expect(g2.lemmingSpeed).toBeNull();
+  });
+});
+
+describe('the hazards of a level (Run Info)', () => {
+  it('tells water, fire and traps from the objects of the level', () => {
+    const style = getStyle(data, StyleDef.Orig);
+    const h = (id: string) => hazardsText(levelHazards(style, data, catalog.get(id)));
+    expect(h('Orig-1-01')).toBe('No water, fire or traps');
+    expect(h('Orig-1-05')).toBe('Water');
+    expect(h('Orig-1-06')).toBe('Fire');
+    expect(h('Orig-1-17')).toBe('4 traps');
+    expect(h('Orig-1-21')).toBe('Water, 1 trap');
   });
 });

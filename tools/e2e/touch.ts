@@ -230,7 +230,7 @@ try {
   if ((await run<string>('state.phase')) !== 'pack') fail('a tap on a card of a pack took it');
   await tapSpot('card:TAKE', 600);
   if ((await run<string>('state.phase')) !== 'shop' || (await run<number>('state.colony.length')) <= colony) fail('the Take button of a card of a pack did not take it');
-  // a tarot: its Use button opens the colony, where a finger dragged across lemmings selects them
+  // a tarot: its Use button opens the colony walking about, where a tap on a lemming lifts it into the sky (selected)
   await ev(
     `(() => { const s = globalThis.lemmix.run.state; s.tarots = [{ uid: 9001, id: 'umbrella' }]; s.jokers = [{ uid: 9002, id: 'piggy' }]; for (const c of s.colony) c.floater = false; for (let i = 0; i < 3; i++) s.colony[i].insured = true; ${runScene}.render(); })()`,
   );
@@ -238,13 +238,16 @@ try {
   await tapSpot('tarot:0');
   await tapSpot('card:USE', 500);
   if ((await ev<number>(`${runScene}.overlay.length`)) === 0) fail('Use did not open the colony');
-  const first = await spot('colony:0');
-  const third = await spot('colony:2');
-  await drag(first.x, first.y, third.x, third.y);
-  await page.waitForTimeout(200);
+  await page.waitForTimeout(300);
+  // three lemmings tapped (they walk: each is tapped where it is now); a lifted one is out of the way of the next tap
+  const lifted = () => ev<number>(`parseInt(${runScene}.overlay.map((o) => o.text ?? '').find((t) => t.includes(' selected')) ?? '0', 10)`);
+  for (let i = 0; i < 40 && (await lifted()) < 3; i++) {
+    await tapSpot(`colony:${i}`, 250);
+  }
+  if ((await lifted()) !== 3) fail(`three lemmings tapped were not lifted into the sky (${await lifted()})`);
   await tapSpot('use', 500);
   if ((await run<number>('state.colony.filter((c) => c.floater).length')) !== 3 || (await run<number>('state.tarots.length')) !== 0)
-    fail('a finger dragged across three lemmings did not select them for the tarot');
+    fail('three lemmings tapped were not selected for the tarot');
   // a joker dragged to the tarots is sold
   await dragSpot('joker:0', 840, 60);
   if ((await run<number>('state.jokers.length')) !== 0 || (await run<number>('state.money')) !== 8) fail('a gadget dragged to Sell was not sold');
