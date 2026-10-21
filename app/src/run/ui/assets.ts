@@ -249,7 +249,6 @@ export function lemmingSprite(scene: Phaser.Scene, x: number, y: number, anim: L
 
 const thumbnails = new Map<string, HTMLCanvasElement>();
 
-
 /** The level's terrain and objects, cropped to what is there and averaged down to w x h (like the preview). */
 /** The level as it starts (terrain and objects), and the columns it uses (the rest of the 1584 pixels is empty). */
 function renderLevelWorld(app: LemmixApp, level: RunLevel): { world: Bitmap32; x0: number; x1: number; start: number } {
