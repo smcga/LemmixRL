@@ -9,7 +9,7 @@ import * as Phaser from 'phaser';
 import { Bitmap32, type HighResolutionMessage, SkillPanelButton, type TColor32 } from '../../../engine/src/index.ts';
 import { BitmapTexture } from '../display.ts';
 import { ScreenType } from '../screens/base.ts';
-import type { LemmingCard } from '../run/state.ts';
+import { markerColor } from '../run/ui/art.ts';
 import { ensureRunAssets, FONT } from '../run/ui/assets.ts';
 import { PlayerScreen } from '../screens/player.ts';
 import { canvasPoint, cssPx, DoubleTap, onTouchChange, pixelRatio, safeAreaInsets, touch } from '../touch.ts';
@@ -25,17 +25,6 @@ const TOUCH_SLOP = 10;
 const TOUCH_MOUSE_GUARD_MS = 800;
 
 /** the colour of a run card's mark: its edition, else insurance, else its abilities (the Lemmix colours) */
-function markerColor(c: LemmingCard): number | null {
-  if (c.edition === 'gold') return 0xf5c542;
-  if (c.edition === 'lucky') return 0x50e050;
-  if (c.edition === 'mentor') return 0x60c0ff;
-  if (c.edition === 'champion') return 0xc070ff;
-  if (c.insured) return 0xffffff;
-  if (c.climber && c.floater) return 0xff4500;
-  if (c.climber) return 0x00ff00;
-  if (c.floater) return 0x6495ed;
-  return null;
-}
 
 type Area = 'img' | 'tool';
 
@@ -509,7 +498,7 @@ export class PlayerScene extends Phaser.Scene {
       for (let i = 0; i < list.length; i++) {
         const l = list[i];
         if (l.isRemoved) continue;
-        const card = run.cardAt(i);
+        const card = run.cardOfLemming(l);
         const color = card ? markerColor(card) : null;
         if (color === null) continue;
         let m = this.markers[n];

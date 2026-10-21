@@ -122,6 +122,8 @@ export class RunScene extends Phaser.Scene {
   /** the level preview: its first column in the window, and scrolling it (keys) */
   private previewSx = 0;
   private previewPan: ((d: number) => void) | null = null;
+  /** a key for the overlay that is open (the colony: the arrow keys browse it) */
+  private overlayKey: ((key: string) => void) | null = null;
   /** where things are on the screen, by name: the middle of the buttons and cards (for the tests) */
   private spots: Record<string, { x: number; y: number }> = {};
   /** what the middle of the screen showed last: when it changes, the new one comes up from below */
@@ -219,6 +221,7 @@ export class RunScene extends Phaser.Scene {
       if (this.overlay.length) this.closeOverlay();
       else this.toMenu();
     } else if (this.previewPan && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) this.previewPan(e.key === 'ArrowLeft' ? -48 : 48);
+    else this.overlayKey?.(e.key);
   }
 
   private toMenu(): void {
@@ -1654,6 +1657,7 @@ export class RunScene extends Phaser.Scene {
     for (const f of this.overlayCleanup) f();
     this.overlayCleanup = [];
     this.previewPan = null;
+    this.overlayKey = null;
   }
 
   /**
@@ -1682,10 +1686,10 @@ export class RunScene extends Phaser.Scene {
       );
     updateSub();
 
-    // (a crowd of at most 150: more would cover the level; the special ones first)
+    // (a crowd of at most 150: more would cover the level; the special ones first, also for Previous and Next)
     const special = colony.filter(isSpecial);
-    const plain = Phaser.Utils.Array.Shuffle(colony.filter((c) => !isSpecial(c)));
-    const shown = colony.length > 150 ? [...special.slice(0, 150), ...plain].slice(0, 150) : colony;
+    const plain = colony.filter((c) => !isSpecial(c));
+    const shown = colony.length > 150 ? [...special, ...Phaser.Utils.Array.Shuffle(plain)].slice(0, 150) : [...special, ...plain];
     const area = { x: 56, y: 96, w: 620, h: 370 };
 
     // the panel at the side: who the lemming picked is (static, like a tooltip pinned to the corner)
@@ -1713,21 +1717,8 @@ export class RunScene extends Phaser.Scene {
         if (this.tip.owner === c) this.tip.hide();
       },
       onPick: (c) => {
-        picked = c;
-        habitat.mark(c.id);
-        showInfo();
-        this.tip.hide();
-        this.sfx(SoundEffect.SkillButtonSelect);
-        if (!tarot) return;
-        const i = selected.indexOf(c.id);
-        if (i >= 0) {
-          selected.splice(i, 1);
-          habitat.drop(c.id);
-        } else if (selected.length < tarot.max) {
-          selected.push(c.id);
-          habitat.lift(c.id);
-        } else this.toast(`${tarot.name} takes ${tarot.max === 1 ? 'one lemming' : `${tarot.max} lemmings`}: put one back first.`);
-        updateSub();
+        pick(c);
+        if (tarot) toggle(c);
       },
       spot: (i, x, y) => this.spot(`colony:${i}`, x, y),
     });
@@ -1736,6 +1727,57 @@ export class RunScene extends Phaser.Scene {
       info.hide();
       this.tip.hide();
     });
+
+    // a lemming picked: marked, and who it is in the panel at the side
+    const pick = (c: LemmingCard) => {
+      picked = c;
+      habitat.mark(c.id);
+      showInfo();
+      updateSelectButton();
+      this.tip.hide();
+      this.sfx(SoundEffect.SkillButtonSelect);
+    };
+    // with a boost: selected (lifted into the sky), or put back
+    const toggle = (c: LemmingCard) => {
+      if (!tarot) return;
+      const i = selected.indexOf(c.id);
+      if (i >= 0) {
+        selected.splice(i, 1);
+        habitat.drop(c.id);
+      } else if (selected.length < tarot.max) {
+        selected.push(c.id);
+        habitat.lift(c.id);
+      } else this.toast(`${tarot.name} takes ${tarot.max === 1 ? 'one lemming' : `${tarot.max} lemmings`}: put one back first.`);
+      updateSub();
+      updateSelectButton();
+    };
+    // Previous and Next: one lemming after the other (also with the arrow keys; Enter selects it for a boost)
+    const position = o(label(this, 797, 446, '', { color: COLORS.text, originX: 0.5, originY: 0.5 }));
+    const browse = (d: number) => {
+      const i = picked ? shown.indexOf(picked) : d > 0 ? -1 : 0;
+      pick(shown[(i + d + shown.length) % shown.length]);
+      position.setText(`${shown.indexOf(picked!) + 1} / ${shown.length}`);
+    };
+    position.setText(`${shown.length} lemmings`);
+    this.spot('colonyPrev', 720, 446);
+    this.spot('colonyNext', 874, 446);
+    o(new Button(this, 690, 432, 60, 28, '<', COLORS.blue, () => browse(-1), { big: true }));
+    o(new Button(this, 844, 432, 60, 28, '>', COLORS.blue, () => browse(1), { big: true }));
+    let selectButton: Button | null = null;
+    const updateSelectButton = () => {
+      if (!selectButton) return;
+      selectButton.setVisible(!!picked);
+      selectButton.setCaption(picked && selected.includes(picked.id) ? 'Put back' : 'Select');
+    };
+    if (tarot) {
+      this.spot('colonySelect', 797, 410);
+      selectButton = o(new Button(this, 690, 396, 214, 28, 'Select', COLORS.purple, () => picked && toggle(picked)));
+      updateSelectButton();
+    }
+    this.overlayKey = (key) => {
+      if (key === 'ArrowLeft' || key === 'ArrowRight') browse(key === 'ArrowLeft' ? -1 : 1);
+      else if (key === 'Enter' && picked) toggle(picked);
+    };
     if (shown.length < colony.length) o(label(this, 64, 478, `and ${colony.length - shown.length} more at home`, { color: COLORS.dim }));
     if (tarot) {
       this.spot('use', 665, 494);
