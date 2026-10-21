@@ -183,6 +183,17 @@ describe('Power Cards: money, the shop and after a level', () => {
 });
 
 describe('Power Cards: colours and keywords', () => {
+  it('the colony a run starts with is classic lemmings, nearly all of it; recruits bring the colours', () => {
+    const run = started();
+    const classic = run.state.colony.filter((c) => c.hair === 'green' && c.clothes === 'blue').length;
+    expect(classic).toBeGreaterThanOrEqual(run.state.colony.length * 0.8);
+    expect(classic).toBeLessThan(run.state.colony.length);
+    const before = run.state.colony.length;
+    run.recruit(200);
+    const joined = run.state.colony.slice(before);
+    expect(joined.filter((c) => c.hair === 'green' && c.clothes === 'blue').length).toBeLessThan(joined.length * 0.4);
+  });
+
   it('new lemmings have colours, and are drawn in them', () => {
     const run = started();
     expect(run.state.colony.every((c) => !!hairOf(c))).toBe(true);
