@@ -16,6 +16,7 @@ import { EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, type Fate, isDeath, JOKERS, j
 import { normalizeSeed, randomSeed } from '../run/rng.ts';
 import { type BlindPreview, cardTitle, isSpecial, jokerSellValue, RunSession, tarotSellPrice } from '../run/session.ts';
 import { COLOR_NAMES, colorsText } from '../run/colors.ts';
+import { hazardsText, levelHazards } from '../run/hazards.ts';
 import { describeSkills, SKILL_NAMES, SKILL_PLURALS, SKILLS, type Skill, totalSkills } from '../run/skills.ts';
 import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type JokerInstance, type PackChoice, type RescueLine, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
 import { loadMeta, loadRun, markSeen, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
@@ -74,7 +75,7 @@ const FATE_ANIMS: Partial<Record<Fate, LemmingAnim>> = {
 };
 
 /** a tarot that is used: one of the player's, one of the shop that is bought for it, or the card of an open pack */
-type TarotUse = { uid?: number; offer?: number; pack?: number; max: number; name: string };
+type TarotUse = { uid?: number; offer?: number; pack?: number; max: number; name: string; text?: string };
 
 /** "Rescue 72/80 (90%)": the requirement of a level, of the squad you bring to it */
 function rescueText(p: BlindPreview): string {
@@ -547,29 +548,41 @@ export class RunScene extends Phaser.Scene {
   private showRunInfo(run: RunSession): void {
     const o = this.openOverlay();
     const s = run.state;
-    o(panel(this, 200, 50, 560, 440, COLORS.panel, COLORS.panelLight, 12));
-    o(label(this, 480, 74, 'Run Info', { size: 32, big: true, originX: 0.5, originY: 0.5 }));
-    o(label(this, 224, 104, `Round ${Math.min(s.ante, ANTES)} of ${ANTES}: ${bandName(run)}`, { color: COLORS.orange }));
+    o(panel(this, 180, 16, 600, 508, COLORS.panel, COLORS.panelLight, 12));
+    o(label(this, 480, 40, 'Run Info', { size: 32, big: true, originX: 0.5, originY: 0.5 }));
+    o(label(this, 204, 66, `Round ${Math.min(s.ante, ANTES)} of ${ANTES}: ${bandName(run)}`, { color: COLORS.orange }));
+    // the levels of the round: a picture of each (a click on it: the preview), what can kill a lemming in it
     s.blinds.forEach((b, i) => {
       const l = run.level(b.levelId);
-      const y = 128 + i * 40;
+      const p = run.preview(i);
+      const y = 88 + i * 78;
       const g = o(this.add.graphics());
       g.fillStyle(COLORS.dark, 1);
-      g.fillRoundedRect(224, y, 512, 34, 6);
+      g.fillRoundedRect(204, y, 552, 72, 6);
       g.fillStyle(BLIND_COLORS[b.kind], 1);
-      g.fillRoundedRect(224, y, 8, 34, 3);
-      o(label(this, 240, y + 9, BLIND_NAMES[b.kind], { color: BLIND_COLORS[b.kind] }));
-      o(label(this, 330, y + 9, `${levelName(l)}  ${l.title}`, { maxWidth: 300 }));
+      g.fillRoundedRect(204, y, 8, 72, 3);
+      const pic = o(this.add.image(220, y + 6, levelThumbnail(this, this.app, l, 180, 60)).setOrigin(0, 0));
+      pic.setInteractive({ useHandCursor: true });
+      const preview = () => this.showLevelPreview(run, i, () => this.showRunInfo(run));
+      pic.on('pointerup', preview);
+      const head = o(label(this, 412, y + 6, BLIND_NAMES[b.kind], { color: BLIND_COLORS[b.kind] }));
+      o(label(this, head.x + head.width + 8, y + 6, levelName(l), { purple: true }));
       const status = b.status === 'current' ? 'Current' : b.status === 'upcoming' ? 'Upcoming' : b.status === 'skipped' ? 'Skipped' : 'Defeated';
-      o(label(this, 728, y + 9, status, { color: b.status === 'current' ? COLORS.gold : COLORS.dim, originX: 1 }));
+      o(label(this, 744, y + 6, status, { color: b.status === 'current' ? COLORS.gold : COLORS.dim, originX: 1 }));
+      o(label(this, 412, y + 24, l.title, { color: COLORS.text, maxWidth: 260 }));
+      const hz = levelHazards(this.app.style, this.app.data.provider, l);
+      o(label(this, 412, y + 44, hazardsText(hz), { color: hz.water || hz.fire || hz.traps ? COLORS.red : COLORS.green }));
+      o(label(this, 412, y + 58, `Rescue ${p.required} of ${p.squad + p.extra}`, { color: COLORS.dim }));
+      this.spot(`info:preview:${i}`, 712, y + 54);
+      o(new Button(this, 680, y + 44, 64, 22, 'Preview', COLORS.blue, preview));
     });
     const cap = run.capability();
-    o(label(this, 224, 258, 'Abilities', { color: COLORS.dim }));
+    o(label(this, 204, 326, 'Abilities', { color: COLORS.dim }));
     SKILLS.forEach((sk, i) => {
-      const x = 224 + i * 64;
-      o(this.add.image(x, 280, SKILL_ICONS, sk).setOrigin(0, 0).setScale(1.5));
-      o(label(this, x + 26, 290, String(cap[sk]), { color: cap[sk] > 0 ? COLORS.text : COLORS.dim }));
-      if (cap[sk] > s.capacity[sk]) o(label(this, x + 26, 306, `+${cap[sk] - s.capacity[sk]}`, { color: COLORS.teal }));
+      const x = 204 + i * 68;
+      o(this.add.image(x, 344, SKILL_ICONS, sk).setOrigin(0, 0).setScale(1.5));
+      o(label(this, x + 26, 354, String(cap[sk]), { color: cap[sk] > 0 ? COLORS.text : COLORS.dim }));
+      if (cap[sk] > s.capacity[sk]) o(label(this, x + 26, 370, `+${cap[sk] - s.capacity[sk]}`, { color: COLORS.teal }));
     });
     const st = s.stats;
     const tags = s.pendingTags.map((t) => tagDef(t).name);
@@ -580,9 +593,9 @@ export class RunScene extends Phaser.Scene {
       ...(tags.length ? [`Skip Bonuses waiting: ${tags.join(', ')}`] : []),
       `Seed ${s.seed}`,
     ];
-    o(label(this, 224, 336, lines.join('\n'), { color: COLORS.text, maxWidth: 512 }));
-    this.spot('back', 480, 465);
-    o(new Button(this, 380, 450, 200, 30, 'Back', COLORS.orange, () => this.closeOverlay()));
+    o(label(this, 204, 398, lines.join('\n'), { color: COLORS.text, maxWidth: 552 }));
+    this.spot('back', 480, 499);
+    o(new Button(this, 380, 486, 200, 28, 'Back', COLORS.orange, () => this.closeOverlay()));
   }
 
   /** Options: the volumes, the collection, back to the title, or the end of the run. */
@@ -879,7 +892,7 @@ export class RunScene extends Phaser.Scene {
    * A level of the ante as it starts, at twice its size: drag it (or the strip of the whole level below it; or the
    * arrow keys and the mouse wheel) to look around. With its numbers and skills, and what the team would bring.
    */
-  private showLevelPreview(run: RunSession, index: number): void {
+  private showLevelPreview(run: RunSession, index: number, onClose?: () => void): void {
     const o = this.openOverlay(0.7);
     const p = run.preview(index);
     const l = p.level;
@@ -890,9 +903,15 @@ export class RunScene extends Phaser.Scene {
     const wiki = o(this.wikiButton(l, name.x + name.width + 8, 29, 'wiki:preview'));
     o(label(this, wiki.x + wiki.bw + 12, 30, l.title, { color: COLORS.text, maxWidth: 800 - wiki.x - wiki.bw }));
     this.spot('close', 828 + 46, 26 + 14);
-    o(new Button(this, 828, 26, 92, 28, 'Close', COLORS.orange, () => this.closeOverlay()));
+    o(
+      new Button(this, 828, 26, 92, 28, 'Close', COLORS.orange, () => {
+        this.closeOverlay();
+        onClose?.();
+      }),
+    );
     const lemmings = (p.squad < l.lemmings ? `${l.lemmings} (you have ${p.squad})` : String(l.lemmings)) + (p.extra ? ` +${p.extra}` : '');
-    o(label(this, 40, 56, `Lemmings ${lemmings} · Rescue ${p.required} (${percent(p.required, p.squad + p.extra)}%)`, { color: COLORS.dim }));
+    const hz = levelHazards(this.app.style, this.app.data.provider, l);
+    o(label(this, 40, 56, `Lemmings ${lemmings} · Rescue ${p.required} (${percent(p.required, p.squad + p.extra)}%) · ${hazardsText(hz)}`, { color: COLORS.dim }));
     const meta = loadMeta().levels[l.id];
     if (meta?.fewest) o(label(this, 920, 56, `Your best: ${meta.best}%, ${totalSkills(meta.fewest)} skills`, { color: COLORS.teal, originX: 1 }));
 
@@ -1331,8 +1350,11 @@ export class RunScene extends Phaser.Scene {
       this.spot('nextBlind', x + 120, by + 46);
       const name = k(label(this, x + 20, by + 70, levelName(nl), { purple: true }));
       this.wikiButton(nl, name.x + name.width + 6, by + 69, 'wiki:next');
-      k(label(this, x + 220, by + 6, `Rescue ${nl.rescue} (${percent(nl.rescue, Math.min(nl.lemmings, s.colony.length))}%)`, { color: COLORS.dim, originX: 1 }));
+      const np = run.preview(index);
+      k(label(this, x + 220, by + 6, `Rescue ${np.required} (${percent(np.required, np.squad + np.extra)}%)`, { color: COLORS.dim, originX: 1 }));
       k(label(this, x + 20, by + 90, nl.title, { color: COLORS.text, maxWidth: 200 }));
+      const hz = levelHazards(this.app.style, this.app.data.provider, nl);
+      k(label(this, x + 20, by + 110, hazardsText(hz), { color: hz.water || hz.fire || hz.traps ? COLORS.red : COLORS.green, maxWidth: 200 }));
     } else k(label(this, x + 20, by + 6, `Next: Round ${s.ante + 1}`, { color: COLORS.orange }));
 
     // the packs, and the extra offers of a Supply Drop
@@ -1443,7 +1465,7 @@ export class RunScene extends Phaser.Scene {
     if (c.type === 'tarot') {
       const d = tarotDef(c.id);
       if (d.select > 0) {
-        this.showColony({ pack: index, max: d.select, name: d.name });
+        this.showColony({ pack: index, max: d.select, name: d.name, text: d.text });
         return;
       }
     }
@@ -1587,7 +1609,7 @@ export class RunScene extends Phaser.Scene {
     }
     const d = tarotDef(o.id);
     if (d.select > 0) {
-      this.showColony({ offer: o.uid, max: d.select, name: d.name });
+      this.showColony({ offer: o.uid, max: d.select, name: d.name, text: d.text });
       return;
     }
     const notes = run.buyAndUse(o.uid);
@@ -1623,7 +1645,7 @@ export class RunScene extends Phaser.Scene {
       }
       return;
     }
-    this.showColony({ uid, max: d.select, name: d.name });
+    this.showColony({ uid, max: d.select, name: d.name, text: d.text });
   }
 
   private closeOverlay(): void {
@@ -1635,120 +1657,93 @@ export class RunScene extends Phaser.Scene {
   }
 
   /**
-   * The colony: every special lemming, and the plain ones. With a tarot: select lemmings for it, with a tap each or
-   * with one drag across them (what the drag does to the first lemming it touches, it does to all).
+   * The colony: every lemming of it walking about a little level (see Habitat). A click on a lemming marks it and
+   * shows who it is in the panel at the side. With a boost, a click selects a lemming for it: the selected ones are
+   * lifted into the sky at the top (a click there drops one back), as Balatro lifts the cards selected from a hand.
    */
   private showColony(tarot: TarotUse | null): void {
     const run = this.run;
     if (!run) return;
-    if (!tarot) {
-      this.showTribe(run);
-      return;
-    }
     const o = this.openOverlay(0.6);
-    const selected = new Set<number>();
     const colony = run.state.colony;
     const squad = new Set(run.state.setup?.hand ?? []);
-    const specials = colony.filter(isSpecial);
-    const plain = colony.filter((c) => !isSpecial(c));
-    o(panel(this, 60, 30, 840, 480, COLORS.panel, COLORS.purple, 12));
-    o(label(this, 84, 44, tarot ? `${tarot.name}: select up to ${tarot.max}` : `Your colony: ${colony.length} lemmings`, { size: 16, color: COLORS.gold }));
-    const info = o(label(this, 84, 66, '', { color: COLORS.dim }));
-    const update = () =>
-      info.setText(
+    const selected: number[] = [];
+    o(panel(this, 40, 20, 880, 500, COLORS.panel, tarot ? COLORS.purple : COLORS.purple, 12));
+    o(label(this, 64, 34, tarot ? `${tarot.name}: select ${tarot.max === 1 ? 'a lemming' : `up to ${tarot.max} lemmings`}` : `Your colony: ${colony.length} lemmings`, { size: 32, color: COLORS.gold, maxWidth: 820 }));
+    const specials = this.specialCounts(colony);
+    const sub = o(label(this, 64, 72, '', { color: COLORS.dim, maxWidth: 620 }));
+    const updateSub = () =>
+      sub.setText(
         tarot
-          ? `${selected.size} of ${tarot.max} selected.${squad.size ? ' Lemmings of the squad of the level you are playing are marked.' : ''}`
-          : 'Special lemmings have editions (Gold, Lucky, Mentor), abilities or insurance.',
+          ? `${selected.length} of ${tarot.max} selected${selected.length ? ': ' + selected.map((id) => run.card(id)?.name ?? '').join(', ') : ''}`
+          : specials
+            ? `Special: ${specials}`
+            : 'All of them plain lemmings.',
       );
-    update();
-    const cells: { c: LemmingCard; rect: Rect; draw: () => void }[] = [];
-    const shown = specials.slice(0, 44);
-    shown.forEach((c, i) => {
-      const cx = 84 + (i % 4) * 200;
-      const cy = 92 + Math.floor(i / 4) * 32;
-      const box = o(this.add.graphics());
-      const draw = () => {
-        box.clear();
-        box.fillStyle(selected.has(c.id) ? COLORS.purple : COLORS.dark, 1);
-        box.fillRoundedRect(cx, cy, 192, 28, 5);
-        box.lineStyle(1, squad.has(c.id) ? COLORS.orange : COLORS.border, 1);
-        box.strokeRoundedRect(cx, cy, 192, 28, 5);
-      };
-      draw();
-      cells.push({ c, rect: { x: cx, y: cy, w: 192, h: 28 }, draw });
-      const sp = o(lemmingSprite(this, cx + 12, cy + 14, c.floater ? 'float' : c.climber ? 'climb' : 'walk', 1));
-      sp.setTint(EDITION_TINTS[c.edition]);
-      o(label(this, cx + 26, cy + 6, cardTitle(c), { color: COLORS.text, maxWidth: 160 }));
-      const zone = o(this.add.zone(cx, cy, 192, 28).setOrigin(0, 0).setInteractive());
-      this.spot(`colony:${i}`, cx + 96, cy + 14);
-      const cellTip = (): TipContent => ({
-        title: cardTitle(c),
-        color: EDITION_TINTS[c.edition] === 0xffffff ? COLORS.text : EDITION_TINTS[c.edition],
-        lines: this.cardLines(c, squad.has(c.id)),
-        x: cx,
-        y: cy + 30,
-        width: 320,
-      });
-      hoverTip(zone, this.tip, cellTip, !tarot);
-      if (!tarot) return;
-      zone.on('pointerdown', () => {
-        // the first lemming decides: the drag selects, or it takes lemmings out of the selection
-        const adding = !selected.has(c.id);
-        const apply = (cell: { c: LemmingCard; draw: () => void }) => {
-          if (adding === selected.has(cell.c.id)) return;
-          if (!adding) selected.delete(cell.c.id);
-          else if (selected.size < tarot.max) selected.add(cell.c.id);
-          else return;
-          cell.draw();
-          update();
-        };
-        apply({ c, draw });
-        const move = (p: Phaser.Input.Pointer) => {
-          const cell = cells.find((cl) => inRect(cl.rect, p.worldX, p.worldY));
-          if (cell) apply(cell);
-        };
-        const stop = () => {
-          this.input.off('pointermove', move);
-          this.input.off('pointerup', stop);
-          this.input.off('pointerupoutside', stop);
-        };
-        this.input.on('pointermove', move);
-        this.input.on('pointerup', stop);
-        this.input.on('pointerupoutside', stop);
-        this.overlayCleanup.push(stop);
-      });
+    updateSub();
+
+    // (a crowd of at most 150: more would cover the level; the special ones first)
+    const special = colony.filter(isSpecial);
+    const plain = Phaser.Utils.Array.Shuffle(colony.filter((c) => !isSpecial(c)));
+    const shown = colony.length > 150 ? [...special.slice(0, 150), ...plain].slice(0, 150) : colony;
+    const area = { x: 56, y: 96, w: 620, h: 370 };
+
+    // the panel at the side: who the lemming picked is (static, like a tooltip pinned to the corner)
+    const info = new Tooltip(this);
+    let picked: LemmingCard | null = null;
+    const showInfo = () => {
+      const c = picked;
+      const tip: TipContent = c
+        ? { title: cardTitle(c), color: this.cardColor(c), lines: this.cardLines(c, squad.has(c.id)), x: 690, y: 96, width: 214, keywords: [] }
+        : tarot
+          ? { title: tarot.name, color: COLORS.purple, lines: [...(tarot.text ? [tarot.text, ''] : []), touch.active ? 'Tap the lemmings to select them; tap one in the sky to put it back.' : 'Click the lemmings to select them; click one in the sky to put it back.'], x: 690, y: 96, width: 214, keywords: [] }
+          : { title: 'Your colony', color: COLORS.gold, lines: [touch.active ? 'Tap a lemming to see who it is.' : 'Click a lemming to see who it is.'], x: 690, y: 96, width: 214, keywords: [] };
+      info.show(tip);
+    };
+    showInfo();
+
+    const habitat = new Habitat(this, area, shown, o, {
+      sky: tarot ? tarot.max : 0,
+      // the tooltip under the pointer: just who it is
+      onHover: (c, x, y) => {
+        if (touch.active) return;
+        showTip(this.tip, { title: cardTitle(c), color: this.cardColor(c), lines: [], x, y: y - 44, center: true, width: Math.min(260, 40 + 8 * cardTitle(c).length), keywords: [] }, c);
+      },
+      onOut: (c) => {
+        if (this.tip.owner === c) this.tip.hide();
+      },
+      onPick: (c) => {
+        picked = c;
+        habitat.mark(c.id);
+        showInfo();
+        this.tip.hide();
+        this.sfx(SoundEffect.SkillButtonSelect);
+        if (!tarot) return;
+        const i = selected.indexOf(c.id);
+        if (i >= 0) {
+          selected.splice(i, 1);
+          habitat.drop(c.id);
+        } else if (selected.length < tarot.max) {
+          selected.push(c.id);
+          habitat.lift(c.id);
+        } else this.toast(`${tarot.name} takes ${tarot.max === 1 ? 'one lemming' : `${tarot.max} lemmings`}: put one back first.`);
+        updateSub();
+      },
+      spot: (i, x, y) => this.spot(`colony:${i}`, x, y),
     });
-    if (specials.length > shown.length) o(label(this, 84, 92 + 11 * 32, `and ${specials.length - shown.length} more special lemmings`, { color: COLORS.dim }));
-    // the plain lemmings: one tile (with a tarot, every click selects another one)
-    const py = 92 + Math.min(11, Math.ceil(shown.length / 4)) * 32 + 8;
-    const plainSelected = () => plain.filter((c) => selected.has(c.id)).length;
-    const plainLabel = o(label(this, 110, py + 8, '', { color: COLORS.text }));
-    const updPlain = () => plainLabel.setText(`Plain lemmings: ${plain.length}${tarot ? `  (${plainSelected()} selected)` : ''}`);
-    updPlain();
-    o(lemmingSprite(this, 94, py + 14, 'walk', 1));
-    if (tarot && plain.length) {
-      this.spot('selectOne', 470, py + 15);
-      const selectOne = () => {
-        const next = plain.find((c) => !selected.has(c.id) && !squad.has(c.id)) ?? plain.find((c) => !selected.has(c.id));
-        if (next && selected.size < tarot.max) selected.add(next.id);
-        updPlain();
-        update();
-      };
-      o(new Button(this, 420, py + 2, 100, 26, 'Select one', COLORS.blue, selectOne));
-      const clearPlain = () => {
-        for (const c of plain) selected.delete(c.id);
-        updPlain();
-        update();
-      };
-      o(new Button(this, 530, py + 2, 100, 26, 'Clear', COLORS.gray, clearPlain));
-    }
+    this.overlayCleanup.push(() => {
+      habitat.destroy();
+      info.hide();
+      this.tip.hide();
+    });
+    if (shown.length < colony.length) o(label(this, 64, 478, `and ${colony.length - shown.length} more at home`, { color: COLORS.dim }));
     if (tarot) {
-      this.spot('use', 665, 482);
+      this.spot('use', 665, 494);
       const use = () => {
-        const notes =
-          tarot.pack !== undefined ? run.choosePack(tarot.pack, [...selected]) : tarot.offer !== undefined ? run.buyAndUse(tarot.offer, [...selected]) : run.useTarot(tarot.uid!, [...selected]);
+        const ids = [...selected];
+        const notes = tarot.pack !== undefined ? run.choosePack(tarot.pack, ids) : tarot.offer !== undefined ? run.buyAndUse(tarot.offer, ids) : run.useTarot(tarot.uid!, ids);
         if (!notes) {
-          this.toast(selected.size === 0 ? 'Select at least one lemming.' : 'That does not work (the squad of a level cannot leave the colony).');
+          this.toast(ids.length === 0 ? 'Select at least one lemming.' : 'That does not work (the squad of a level cannot leave the colony).');
           return;
         }
         this.sfx(SoundEffect.AssignSkill);
@@ -1756,34 +1751,15 @@ export class RunScene extends Phaser.Scene {
         this.render();
         this.toast(notes.join('\n'));
       };
-      o(new Button(this, 600, 466, 130, 32, 'Use', COLORS.red, use));
+      o(new Button(this, 600, 478, 130, 32, 'Use', COLORS.red, use));
     }
-    this.spot('back', 805, 482);
-    o(new Button(this, 740, 466, 130, 32, tarot ? 'Cancel' : 'Back', COLORS.orange, () => this.closeOverlay()));
+    this.spot('back', 820, 494);
+    o(new Button(this, 750, 478, 140, 32, tarot ? 'Cancel' : 'Back', COLORS.orange, () => this.closeOverlay()));
   }
 
-  /** The colony at home: every lemming of it, walking about a little level (see Habitat). */
-  private showTribe(run: RunSession): void {
-    const o = this.openOverlay(0.6);
-    const colony = run.state.colony;
-    const squad = new Set(run.state.setup?.hand ?? []);
-    o(panel(this, 40, 20, 880, 500, COLORS.panel, COLORS.purple, 12));
-    o(label(this, 64, 34, `Your colony: ${colony.length} lemmings`, { size: 32, color: COLORS.gold }));
-    const specials = this.specialCounts(colony);
-    o(label(this, 64, 72, specials ? `Special: ${specials}` : 'All of them plain lemmings.', { color: COLORS.dim, maxWidth: 820 }));
-    // (a crowd of at most 150: more would cover the level)
-    const shown = colony.length > 150 ? Phaser.Utils.Array.Shuffle([...colony]).slice(0, 150) : colony;
-    const habitat = new Habitat(this, { x: 56, y: 96, w: 848, h: 370 }, shown, o, EDITION_TINTS, (c, x, y) =>
-      showTip(this.tip, { title: cardTitle(c), color: EDITION_TINTS[c.edition] === 0xffffff ? COLORS.text : EDITION_TINTS[c.edition], lines: this.cardLines(c, squad.has(c.id)), x: x - 150, y: y + 12, width: 300 }),
-    );
-    this.overlayCleanup.push(() => {
-      habitat.destroy();
-      this.tip.hide();
-    });
-    if (shown.length < colony.length) o(label(this, 64, 478, `and ${colony.length - shown.length} more at home`, { color: COLORS.dim }));
-    o(label(this, 480, 494, touch.active ? 'Tap a lemming to see who it is' : 'Point at a lemming to see who it is', { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
-    this.spot('back', 820, 494);
-    o(new Button(this, 750, 478, 140, 32, 'Back', COLORS.orange, () => this.closeOverlay()));
+  /** the colour of a lemming's name: its edition */
+  private cardColor(c: LemmingCard): number {
+    return EDITION_TINTS[c.edition] === 0xffffff ? COLORS.text : EDITION_TINTS[c.edition];
   }
 
   private cardLines(c: LemmingCard, inSquad: boolean): string[] {
