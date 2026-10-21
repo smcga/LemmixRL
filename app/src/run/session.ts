@@ -158,7 +158,7 @@ export class RunSession {
     };
     const run = new RunSession(catalog, state);
     const names = run.random.stream('names');
-    for (let i = 0; i < START_COLONY; i++) state.colony.push(run.newCard(names));
+    for (let i = 0; i < START_COLONY; i++) state.colony.push(run.newCard(names, true));
     run.newAnte();
     // the first decision of the run: the abilities, with the levels of the first ante in view
     run.beginAssignment('start', START_ABILITY_POINTS, 0, 'blinds', []);
@@ -1535,9 +1535,10 @@ export class RunSession {
     return this.state.nextUid++;
   }
 
-  private newCard(names: Rng): LemmingCard {
+  /** a new lemming (start: of the colony a run starts with, a classic lemming nearly always) */
+  private newCard(names: Rng, start = false): LemmingCard {
     const card: LemmingCard = { id: this.uid(), name: names.pick(LEMMING_NAMES), climber: false, floater: false, edition: 'plain', insured: false, saves: 0 };
-    return { ...card, ...randomColors(this.random.stream('colors')) };
+    return { ...card, ...randomColors(this.random.stream('colors'), start) };
   }
 
   /** a Power Card as it is bought (the Checklist starts with Red clothes on its list) */

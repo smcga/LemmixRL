@@ -34,8 +34,19 @@ function weighted(rng: Rng, weights: Record<LemmingColor, number>): LemmingColor
   return rng.pickWeighted(LEMMING_COLORS, LEMMING_COLORS.map((c) => weights[c]));
 }
 
-/** the colours of a new lemming */
-export function randomColors(rng: Rng): { hair: LemmingColor; clothes: LemmingColor } {
+/**
+ * The colony a run starts with is classic lemmings, nearly all of it: a lemming of it has other hair (or other
+ * clothes) only now and then. The lemmings that join later bring the colours in.
+ */
+export const START_COLOR_CHANCE = 0.06;
+
+/** the colours of a new lemming (of the colony a run starts with: nearly always green hair and blue clothes) */
+export function randomColors(rng: Rng, start = false): { hair: LemmingColor; clothes: LemmingColor } {
+  if (start) {
+    const other = (classic: LemmingColor, weights: Record<LemmingColor, number>) =>
+      rng.chance(START_COLOR_CHANCE) ? weighted(rng, { ...weights, [classic]: 0 }) : classic;
+    return { hair: other('green', HAIR_WEIGHTS), clothes: other('blue', CLOTHES_WEIGHTS) };
+  }
   return { hair: weighted(rng, HAIR_WEIGHTS), clothes: weighted(rng, CLOTHES_WEIGHTS) };
 }
 
