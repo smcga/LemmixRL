@@ -150,7 +150,8 @@ is sold (a boost to the Power Cards), a boost dragged above the colony is used, 
 another place. The colony (the deck in the corner) lives at home: a little level of its own, played by the game, with a trapdoor
 and an exit (`app/src/run/home.ts`). *Pick* shows who a lemming is in the panel at the side (a drag picks every lemming
 in a box), and the eight skills can be used there as often as you like, for nothing: build bridges, dig, bash and blow
-up the ground, put blockers in the way, to keep lemmings in groups. The home is kept with the run as it was left (its
+up the ground, put blockers in the way, to keep lemmings in groups; *Dirt* and *Erase* paint the ground where they
+are dragged. A home starts as three shelves of three pens (walls from floor to floor), the exit in a nook of its own. The home is kept with the run as it was left (its
 ground, where every lemming is, its blockers); nothing is lost there (a lemming that dies or goes out comes back in by
 the trapdoor), and new lemmings come in by the trapdoor. The lemmings picked can be *preferred* or *avoided*: a squad
 is drawn from the preferred lemmings first and the avoided ones last (drawn again at once while its level has not

@@ -1,18 +1,24 @@
 /**
  * The colony at home on the screen (see home.ts): the game's picture of the home at twice its size, the marks of the
  * special lemmings over it (as in a level), the lemmings selected, and the tools: Pick (a click picks a lemming, a drag
- * picks every lemming in a box) and the eight skills (a click gives the lemming under it the skill, for nothing).
+ * picks every lemming in a box), the eight skills (a click gives the lemming under it the skill, for nothing), and the
+ * brush: Dirt paints ground where it is dragged, Erase takes it away.
  */
 import * as Phaser from 'phaser';
 import { Bitmap32, type Lemming } from '../../../../engine/src/index.ts';
 import { ColonyHome, HOME_H, HOME_W, homePicture } from '../home.ts';
-import { type Skill, SKILL_NAMES, SKILLS } from '../skills.ts';
+import { type Skill, SKILLS } from '../skills.ts';
 import type { LemmingCard } from '../state.ts';
 import { markerColor } from './art.ts';
 import { SKILL_ICONS } from './assets.ts';
 import { COLORS, label, shade } from './widgets.ts';
 
-export type HomeTool = 'pick' | Skill;
+export type HomeTool = 'pick' | Skill | 'dirt' | 'erase';
+
+/** the tools, in the order of the toolbar */
+const TOOLS: readonly HomeTool[] = ['pick', ...SKILLS, 'dirt', 'erase'];
+/** the brush: its radius (pixels of the home) */
+const BRUSH = 4;
 
 export interface HomeViewOptions {
   /** a click on a lemming with the Pick tool (or on nothing: null) */
@@ -45,6 +51,8 @@ export class HomeView {
   private readonly pips: Phaser.GameObjects.Rectangle[] = [];
   private readonly tools = new Map<HomeTool, Phaser.GameObjects.Graphics>();
   private box: { x: number; y: number; x1: number; y1: number } | null = null;
+  /** the brush: where it was last (a drag paints the line between) */
+  private stroke: { x: number; y: number } | null = null;
   private clock = 0;
   private time = 0;
 
@@ -68,7 +76,11 @@ export class HomeView {
     img.on('pointerdown', (p: Phaser.Input.Pointer) => this.down(p));
     img.on('pointermove', (p: Phaser.Input.Pointer) => this.move(p));
     img.on('pointerup', (p: Phaser.Input.Pointer) => this.up(p));
-    img.on('pointerout', () => opts.onHover?.(null, 0, 0));
+    img.on('pointerout', () => {
+      this.stroke = null;
+      this.pointer = null;
+      opts.onHover?.(null, 0, 0);
+    });
     this.overlay = add(scene.add.graphics());
     this.draw();
     scene.events.on('update', this.update, this);
@@ -84,27 +96,27 @@ export class HomeView {
     this.toolX = x;
     this.toolY = y;
     const scene = this.scene;
-    const all: HomeTool[] = ['pick', ...SKILLS];
-    all.forEach((t, i) => {
+    TOOLS.forEach((t, i) => {
       const bx = x + i * 48;
       const g = this.add(scene.add.graphics());
       this.tools.set(t, g);
-      if (t === 'pick') this.add(label(scene, bx + 21, y + 20, 'Pick', { originX: 0.5, originY: 0.5 }));
-      else this.add(scene.add.image(bx + 21, y + 20, SKILL_ICONS, t).setScale(1.4));
+      if (t === 'pick' || t === 'erase') this.add(label(scene, bx + 21, y + 20, t === 'pick' ? 'Pick' : 'Erase', { originX: 0.5, originY: 0.5, size: t === 'erase' ? 12 : 16 }));
+      // (the Dirt tool is a lump of earth, drawn with its button: see drawTools)
+      else if (t !== 'dirt') this.add(scene.add.image(bx + 21, y + 20, SKILL_ICONS, t).setScale(1.4));
       const zone = this.add(scene.add.zone(bx, y, 42, 40).setOrigin(0, 0).setInteractive({ useHandCursor: true }));
       zone.on('pointerup', () => {
         this.tool = t;
         this.drawTools();
       });
       this.opts.spot?.(`tool:${t}`, bx + 21, y + 20);
-      zone.setData('tip', t === 'pick' ? 'Pick' : SKILL_NAMES[t]);
     });
     this.drawTools();
   }
 
+
   private drawTools(): void {
     for (const [t, g] of this.tools) {
-      const i = ['pick', ...SKILLS].indexOf(t);
+      const i = TOOLS.indexOf(t);
       const bx = this.toolX + i * 48;
       const on = this.tool === t;
       g.clear();
@@ -112,6 +124,16 @@ export class HomeView {
       g.fillRoundedRect(bx, this.toolY + 2, 42, 40, 6);
       g.fillStyle(on ? COLORS.gold : COLORS.panelLight, 1);
       g.fillRoundedRect(bx, this.toolY, 42, 40, 6);
+      if (t === 'dirt') {
+        // a lump of earth with grass on it
+        g.fillStyle(0x8a4f2a, 1);
+        g.fillRoundedRect(bx + 9, this.toolY + 13, 24, 16, 5);
+        g.fillStyle(0x5a3018, 1);
+        g.fillRect(bx + 13, this.toolY + 22, 4, 3);
+        g.fillRect(bx + 23, this.toolY + 18, 3, 3);
+        g.fillStyle(0x4caf50, 1);
+        g.fillRect(bx + 11, this.toolY + 12, 20, 3);
+      }
     }
   }
 
@@ -144,6 +166,11 @@ export class HomeView {
 
   private down(p: Phaser.Input.Pointer): void {
     const w = this.world(p);
+    if (this.tool === 'dirt' || this.tool === 'erase') {
+      this.stroke = w;
+      this.home.paint(w.x, w.y, BRUSH, this.tool === 'dirt');
+      return;
+    }
     if (this.tool !== 'pick') {
       this.home.assign(this.tool, Math.round(w.x), Math.round(w.y));
       return;
@@ -151,8 +178,20 @@ export class HomeView {
     this.box = { x: w.x, y: w.y, x1: w.x, y1: w.y };
   }
 
+  /** where the pointer is over the home (the brush is drawn there) */
+  private pointer: { x: number; y: number } | null = null;
+
   private move(p: Phaser.Input.Pointer): void {
     const w = this.world(p);
+    this.pointer = w;
+    if (this.stroke && p.isDown && (this.tool === 'dirt' || this.tool === 'erase')) {
+      // the line from where the brush was: a spot every pixel of it
+      const a = this.stroke;
+      const n = Math.max(1, Math.ceil(Math.hypot(w.x - a.x, w.y - a.y)));
+      for (let k = 1; k <= n; k++) this.home.paint(a.x + ((w.x - a.x) * k) / n, a.y + ((w.y - a.y) * k) / n, BRUSH, this.tool === 'dirt');
+      this.stroke = w;
+      return;
+    }
     if (this.box && p.isDown) {
       this.box.x1 = w.x;
       this.box.y1 = w.y;
@@ -164,6 +203,7 @@ export class HomeView {
   }
 
   private up(_p: Phaser.Input.Pointer): void {
+    this.stroke = null;
     const b = this.box;
     this.box = null;
     if (!b) return;
@@ -246,6 +286,10 @@ export class HomeView {
     for (let i = n; i < this.pips.length; i++) this.pips[i].setVisible(false);
     for (const p of this.pips) this.scene.children.bringToTop(p);
     this.scene.children.bringToTop(g);
+    if ((this.tool === 'dirt' || this.tool === 'erase') && this.pointer) {
+      g.lineStyle(1, this.tool === 'dirt' ? 0x8a4f2a : 0xffffff, 0.9);
+      g.strokeCircle(this.x + this.pointer.x * SCALE, this.y + this.pointer.y * SCALE, BRUSH * SCALE + 1);
+    }
     if (this.box) {
       const b = this.box;
       g.lineStyle(2, COLORS.gold, 1);

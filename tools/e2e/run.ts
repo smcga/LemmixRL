@@ -246,11 +246,26 @@ try {
   await clickSpot('tool:pick', 200);
   await page.mouse.move(vx(56 + 10 * 2), vy(96 + 22 * 2));
   await page.mouse.down();
-  await page.mouse.move(vx(56 + 152 * 2), vy(96 + 46 * 2), { steps: 8 });
+  await page.mouse.move(vx(56 + 152 * 2), vy(96 + 56 * 2), { steps: 8 });
   await page.mouse.up();
   await page.waitForTimeout(300);
   await clickSpot('prefer', 300);
-  await page.waitForTimeout(1500);
+  // the brush: Dirt dragged through the air of a pen makes ground, Erase dragged over it takes it away
+  const drag = async (x0: number, y0: number, x1: number, y1: number) => {
+    await page.mouse.move(vx(56 + x0 * 2), vy(96 + y0 * 2));
+    await page.mouse.down();
+    await page.mouse.move(vx(56 + x1 * 2), vy(96 + y1 * 2), { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+  };
+  const ground = (x: number, y: number) => ev<boolean>(`${home}.game.hasPixelAt(${x}, ${y})`);
+  await clickSpot('tool:dirt', 200);
+  await drag(130, 30, 175, 30);
+  if (!(await ground(150, 30)) || !(await ground(170, 30))) fail('Dirt dragged through the air did not make ground');
+  await clickSpot('tool:erase', 200);
+  await drag(130, 30, 160, 30);
+  if ((await ground(150, 30)) || !(await ground(172, 30))) fail('Erase did not take away the ground it was dragged over (only that)');
+  await page.waitForTimeout(1200);
   await page.screenshot({ path: `${REPO_ROOT}/tools/e2e/home.png` });
   const preferred = (await state()).colony.filter((c: { pref?: string }) => c.pref === 'prefer').length;
   if (preferred < 1) fail('Prefer did not prefer the lemmings in the box');
