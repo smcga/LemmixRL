@@ -1485,36 +1485,39 @@ export class RunScene extends Phaser.Scene {
     const lemmings = (title: string, line: string, art: Art) => ({ title, color: COLORS.blue, lines: [line], art, badge: { text: 'Lemmings', color: COLORS.blue } });
     switch (c.type) {
       case 'recruits':
-        return lemmings(`${c.amount} Lemmings`, `${c.amount} plain lemmings join the colony.`, { anim: 'walk' });
+        return lemmings(`${c.amount} Lemmings`, `{!}${c.amount}{} plain lemmings join the colony`, { anim: 'walk' });
       case 'specials': {
         const n = c.amount;
         switch (c.trait) {
           case 'floater':
-            return lemmings(`${n} Floaters`, `${n} lemmings with an umbrella in every level join the colony.`, { anim: 'float' });
+            return lemmings(`${n} Floaters`, `{!}${n}{} {s}Floaters{} join the colony`, { anim: 'float' });
           case 'climber':
-            return lemmings(`${n} Climbers`, `${n} lemmings that climb walls in every level join the colony.`, { anim: 'climb' });
+            return lemmings(`${n} Climbers`, `{!}${n}{} {s}Climbers{} join the colony`, { anim: 'climb' });
           case 'athlete':
-            return lemmings('An Athlete', 'A lemming that climbs and floats in every level joins the colony.', { anim: 'climb', tint: 0x9fd0ff });
+            return lemmings('An Athlete', 'A {s}Climber{} and {s}Floater{} joins the colony', { anim: 'climb', tint: 0x9fd0ff });
           case 'insured':
-            return lemmings(`${n} Insured`, `${n} lemmings that come back once after they die join the colony.`, { anim: 'block', tint: 0xffd0a0 });
+            return lemmings(`${n} Insured`, `{!}${n}{} {!}Insured{} lemmings join the colony. ${TRAIT_TEXTS.insured}`, { anim: 'block', tint: 0xffd0a0 });
           default:
-            return lemmings(`A ${EDITION_NAMES[c.trait]} Lemming`, `Joins the colony. ${EDITION_TEXTS[c.trait]}`, { anim: c.trait === 'mentor' ? 'build' : c.trait === 'champion' ? 'exit' : 'walk', tint: EDITION_TINTS[c.trait] });
+            return lemmings(`A ${EDITION_NAMES[c.trait]} Lemming`, `A {!}${EDITION_NAMES[c.trait]}{} lemming joins the colony. ${EDITION_TEXTS[c.trait]}`, { anim: c.trait === 'mentor' ? 'build' : c.trait === 'champion' ? 'exit' : 'walk', tint: EDITION_TINTS[c.trait] });
         }
       }
       case 'ability':
         return {
           title: `+${c.amount} ${SKILL_PLURALS[c.skill]}`,
           color: COLORS.teal,
-          lines: [`+${c.amount} ${SKILL_NAMES[c.skill]} ability for good${c.minus ? `, but ${c.minusAmount} less ${SKILL_NAMES[c.minus]}` : ''}.`, `You have ${run.capability()[c.skill]}${c.minus ? ` and ${run.capability()[c.minus]}` : ''}.`],
+          lines: [
+            `{!}+${c.amount}{} {s}${SKILL_NAMES[c.skill]}{} ability${c.minus ? `, {x}-${c.minusAmount}{} {s}${SKILL_NAMES[c.minus]}{} ability` : ''}`,
+            `{~}(Currently{} {!}${run.capability()[c.skill]}{}${c.minus ? `{~} and{} {!}${run.capability()[c.minus]}{}` : ''}{~}){}`,
+          ],
           art: { icon: c.skill },
           badge: { text: c.minus ? 'Trade' : 'Training', color: COLORS.teal },
         };
       case 'allSkills':
-        return { title: 'All-round Training', color: COLORS.teal, lines: [`+${c.amount} ability in every skill, for good.`], art: { text: `+${c.amount}`, color: COLORS.teal }, badge: { text: 'Training', color: COLORS.teal } };
+        return { title: 'All-round Training', color: COLORS.teal, lines: [`{!}+${c.amount}{} ability in every skill`], art: { text: `+${c.amount}`, color: COLORS.teal }, badge: { text: 'Training', color: COLORS.teal } };
       case 'tarot': {
         const d = tarotDef(c.id);
         const text = c.skill && d.skillText ? d.skillText(SKILL_NAMES[c.skill]) : d.text;
-        return { title: d.name, color: COLORS.purple, lines: [text, '', 'Used as soon as you choose it.'], art: c.id === 'manual' && c.skill ? { icon: c.skill } : TAROT_ART[c.id], badge: { text: 'Boost', color: COLORS.purple } };
+        return { title: d.name, color: COLORS.purple, lines: [text, '{~}(Used at once){}'], art: c.id === 'manual' && c.skill ? { icon: c.skill } : TAROT_ART[c.id], badge: { text: 'Boost', color: COLORS.purple } };
       }
       case 'joker': {
         const d = jokerDef(c.id);
@@ -1576,7 +1579,7 @@ export class RunScene extends Phaser.Scene {
         return {
           title: `${SKILL_NAMES[sk]} Training`,
           color: COLORS.teal,
-          lines: [`+${o.amount} ${SKILL_NAMES[sk]} ability for good.`, `You have ${run.capability()[sk]}.`],
+          lines: [`{!}+${o.amount}{} {s}${SKILL_NAMES[sk]}{} ability`, `{~}(Currently{} {!}${run.capability()[sk]}{}{~}){}`],
           art: { icon: sk },
           badge: { text: 'Training', color: COLORS.teal },
         };
@@ -1586,7 +1589,7 @@ export class RunScene extends Phaser.Scene {
         return {
           title: `${SKILL_NAMES[sk]} Recruitment Drive`,
           color: COLORS.teal,
-          lines: [`+${o.amount} lemmings and +${o.amount} ${SKILL_NAMES[sk]} ability.`],
+          lines: [`{!}${o.amount}{} lemmings join the colony and {!}+${o.amount}{} {s}${SKILL_NAMES[sk]}{} ability`],
           art: { anim: 'walk', tint: 0x9ff0e0 },
           badge: { text: 'Recruitment Drive', color: COLORS.teal },
         };

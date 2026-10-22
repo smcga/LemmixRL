@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Bitmap32, createSessionFromInfo, getStyle, StyleDef } from '../../engine/src/index.ts';
 import { repoDataProvider } from '../../engine/src/node/repoData.ts';
 import { LevelCatalog } from '../src/run/catalog.ts';
-import { JOKERS, jokerDef, jokerText, keywordsOf, TAROTS } from '../src/run/content.ts';
+import { JOKERS, jokerDef, jokerText, keywordsOf, PACKS, TAGS, TAROTS } from '../src/run/content.ts';
 import { drawnIndexes, parseRich, plainText, RICH_COLORS } from '../src/run/rich.ts';
 import { RunSession } from '../src/run/session.ts';
 import { SKILLS, type SkillCounts, zeroSkills } from '../src/run/skills.ts';
@@ -69,14 +69,14 @@ describe('the colours of a description', () => {
     expect(drawnIndexes('a~b', 'a~b', (code) => code !== 126)).toEqual([0, -1, 1]);
   });
 
-  it('every Power Card and Boost describes itself in known tags, without explaining the game in it', () => {
-    for (const t of [...JOKERS.map((d) => d.text), ...TAROTS.map((d) => d.text)]) {
+  it('every Power Card, Boost, pack and Skip Bonus describes itself in known tags, without explaining the game in it', () => {
+    for (const t of [...JOKERS.map((d) => d.text), ...TAROTS.map((d) => d.text), ...Object.values(PACKS).map((d) => d.text), ...TAGS.map((d) => d.text)]) {
       const plain = plainText(t);
       expect(plain, t).not.toMatch(/[{}#]/);
       // (what a term means is in the box next to the description, not in it)
       expect(plain, t).not.toMatch(/count(s)? as \d|not of your colony|\(they are/);
       expect(plain.length, t).toBeLessThan(120);
-      for (const tag of t.match(/\{([^{}]*)\}/g) ?? []) expect(['{}', '{+}', '{x}', '{$}', '{%}', '{!}', '{~}'].includes(tag) || /^\{c:(green|orange|red|purple|blue)\}$/.test(tag), tag).toBe(true);
+      for (const tag of t.match(/\{([^{}]*)\}/g) ?? []) expect(['{}', '{+}', '{x}', '{$}', '{%}', '{s}', '{!}', '{~}'].includes(tag) || /^\{c:(green|orange|red|purple|blue)\}$/.test(tag), tag).toBe(true);
     }
   });
 

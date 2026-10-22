@@ -20,8 +20,8 @@ export const EDITION_NAMES: Record<Edition, string> = { plain: 'Lemming', gold: 
 
 /** what the abilities of a lemming do (in every level), as a description is written */
 export const TRAIT_TEXTS = {
-  climber: '{!}Climbs{} walls in every level',
-  floater: 'Opens an {!}umbrella{} when it falls, in every level',
+  climber: '{s}Climbs{} walls in every level',
+  floater: 'Opens an {s}umbrella{} when it falls, in every level',
   insured: '{!}Returns{} to the colony the first time it is lost',
 };
 
@@ -456,8 +456,8 @@ export interface TarotDef {
 }
 
 export const TAROTS: readonly TarotDef[] = [
-  { id: 'umbrella', name: 'The Umbrella', price: 3, text: 'Makes up to {!}3{} selected lemmings {!}Floaters{}', select: 3 },
-  { id: 'gear', name: 'The Climbing Gear', price: 3, text: 'Makes up to {!}3{} selected lemmings {!}Climbers{}', select: 3 },
+  { id: 'umbrella', name: 'The Umbrella', price: 3, text: 'Makes up to {!}3{} selected lemmings {s}Floaters{}', select: 3 },
+  { id: 'gear', name: 'The Climbing Gear', price: 3, text: 'Makes up to {!}3{} selected lemmings {s}Climbers{}', select: 3 },
   { id: 'midas', name: 'The Midas', price: 3, text: 'Makes {!}1{} selected lemming {!}Gold{}', select: 1 },
   { id: 'clover', name: 'The Four-Leaf', price: 3, text: 'Makes up to {!}2{} selected lemmings {!}Lucky{}', select: 2 },
   { id: 'mentor', name: 'The Mentor', price: 3, text: 'Makes {!}1{} selected lemming a {!}Mentor{}', select: 1 },
@@ -469,7 +469,7 @@ export const TAROTS: readonly TarotDef[] = [
     price: 3,
     text: 'Up to {!}3{} selected lemmings leave the colony for {!}+2{} ability each',
     select: 3,
-    skillText: (s) => `Up to {!}3{} selected lemmings leave the colony for {!}+2{} ${s} ability each`,
+    skillText: (s) => `Up to {!}3{} selected lemmings leave the colony for {!}+2{} {s}${s}{} ability each`,
   },
   { id: 'conscription', name: 'Conscription', price: 3, text: '{!}5{} random plain lemmings leave, {!}3{} random {!}Super Lemmings{} join', select: 0 },
   { id: 'vat', name: 'The Cloning Vat', price: 3, text: 'Creates a copy of {!}1{} selected lemming', select: 1 },
@@ -507,10 +507,10 @@ export interface PackDef {
 }
 
 export const PACKS: Record<PackKind, PackDef> = {
-  lemmings: { kind: 'lemmings', name: 'Lemmings Pack', price: 4, size: 3, text: 'Choose 1 of 3 groups of lemmings to join your colony.' },
-  training: { kind: 'training', name: 'Training Pack', price: 4, size: 3, text: 'Choose 1 of 3 changes to your abilities.' },
-  boost: { kind: 'boost', name: 'Boost Pack', price: 4, size: 3, text: 'Choose 1 of 3 boosts, used at once.' },
-  gadget: { kind: 'gadget', name: 'Power Pack', price: 6, size: 2, text: 'Choose 1 of 2 Power Cards.' },
+  lemmings: { kind: 'lemmings', name: 'Lemmings Pack', price: 4, size: 3, text: 'Choose {!}1{} of {!}3{} groups of lemmings to join your colony' },
+  training: { kind: 'training', name: 'Training Pack', price: 4, size: 3, text: 'Choose {!}1{} of {!}3{} ways to train your abilities' },
+  boost: { kind: 'boost', name: 'Boost Pack', price: 4, size: 3, text: 'Choose {!}1{} of {!}3{} {!}Boosts{} to use at once' },
+  gadget: { kind: 'gadget', name: 'Power Pack', price: 6, size: 2, text: 'Choose {!}1{} of {!}2{} {!}Power Cards{}' },
 };
 
 /* ---------------------------------------------------------------------------------------------- tags */
@@ -522,15 +522,15 @@ export interface TagDef {
 }
 
 export const TAGS: readonly TagDef[] = [
-  { id: 'recruits', name: 'Recruitment Drive', text: '8 plain lemmings join the colony.' },
-  { id: 'umbrellas', name: 'Umbrella Bonus', text: '5 random lemmings become Floaters.' },
-  { id: 'golden', name: 'Golden Exit', text: 'Doubles the payout of the next Level 3.' },
-  { id: 'supply', name: 'Supply Drop', text: 'The next shop has 2 more training offers.' },
-  { id: 'clone', name: 'Clone Bonus', text: 'A random special lemming is duplicated (or a plain one).' },
-  { id: 'investment', name: 'Investment Bonus', text: '+$10 after the next Level 3.' },
-  { id: 'coupon', name: 'Coupon Bonus', text: 'The offers in the next shop are free.' },
-  { id: 'training', name: 'Training Bonus', text: '+3 ability in a random skill.' },
-  { id: 'economy', name: 'Economy Bonus', text: '+$1 for every 10 lemmings in your colony.' },
+  { id: 'recruits', name: 'Recruitment Drive', text: '{!}8{} plain lemmings join the colony' },
+  { id: 'umbrellas', name: 'Umbrella Bonus', text: '{!}5{} random lemmings become {s}Floaters{}' },
+  { id: 'golden', name: 'Golden Exit', text: 'Doubles the payout of the next {!}Level 3{}' },
+  { id: 'supply', name: 'Supply Drop', text: 'The next shop has {!}2{} more training offers' },
+  { id: 'clone', name: 'Clone Bonus', text: 'Creates a copy of a random {!}Super Lemming{} (or a plain one)' },
+  { id: 'investment', name: 'Investment Bonus', text: 'Earn {$}$10{} after the next {!}Level 3{}' },
+  { id: 'coupon', name: 'Coupon Bonus', text: 'The offers in the next shop are {$}free{}' },
+  { id: 'training', name: 'Training Bonus', text: '{!}+3{} ability in a random skill' },
+  { id: 'economy', name: 'Economy Bonus', text: 'Earn {$}$1{} for every {!}10{} lemmings in your colony' },
 ];
 
 export function tagDef(id: string): TagDef {

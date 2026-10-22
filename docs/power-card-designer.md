@@ -48,7 +48,8 @@ the colour of what they are. Colours are tags; `{}` ends one. The designer's pre
 | `{x}X2{} Rescues` | red | multiplies the rescue count (Balatro's Mult) |
 | `{$}$3{}` | gold | money |
 | `{%}1 in 4{}` | green | a chance |
-| `{!}Floaters{}` | orange | something to notice: a skill, an edition, a number of lemmings |
+| `{s}Floaters{}` | green | a skill or ability: Builder, Floaters |
+| `{!}Gold{}` | orange | something to notice: an edition, a number of lemmings |
 | `{~}(Currently X1.4){}` | grey | what a card is at now |
 | `{c:orange}Orange{}` | the colour | a hair or clothes colour (`green`, `orange`, `red`, `purple`, `blue`) |
 

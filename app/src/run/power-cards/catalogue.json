@@ -6,7 +6,7 @@
       "name": "Illegal Toolkit",
       "rarity": "rare",
       "price": 8,
-      "description": "{!}+1{} Builder above the level maximum",
+      "description": "{!}+1{} {s}Builder{} above the level maximum",
       "appearance": {
         "background": "#652622",
         "border": "#f4f1e6",
@@ -73,7 +73,7 @@
       "name": "Rope Ladder",
       "rarity": "uncommon",
       "price": 7,
-      "description": "The first {!}3{} lemmings of each level are {!}Climbers{}",
+      "description": "The first {!}3{} lemmings of each level are {s}Climbers{}",
       "appearance": {
         "background": "#1e4d3a",
         "border": "#f4f1e6",
@@ -96,7 +96,7 @@
       "name": "Umbrella Stand",
       "rarity": "uncommon",
       "price": 7,
-      "description": "The first {!}3{} lemmings of each level are {!}Floaters{}",
+      "description": "The first {!}3{} lemmings of each level are {s}Floaters{}",
       "appearance": {
         "background": "#1e4d3a",
         "border": "#f4f1e6",
@@ -142,7 +142,7 @@
       "name": "Bomb Disposal",
       "rarity": "uncommon",
       "price": 6,
-      "description": "Lemmings you turn into {!}Bombers{} return to the colony",
+      "description": "Lemmings you turn into {s}Bombers{} return to the colony",
       "appearance": {
         "background": "#1e4d3a",
         "border": "#f4f1e6",
@@ -394,7 +394,7 @@
       "name": "Builders' Guild",
       "rarity": "common",
       "price": 4,
-      "description": "{!}+2{} Builder ability",
+      "description": "{!}+2{} {s}Builder{} ability",
       "appearance": {
         "background": "#003e66",
         "border": "#f4f1e6",
@@ -414,7 +414,7 @@
       "name": "Demolition Crew",
       "rarity": "common",
       "price": 5,
-      "description": "{!}+1{} Basher, Miner and Digger ability",
+      "description": "{!}+1{} {s}Basher{}, {s}Miner{} and {s}Digger{} ability",
       "appearance": {
         "background": "#003e66",
         "border": "#f4f1e6",
@@ -434,7 +434,7 @@
       "name": "Climbing Club",
       "rarity": "common",
       "price": 4,
-      "description": "{!}+2{} Climber and Floater ability",
+      "description": "{!}+2{} {s}Climber{} and {s}Floater{} ability",
       "appearance": {
         "background": "#003e66",
         "border": "#f4f1e6",
@@ -454,7 +454,7 @@
       "name": "Bomb Squad",
       "rarity": "common",
       "price": 4,
-      "description": "{!}+2{} Bomber and Blocker ability",
+      "description": "{!}+2{} {s}Bomber{} and {s}Blocker{} ability",
       "appearance": {
         "background": "#003e66",
         "border": "#f4f1e6",
@@ -1062,7 +1062,7 @@
       "name": "Going Up!",
       "rarity": "common",
       "price": 5,
-      "description": "A {!}Climber{} joins the colony after each level",
+      "description": "A {s}Climber{} joins the colony after each level",
       "appearance": {
         "background": "#003e66",
         "border": "#f4f1e6",
@@ -1085,7 +1085,7 @@
       "name": "Going Down!",
       "rarity": "common",
       "price": 5,
-      "description": "A {!}Floater{} joins the colony after each level",
+      "description": "A {s}Floater{} joins the colony after each level",
       "appearance": {
         "background": "#003e66",
         "border": "#f4f1e6",
@@ -1223,7 +1223,7 @@
       "name": "Unblocked",
       "rarity": "common",
       "price": 4,
-      "description": "{+}+1{} Rescues for each {!}Blocker{} used",
+      "description": "{+}+1{} Rescues for each {s}Blocker{} used",
       "appearance": {
         "background": "#003e66",
         "border": "#f4f1e6",
@@ -1473,7 +1473,7 @@
       "name": "Rainy Day Fund",
       "rarity": "common",
       "price": 4,
-      "description": "{%}1 in 2{} chance to earn {$}$1{} for each {!}Floater{} in the level",
+      "description": "{%}1 in 2{} chance to earn {$}$1{} for each {s}Floater{} in the level",
       "appearance": {
         "background": "#003e66",
         "border": "#f4f1e6",
@@ -1960,7 +1960,7 @@
       "name": "Paratroopers",
       "rarity": "rare",
       "price": 8,
-      "description": "After {!}10{} seconds, the colony's {!}Floaters{} outside the squad parachute in across the level",
+      "description": "After {!}10{} seconds, the colony's {s}Floaters{} outside the squad parachute in across the level",
       "appearance": {
         "background": "#652622",
         "border": "#f4f1e6",

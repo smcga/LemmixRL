@@ -7,7 +7,7 @@ import { POWER_CARD_LIBRARY } from '../power-cards/catalogue.ts';
 import type { LemmingAnim } from '../power-cards/animations.ts';
 import type { PowerCardDesign } from '../power-cards/schema.ts';
 import { COLORS } from './widgets.ts';
-import type { PackKind, Rarity } from '../content.ts';
+import { EDITION_TEXTS, type PackKind, type Rarity, TRAIT_TEXTS } from '../content.ts';
 import type { LemmingCard, SpecialTrait } from '../state.ts';
 
 /** the colour of the small mark above a special lemming (in a level and in the colony), or none */
@@ -93,13 +93,13 @@ export const TAG_ART: Record<string, Art> = {
 
 /** the kinds of special lemmings: their name, what they do, and their picture */
 export const TRAIT_LOOKS: Record<SpecialTrait, { name: string; text: string; art: Art }> = {
-  gold: { name: 'Gold', text: 'Earns $2 when it reaches the exit.', art: { anim: 'walk', tint: COLORS.gold } },
-  lucky: { name: 'Lucky', text: 'When it reaches the exit: 1 in 3 chance of $4, 1 in 5 chance of a Boost.', art: { anim: 'walk', tint: 0x7dff7d } },
-  mentor: { name: 'Mentor', text: 'When it reaches the exit: +1 ability in the skill you used most in that level.', art: { anim: 'build', tint: 0x9fd0ff } },
-  champion: { name: 'Champion', text: 'When it reaches the exit, the rescue bonus of the level is multiplied.', art: { anim: 'exit', tint: 0xd090ff } },
-  climber: { name: 'Climber', text: 'Climbs walls from the start of every level.', art: { anim: 'climb' } },
-  floater: { name: 'Floater', text: 'Has an umbrella in every level.', art: { anim: 'float' } },
-  athlete: { name: 'Athlete', text: 'A climber and a floater.', art: { anim: 'climb', tint: 0x9fd0ff } },
-  insured: { name: 'Insured', text: 'Comes back once after it dies.', art: { anim: 'block', tint: 0xffd0a0 } },
-  wise: { name: 'Wise', text: 'A wise old lemming: some Power Cards count the Wise lemmings of your colony.', art: { anim: 'walk', tint: 0xe8e8f0 } },
+  gold: { name: 'Gold', text: EDITION_TEXTS.gold, art: { anim: 'walk', tint: COLORS.gold } },
+  lucky: { name: 'Lucky', text: EDITION_TEXTS.lucky, art: { anim: 'walk', tint: 0x7dff7d } },
+  mentor: { name: 'Mentor', text: EDITION_TEXTS.mentor, art: { anim: 'build', tint: 0x9fd0ff } },
+  champion: { name: 'Champion', text: EDITION_TEXTS.champion, art: { anim: 'exit', tint: 0xd090ff } },
+  climber: { name: 'Climber', text: TRAIT_TEXTS.climber, art: { anim: 'climb' } },
+  floater: { name: 'Floater', text: TRAIT_TEXTS.floater, art: { anim: 'float' } },
+  athlete: { name: 'Athlete', text: 'A {s}Climber{} and a {s}Floater{}', art: { anim: 'climb', tint: 0x9fd0ff } },
+  insured: { name: 'Insured', text: TRAIT_TEXTS.insured, art: { anim: 'block', tint: 0xffd0a0 } },
+  wise: { name: 'Wise', text: EDITION_TEXTS.wise, art: { anim: 'walk', tint: 0xe8e8f0 } },
 };

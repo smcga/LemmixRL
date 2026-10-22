@@ -9,7 +9,8 @@
  * | {x}          | X Rescues (red)                            |
  * | {$}          | money (gold)                               |
  * | {%}          | a chance, "1 in 4" (green)                 |
- * | {!}          | something to notice: a skill, an edition   |
+ * | {s}          | a skill or ability: Builder, Floaters      |
+ * | {!}          | something to notice: a number, an edition  |
  * | {~}          | as it is now: "(Currently X1.5)" (grey)    |
  * | {c:orange}   | a colour of hair or clothes, in its colour |
  *
@@ -22,6 +23,7 @@ export const RICH_COLORS: Record<string, number> = {
   x: 0xfe5f55,
   $: 0xd99a20,
   '%': 0x2fae5f,
+  s: 0x2f9e44,
   '!': 0xf08a10,
   '~': 0x8c8c94,
 };
@@ -83,4 +85,9 @@ export function drawnIndexes(plain: string, wrapped: string, hasGlyph: (code: nu
     at[p++] = hasGlyph(ch.charCodeAt(0)) ? drawn++ : -1;
   }
   return at;
+}
+
+/** "{s}Builder{}" */
+export function skillTag(name: string): string {
+  return `{s}${name}{}`;
 }
