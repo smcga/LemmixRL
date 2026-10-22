@@ -1155,12 +1155,21 @@ export class RunSession {
     // two packs, as in Balatro: a Lemmings Pack (the colony has to grow somewhere), and one of the others
     const other = rng.pickWeighted(['training', 'boost', 'gadget'] as PackKind[], [40, 35, 25]);
     const packs = (['lemmings', other] as PackKind[]).map((kind): ShopOffer => ({ uid: this.uid(), type: 'pack', id: kind, price: PACKS[kind].price, sold: false }));
-    s.shop = { offers, packs, rerolls: 0, freeRerolls: this.jokerSum((d) => d.freeRerolls) };
+    s.shop = { offers, packs, rerolls: 0, freeRerollsUsed: 0 };
     s.phase = 'shop';
   }
 
+  /**
+   * The free rerolls left in this shop: as many as the Power Cards you have now give (as Balatro's Chaos the Clown,
+   * one bought in the shop gives them at once), less the ones used.
+   */
+  freeRerollsLeft(): number {
+    const shop = this.state.shop;
+    return shop ? Math.max(0, this.jokerSum((d) => d.freeRerolls) - (shop.freeRerollsUsed ?? 0)) : 0;
+  }
+
   rerollPrice(): number {
-    if ((this.state.shop?.freeRerolls ?? 0) > 0) return 0;
+    if (this.freeRerollsLeft() > 0) return 0;
     return 2 + (this.state.shop?.rerolls ?? 0);
   }
 
@@ -1168,7 +1177,7 @@ export class RunSession {
     const s = this.state;
     const shop = s.shop;
     if (!shop || !this.canAfford(this.rerollPrice())) return false;
-    if ((shop.freeRerolls ?? 0) > 0) shop.freeRerolls!--;
+    if (this.freeRerollsLeft() > 0) shop.freeRerollsUsed = (shop.freeRerollsUsed ?? 0) + 1;
     else {
       s.money -= this.rerollPrice();
       shop.rerolls++;

@@ -1329,7 +1329,7 @@ export class RunScene extends Phaser.Scene {
       this.save();
       this.render();
     };
-    this.btn('reroll', x + 12, y + 80, 124, 58, 'Reroll', COLORS.green, reroll, { big: true, enabled: run.canAfford(run.rerollPrice()), sub: run.rerollPrice() === 0 ? `FREE (${s.shop?.freeRerolls ?? 0})` : `$${run.rerollPrice()}` });
+    this.btn('reroll', x + 12, y + 80, 124, 58, 'Reroll', COLORS.green, reroll, { big: true, enabled: run.canAfford(run.rerollPrice()), sub: run.rerollPrice() === 0 ? `FREE (${run.freeRerollsLeft()})` : `$${run.rerollPrice()}` });
 
     // the cards on offer
     const top: Rect = { x: x + 146, y: y + 12, w: w - 158, h: 130 };

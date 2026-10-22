@@ -109,7 +109,9 @@ export interface ShopState {
   /** the packs of the shop (they are not rerolled); runs saved before packs existed do not have them */
   packs?: ShopOffer[];
   rerolls: number;
-  /** rerolls left that cost nothing (the Generous Clown) */
+  /** the free rerolls used in this shop (the Generous Clown's) */
+  freeRerollsUsed?: number;
+  /** (saves of old: the free rerolls left when the shop opened; no longer used) */
   freeRerolls?: number;
 }
 
