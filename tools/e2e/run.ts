@@ -227,14 +227,44 @@ try {
   await page.waitForTimeout(500);
   if ((await scenes()) !== 'run' || (await state()).phase !== 'shop') fail('the collection did not go back to the run');
 
-  // the colony at home: every lemming of it walking about (and Escape closes it)
-  await clickSpot('deck', 800);
-  const walkers = await ev<number>(`${scene}.overlay.filter((o) => o.type === 'Sprite').length`);
-  if (walkers < (await state()).colony.length) fail(`the colony shows ${walkers} lemmings of ${(await state()).colony.length}`);
+  // the colony at home: every lemming of it in a little level of its own, played by the game
+  await clickSpot('deck', 1500);
+  const home = `${scene}.homeView.home`;
+  const atHome = await ev<number>(`${home}.population()`);
+  if (atHome !== (await state()).colony.length) fail(`the home has ${atHome} lemmings of ${(await state()).colony.length}`);
+  const frame0 = await ev<number>(`${home}.game.currentIteration`);
+  await page.waitForTimeout(600);
+  if ((await ev<number>(`${home}.game.currentIteration`)) <= frame0) fail('the home does not move');
+  // the Builder tool, and a click on a lemming of the bottom floor: it builds (for nothing)
+  await clickSpot('tool:builder', 200);
+  const walker = await ev<{ x: number; y: number }>(
+    `(() => { const l = ${home}.lemmings().find((l) => l.yPos === 146 && l.xPos > 40 && l.xPos < 220); return { x: 56 + l.xPos * 2, y: 96 + (l.yPos - 5) * 2 }; })()`,
+  );
+  await click(walker.x, walker.y, 400);
+  if ((await ev<number>(`${home}.lemmings().filter((l) => l.numberOfBricksLeft > 0).length`)) < 1) fail('a click with the Builder tool did not make a builder');
+  // Pick, and a box dragged around the top left floor: Prefer them all
+  await clickSpot('tool:pick', 200);
+  await page.mouse.move(vx(56 + 10 * 2), vy(96 + 22 * 2));
+  await page.mouse.down();
+  await page.mouse.move(vx(56 + 152 * 2), vy(96 + 46 * 2), { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  await clickSpot('prefer', 300);
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${REPO_ROOT}/tools/e2e/home.png` });
+  const preferred = (await state()).colony.filter((c: { pref?: string }) => c.pref === 'prefer').length;
+  if (preferred < 1) fail('Prefer did not prefer the lemmings in the box');
+  // closed and opened again: the home is as it was left (its ground kept), the preferences too
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  if (!(await state()).home?.terrain) fail('the home was not kept');
+  await clickSpot('deck', 1500);
+  if ((await ev<number>(`${home}.population()`)) !== (await state()).colony.length) fail('the home lost lemmings between visits');
+  if ((await state()).colony.filter((c: { pref?: string }) => c.pref === 'prefer').length !== preferred) fail('the preferences were not kept');
   // Next picks the first lemming (the special ones come first), and shows who it is
   await clickSpot('colonyNext', 300);
   await clickSpot('colonyNext', 300);
-  const position = await ev<string>(`${scene}.overlay.map((o) => o.text ?? '').find((t) => t.includes(' / ')) ?? ''`);
+  const position = await ev<string>(`${scene}.overlay.map((o) => (typeof o.text === 'string' ? o.text : '')).find((t) => t.includes(' / ')) ?? ''`);
   if (!position.startsWith('2 / ')) fail(`Next did not browse the colony (${position})`);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);

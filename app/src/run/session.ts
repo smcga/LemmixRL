@@ -444,12 +444,12 @@ export class RunSession {
     if (s.setup && s.setup.blind === index) return this.refreshSetup(s.setup);
     const blind = s.blinds[index];
     const level = this.level(blind.levelId);
-    const ids = this.random.stream('hand').shuffle(s.colony.map((c) => c.id));
-    const squad = ids.slice(0, Math.min(ids.length, level.lemmings));
+    const order = this.random.stream('hand').shuffle(s.colony.map((c) => c.id));
     s.setup = {
       blind: index,
       levelId: level.id,
-      hand: squad,
+      hand: this.drawSquad(order, level.lemmings),
+      order,
       rescue: level.rescue,
       minutes: level.time,
       usable: zeroSkills(),
@@ -460,6 +460,41 @@ export class RunSession {
       attempts: 0,
     };
     return this.refreshSetup(s.setup);
+  }
+
+  /**
+   * The squad of a level: as many lemmings as the level has (or the colony), in the shuffled order of the colony, the
+   * preferred ones first and the avoided ones last.
+   */
+  private drawSquad(order: number[], levelLemmings: number): number[] {
+    const rank = (id: number) => {
+      const p = this.card(id)?.pref;
+      return p === 'prefer' ? 0 : p === 'avoid' ? 2 : 1;
+    };
+    // (a stable sort: within a preference, the shuffled order)
+    const chosen = new Set([...order].sort((a, b) => rank(a) - rank(b)).slice(0, Math.min(order.length, levelLemmings)));
+    return order.filter((id) => chosen.has(id));
+  }
+
+  /**
+   * Prefer or avoid lemmings for squads (null: neither). The squad of a level that has not begun is drawn again, in
+   * the same order (nothing is drawn at random again).
+   */
+  setPreference(ids: number[], pref: 'prefer' | 'avoid' | null): void {
+    const s = this.state;
+    for (const id of ids) {
+      const c = this.card(id);
+      if (!c) continue;
+      if (pref) c.pref = pref;
+      else delete c.pref;
+    }
+    const setup = s.setup;
+    if (!setup || setup.begun || setup.blind !== this.currentBlindIndex) return;
+    const colony = new Set(s.colony.map((c) => c.id));
+    const order = (setup.order ?? setup.hand).filter((id) => colony.has(id));
+    for (const c of s.colony) if (!order.includes(c.id)) order.push(c.id);
+    setup.order = order;
+    setup.hand = this.drawSquad(order, this.level(setup.levelId).lemmings);
   }
 
   /** Play the current blind. */

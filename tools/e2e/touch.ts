@@ -240,7 +240,7 @@ try {
   if ((await ev<number>(`${runScene}.overlay.length`)) === 0) fail('Use did not open the colony');
   await page.waitForTimeout(300);
   // three lemmings tapped (they walk: each is tapped where it is now); a lifted one is out of the way of the next tap
-  const lifted = () => ev<number>(`parseInt(${runScene}.overlay.map((o) => o.text ?? '').find((t) => t.includes(' selected')) ?? '0', 10)`);
+  const lifted = () => ev<number>(`parseInt(${runScene}.overlay.map((o) => (typeof o.text === 'string' ? o.text : '')).find((t) => t.includes(' selected')) ?? '0', 10)`);
   for (let i = 0; i < 40 && (await lifted()) < 3; i++) {
     await tapSpot(`colony:${i}`, 250);
   }

@@ -1,3 +1,4 @@
+import type { HomeState } from './home.ts';
 /** The saved state of a roguelike run. Everything the run needs to continue is in here (it is stored as JSON). */
 import type { LemmingColor } from './colors.ts';
 import type { Edition, Fate, PackKind } from './content.ts';
@@ -43,6 +44,8 @@ export interface AssignState {
 
 /** A lemming of the colony: a card of the deck. */
 export interface LemmingCard {
+  /** chosen for squads first (prefer) or last (avoid) */
+  pref?: 'prefer' | 'avoid';
   id: number;
   name: string;
   climber: boolean;
@@ -160,6 +163,8 @@ export interface BlindSetup {
   attempts: number;
   /** lemmings that drop in besides the squad (Power Cards), after the squad */
   extra?: number;
+  /** the colony in the shuffled order the squad was drawn from (preferences draw it again from it) */
+  order?: number[];
   /** the level has begun (the Power Cards that act when a level begins have acted) */
   begun?: boolean;
   /** the lemming of the squad (card id) that was the only one out 10 seconds in (Self Replication) */
@@ -245,6 +250,8 @@ export interface RunStats {
 }
 
 export interface RunState {
+  /** the colony at home: its ground and where its lemmings are (see home.ts) */
+  home?: HomeState;
   version: number;
   seed: string;
   /** random stream counters (see RunRandom) */
