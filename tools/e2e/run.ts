@@ -246,11 +246,39 @@ try {
   await clickSpot('tool:pick', 200);
   await page.mouse.move(vx(56 + 10 * 2), vy(96 + 22 * 2));
   await page.mouse.down();
-  await page.mouse.move(vx(56 + 152 * 2), vy(96 + 46 * 2), { steps: 8 });
+  await page.mouse.move(vx(56 + 152 * 2), vy(96 + 56 * 2), { steps: 8 });
   await page.mouse.up();
   await page.waitForTimeout(300);
   await clickSpot('prefer', 300);
-  await page.waitForTimeout(1500);
+  // the brush: Dirt dragged through the air of a pen makes ground, Erase dragged over it takes it away
+  const drag = async (x0: number, y0: number, x1: number, y1: number) => {
+    await page.mouse.move(vx(56 + x0 * 2), vy(96 + y0 * 2));
+    await page.mouse.down();
+    await page.mouse.move(vx(56 + x1 * 2), vy(96 + y1 * 2), { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+  };
+  const ground = (x: number, y: number) => ev<boolean>(`${home}.game.hasPixelAt(${x}, ${y})`);
+  await clickSpot('tool:dirt', 200);
+  await drag(130, 30, 175, 30);
+  if (!(await ground(150, 30)) || !(await ground(170, 30))) fail('Dirt dragged through the air did not make ground');
+  await clickSpot('tool:erase', 200);
+  await drag(130, 30, 160, 30);
+  if ((await ground(150, 30)) || !(await ground(172, 30))) fail('Erase did not take away the ground it was dragged over (only that)');
+  // the Trapdoor tool: a click puts the trapdoor there; Poof: the lemming clicked is gone, without a hole
+  await clickSpot('tool:trapdoor', 200);
+  await click(56 + 150 * 2, 96 + 70 * 2, 200);
+  const door = await ev<{ x: number; y: number }>(`${home}.game.entrancePoint(0)`);
+  if (door.x !== 150 || door.y !== 70) fail(`the Trapdoor tool did not move the trapdoor (${door.x}, ${door.y})`);
+  await clickSpot('tool:poof', 200);
+  const victim = await ev<{ x: number; y: number; fx: number; fy: number }>(
+    `(() => { const l = ${home}.lemmings().find((l) => l.yPos === 146 && l.xPos > 30 && l.xPos < 90); return { x: 56 + l.xPos * 2, y: 96 + (l.yPos - 5) * 2, fx: l.xPos, fy: l.yPos }; })()`,
+  );
+  const atHomeBefore = await ev<number>(`${home}.lemmings().length`);
+  await click(victim.x, victim.y, 300);
+  if ((await ev<number>(`${home}.lemmings().length`)) !== atHomeBefore - 1) fail('Poof did not take the lemming away');
+  if (!(await ground(victim.fx, victim.fy + 1))) fail('Poof made a hole in the ground');
+  await page.waitForTimeout(1200);
   await page.screenshot({ path: `${REPO_ROOT}/tools/e2e/home.png` });
   const preferred = (await state()).colony.filter((c: { pref?: string }) => c.pref === 'prefer').length;
   if (preferred < 1) fail('Prefer did not prefer the lemmings in the box');

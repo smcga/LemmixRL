@@ -32,17 +32,37 @@ export const HOME_LEVEL = 'Orig-1-01';
 export const HOME_W = 310;
 export const HOME_H = 160;
 
-/** the floors of the home (x from, x to, the top of the ground), from the top */
-export const HOME_FLOORS: readonly [number, number, number][] = [
-  [8, 150, 44],
-  [130, 301, 78],
-  [8, 200, 112],
-  [8, 301, 146],
+/**
+ * The home as it starts: three shelves, each of three pens closed by walls from its floor to the floor above (a
+ * climber cannot get out either), the trapdoor over the top left pen, and the exit in a nook of its own at the bottom
+ * right (open it to send lemmings back to the trapdoor).
+ */
+const ROWS: readonly { floor: number; top: number }[] = [
+  { floor: 52, top: 6 },
+  { floor: 100, top: 60 },
+  { floor: 146, top: 108 },
 ];
+/** the walls between the pens (x from, x to); the bottom row walls off the exit too */
+const DIVIDERS: readonly [number, number][] = [
+  [100, 105],
+  [200, 205],
+];
+const EXIT_WALL: [number, number] = [248, 253];
+/** the top of the ground of the bottom floor */
+export const HOME_BOTTOM = 146;
+
+/** the pens of the home as it starts (x from, x to, the top of their floor), from the top left */
+export const HOME_PENS: readonly [number, number, number][] = ROWS.flatMap((r, i) => {
+  const walls = [[0, 7], ...DIVIDERS, ...(i === ROWS.length - 1 ? [EXIT_WALL] : []), [HOME_W - 8, HOME_W - 1]] as [number, number][];
+  return walls
+    .slice(0, -1)
+    .map(([, end], k) => [end + 1, walls[k + 1][0] - 1, r.floor] as [number, number, number])
+    .filter(([x0]) => !(i === ROWS.length - 1 && x0 > EXIT_WALL[1])); // (not the nook of the exit)
+});
 
 /** the objects of a DOS graphic set: 0 the exit, 1 the trapdoor, 7 (Dirt) the flames of the exit */
 const ENTRANCE = { left: 30, top: 6 };
-const EXIT = { left: 236, top: 146 - 17 };
+const EXIT = { left: 254, top: HOME_BOTTOM - 17 };
 
 /** what is kept of a home between visits */
 export interface HomeState {
@@ -51,6 +71,8 @@ export interface HomeState {
   terrain: string;
   /** where every lemming is (feet), its way and whether it blocks */
   lemmings: { id: number; x: number; y: number; dir: 1 | -1; blocker?: true }[];
+  /** where the trapdoor is (its top left), if it was moved */
+  entrance?: { left: number; top: number };
 }
 
 /** a lemming that is not there yet: it comes in by the trapdoor */
@@ -102,7 +124,8 @@ export class ColonyHome {
         o.top = top;
         level.interactiveObjects.push(o);
       };
-      obj(1, ENTRANCE.left, ENTRANCE.top);
+      const e = saved?.entrance ?? ENTRANCE;
+      obj(1, e.left, e.top);
       obj(0, EXIT.left, EXIT.top);
       obj(7, EXIT.left, EXIT.top - 8);
     });
@@ -150,6 +173,18 @@ export class ColonyHome {
     this.game.update();
   }
 
+  /** Poof: the lemming is gone at once, without a hole in the ground; it comes back in by the trapdoor. */
+  poof(l: Lemming): void {
+    if (this.cardOf.has(l)) this.game.vanishLemming(l);
+  }
+
+  /** Puts the trapdoor where the lemmings come in at x, y (the point they drop from), inside the home. */
+  moveTrapdoor(x: number, y: number): void {
+    const left = Math.max(0, Math.min(HOME_W - 48, Math.round(x) - 24));
+    const top = Math.max(0, Math.min(HOME_H - 25, Math.round(y) - 14));
+    this.game.moveEntrance(0, left, top);
+  }
+
   /** Uses a skill on the lemming at x, y (of the home), for nothing. Returns whether a lemming took it. */
   assign(skill: (typeof SKILLS)[number], x: number, y: number): boolean {
     const game = this.game;
@@ -168,7 +203,8 @@ export class ColonyHome {
       seen.add(id);
       lemmings.push({ id, x: l.xPos, y: l.yPos, dir: l.xDelta > 0 ? 1 : -1, ...(l.action === LemmingAction.Blocking ? { blocker: true as const } : {}) });
     }
-    return { v: 1, terrain: this.saveTerrain(), lemmings };
+    const e = this.game.entrances[0]?.obj;
+    return { v: 1, terrain: this.saveTerrain(), lemmings, ...(e && (e.left !== ENTRANCE.left || e.top !== ENTRANCE.top) ? { entrance: { left: e.left, top: e.top } } : {}) };
   }
 
   /* ------------------------------------------------------------------------------------------------- inside */
@@ -181,13 +217,11 @@ export class ColonyHome {
     return l;
   }
 
-  /** a lemming put down on a floor (spread over the floors by its number) */
+  /** a lemming put down in a pen (spread over the pens by its number) */
   private spawnOnFloor(id: number, k: number): void {
-    const [x0, x1, y] = HOME_FLOORS[k % HOME_FLOORS.length];
-    const n = Math.floor(k / HOME_FLOORS.length);
-    let x = x0 + 6 + ((n * 37) % (x1 - x0 - 12));
-    // (not in the door of the exit: it would go out at once)
-    if (y === EXIT.top + 17 && x >= EXIT.left + 14 && x <= EXIT.left + 38) x = EXIT.left + 4;
+    const [x0, x1, y] = HOME_PENS[k % HOME_PENS.length];
+    const n = Math.floor(k / HOME_PENS.length);
+    const x = x0 + 4 + ((n * 13) % (x1 - x0 - 8));
     this.spawn(id, x, y, k % 2 ? 1 : -1);
   }
 
@@ -225,32 +259,58 @@ export class ColonyHome {
     return this.game.hasPixelAt(x, y);
   }
 
-  /** The ground at first: a cave of Dirt (walls, a ceiling, four floors), drawn with a piece of the Dirt set. */
-  private buildTerrain(): void {
-    const game = this.game;
-    const gs = this.session.graphicSet;
-    // the texture of the ground: the piece of the set with the most earth in it (a piece is transparent where it is
-    // black); where it has none, the earth before it in its row
-    const opaque = (b: Bitmap32) => b.bits.reduce((n, px) => n + ((px & 0xffffff) !== 0 ? 1 : 0), 0);
-    const tex = gs.terrainBitmaps.filter((b) => b.width >= 16 && b.height >= 16).reduce((a, b) => (opaque(b) > opaque(a) ? b : a));
-    const texel = (x: number, y: number) => {
-      const row = (y % tex.height) * tex.width;
-      for (let k = 0; k < tex.width; k++) {
-        const px = tex.bits[row + ((x + tex.width - k) % tex.width)] & 0xffffff;
-        if (px) return (px | ALPHA_TERRAIN) >>> 0;
+  /** the texture of the ground: the piece of the Dirt set with the most earth in it */
+  private tex: Bitmap32 | null = null;
+
+  /** the ground at a point: the texture (a piece is transparent where it is black: the earth before it in its row) */
+  private texel(x: number, y: number): number {
+    if (!this.tex) {
+      const opaque = (b: Bitmap32) => b.bits.reduce((n, px) => n + ((px & 0xffffff) !== 0 ? 1 : 0), 0);
+      this.tex = this.session.graphicSet.terrainBitmaps.filter((b) => b.width >= 16 && b.height >= 16).reduce((a, b) => (opaque(b) > opaque(a) ? b : a));
+    }
+    const tex = this.tex;
+    const row = (y % tex.height) * tex.width;
+    for (let k = 0; k < tex.width; k++) {
+      const px = tex.bits[row + ((x + tex.width - k) % tex.width)] & 0xffffff;
+      if (px) return (px | ALPHA_TERRAIN) >>> 0;
+    }
+    return (0x8a4f2a | ALPHA_TERRAIN) >>> 0;
+  }
+
+  private setGround(x: number, y: number, solid: boolean): void {
+    const v = solid ? this.texel(x, y) : 0;
+    for (const bmp of [this.game.world, this.game.targetBitmap]) bmp.bits[y * bmp.width + x] = v;
+  }
+
+  /**
+   * The brush: ground (solid) or none in a round spot of radius r at x, y of the home (not outside it). Lemmings in
+   * the way walk out of it, as they walk up a step.
+   */
+  paint(x: number, y: number, r: number, solid: boolean): void {
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > r * r + r) continue;
+        const px = Math.round(x) + dx;
+        const py = Math.round(y) + dy;
+        if (px < 0 || py < 0 || px >= HOME_W || py >= HOME_H) continue;
+        this.setGround(px, py, solid);
       }
-      return (0x8a4f2a | ALPHA_TERRAIN) >>> 0;
-    };
-    for (const bmp of [game.world, game.targetBitmap])
-      for (let y = 0; y < HOME_H; y++) for (let x = 0; x < HOME_W + 2; x++) bmp.bits[y * bmp.width + x] = 0;
+  }
+
+  /** The ground at first: three shelves of three pens, in a cave of Dirt (see ROWS). */
+  private buildTerrain(): void {
+    for (let y = 0; y < HOME_H; y++) for (let x = 0; x < HOME_W + 2; x++) this.setGround(x, y, false);
     const fill = (x0: number, x1: number, y0: number, y1: number) => {
-      for (const bmp of [game.world, game.targetBitmap])
-        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) bmp.bits[y * bmp.width + x] = texel(x, y);
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) this.setGround(x, y, true);
     };
     fill(0, HOME_W - 1, 0, 5); // the ceiling
     fill(0, 7, 0, HOME_H - 1); // the walls
     fill(HOME_W - 8, HOME_W - 1, 0, HOME_H - 1);
-    for (const [x0, x1, y] of HOME_FLOORS) fill(x0, x1, y, Math.min(HOME_H - 1, y + (y === 146 ? 13 : 7)));
+    ROWS.forEach((r, i) => {
+      const last = i === ROWS.length - 1;
+      fill(8, HOME_W - 9, r.floor, Math.min(HOME_H - 1, r.floor + (last ? 13 : 7)));
+      for (const [x0, x1] of [...DIVIDERS, ...(last ? [EXIT_WALL] : [])]) fill(x0, x1, r.top, r.floor - 1);
+    });
   }
 
   private saveTerrain(): string {

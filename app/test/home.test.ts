@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getStyle, LemmingAction, StyleDef } from '../../engine/src/index.ts';
 import { repoDataProvider } from '../../engine/src/node/repoData.ts';
 import { LevelCatalog } from '../src/run/catalog.ts';
-import { ColonyHome, HOME_FLOORS, HOME_W } from '../src/run/home.ts';
+import { ColonyHome, HOME_BOTTOM, HOME_PENS, HOME_W } from '../src/run/home.ts';
 import { RunSession } from '../src/run/session.ts';
 import { SKILLS, type SkillCounts } from '../src/run/skills.ts';
 import type { LemmingCard } from '../src/run/state.ts';
@@ -37,7 +37,7 @@ describe('the colony at home', () => {
     const home = new ColonyHome(data, base, () => cards, undefined);
     frames(home, 5);
     // a blocker, and a digger through the bottom floor
-    const [a, b] = home.lemmings().filter((l) => l.yPos === HOME_FLOORS[3][2]);
+    const [a, b] = home.lemmings().filter((l) => l.yPos === HOME_BOTTOM);
     expect(home.assign('blocker', a.xPos, a.yPos - 5)).toBe(true);
     frames(home, 2);
     const holeX = b.xPos;
@@ -48,11 +48,11 @@ describe('the colony at home', () => {
     expect(saved.lemmings.find((s) => s.id === home.card(a)!.id)?.blocker).toBe(true);
     // a new visit: the hole is there, the blocker blocks
     const again = new ColonyHome(data, base, () => cards, saved);
-    const hasGround = (h: ColonyHome) => h.game.hasPixelAt(holeX, HOME_FLOORS[3][2] + 2);
+    const hasGround = (h: ColonyHome) => h.game.hasPixelAt(holeX, HOME_BOTTOM + 2);
     expect(hasGround(home)).toBe(false);
     expect(hasGround(again)).toBe(false);
     expect(again.lemmings().some((l) => l.action === LemmingAction.Blocking)).toBe(true);
-    expect(new ColonyHome(data, base, () => cards, undefined).game.hasPixelAt(holeX, HOME_FLOORS[3][2] + 2)).toBe(true);
+    expect(new ColonyHome(data, base, () => cards, undefined).game.hasPixelAt(holeX, HOME_BOTTOM + 2)).toBe(true);
   });
 
   it('a lemming lost at home comes back by the trapdoor; a new one comes in by it', () => {
@@ -71,6 +71,66 @@ describe('the colony at home', () => {
     expect(again.lemmings().some((l) => again.card(l)?.id === 99)).toBe(false);
     frames(again, 60);
     expect(again.lemmings().some((l) => again.card(l)?.id === 99)).toBe(true);
+  });
+});
+
+describe('the home as it starts, and the brush', () => {
+  it('three shelves of three pens: every lemming stays in its pen, climbers too', () => {
+    const cards = colony(36).map((c, i) => ({ ...c, climber: i % 3 === 0 }));
+    const home = new ColonyHome(data, base, () => cards, undefined);
+    expect(HOME_PENS).toHaveLength(9);
+    // (a climber on a wall of its pen is in the column of the wall)
+    const penOf = (x: number, y: number) => HOME_PENS.findIndex(([x0, x1, fy]) => x >= x0 - 1 && x <= x1 + 1 && y <= fy && y > fy - 46);
+    const start = new Map(home.lemmings().map((l) => [home.card(l)!.id, penOf(l.xPos, l.yPos)]));
+    expect([...start.values()].every((p) => p >= 0)).toBe(true);
+    // every pen but the nook of the exit has lemmings
+    expect(new Set(start.values()).size).toBe(9);
+    frames(home, 800);
+    for (const l of home.lemmings()) expect(penOf(l.xPos, l.yPos), home.card(l)!.name).toBe(start.get(home.card(l)!.id));
+  });
+
+  it('Dirt paints ground and Erase takes it away; the home keeps it', () => {
+    const cards = colony(4);
+    const home = new ColonyHome(data, base, () => cards, undefined);
+    // a hole through the wall between the first two pens of the top row, and a block in the middle of the second
+    home.paint(102, 46, 4, false);
+    home.paint(150, 30, 4, true);
+    expect(home.game.hasPixelAt(102, 46)).toBe(false);
+    expect(home.game.hasPixelAt(150, 30)).toBe(true);
+    // (nothing outside the home)
+    home.paint(HOME_W + 3, 30, 4, true);
+    expect(home.game.hasPixelAt(HOME_W + 3, 30)).toBe(false);
+    const again = new ColonyHome(data, base, () => cards, home.save());
+    expect(again.game.hasPixelAt(102, 46)).toBe(false);
+    expect(again.game.hasPixelAt(150, 30)).toBe(true);
+  });
+});
+
+describe('Poof and the trapdoor', () => {
+  it('Poof: a lemming gone without a hole, back in by the trapdoor, which can be moved (and is kept where it was put)', () => {
+    const cards = colony(6);
+    const home = new ColonyHome(data, base, () => cards, undefined);
+    frames(home, 40);
+    // the trapdoor over the middle pen of the middle row: lemmings drop in there
+    home.moveTrapdoor(150, 70);
+    const l = home.lemmings()[0];
+    const floor = l.yPos;
+    const id = home.card(l)!.id;
+    const ground = () => Array.from({ length: 9 }, (_, d) => home.game.hasPixelAt(l.xPos - 4 + d, floor + 1)).every(Boolean);
+    expect(ground()).toBe(true);
+    home.poof(l);
+    expect(l.isRemoved).toBe(true);
+    frames(home, 80);
+    expect(ground()).toBe(true);
+    const back = home.lemmings().find((x) => home.card(x)?.id === id)!;
+    expect(back).toBeDefined();
+    // it came in by the trapdoor where it was put: it is in the middle pen of the middle row now
+    expect(back.xPos).toBeGreaterThan(105);
+    expect(back.xPos).toBeLessThan(200);
+    expect(back.yPos).toBeLessThanOrEqual(100);
+    const saved = home.save();
+    expect(saved.entrance).toEqual({ left: 126, top: 56 });
+    expect(new ColonyHome(data, base, () => cards, saved).game.entrancePoint(0)).toEqual({ x: 150, y: 70 });
   });
 });
 
