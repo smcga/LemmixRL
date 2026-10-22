@@ -64,3 +64,23 @@ export function plainText(text: string): string {
 export function colorTag(color: LemmingColor, word: string): string {
   return `{c:${color}}${word}{}`;
 }
+
+/**
+ * Where each character of the plain text is among the characters a bitmap text draws (-1: not drawn). Phaser numbers
+ * them after wrapping, without line breaks (a wrap takes the place of a space) and without characters its font has no
+ * glyph for; a colour has to go by those numbers.
+ */
+export function drawnIndexes(plain: string, wrapped: string, hasGlyph: (code: number) => boolean): number[] {
+  const at: number[] = new Array(plain.length).fill(-1);
+  let drawn = 0;
+  let p = 0;
+  for (let w = 0; w < wrapped.length && p < plain.length; w++) {
+    const ch = wrapped[w];
+    if (ch === '\n') {
+      if (plain[p] === ' ' || plain[p] === '\n') p++;
+      continue;
+    }
+    at[p++] = hasGlyph(ch.charCodeAt(0)) ? drawn++ : -1;
+  }
+  return at;
+}

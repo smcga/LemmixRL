@@ -2,7 +2,7 @@
 import * as Phaser from 'phaser';
 import { touch } from '../../touch.ts';
 import { keywordsOf } from '../content.ts';
-import { parseRich, plainText } from '../rich.ts';
+import { drawnIndexes, parseRich, plainText } from '../rich.ts';
 import { FONT, FONT_PURPLE } from './assets.ts';
 
 /** The colours of Balatro's interface (its G.C table), for the panels, buttons and texts of the run screens. */
@@ -53,23 +53,12 @@ export function label(scene: Phaser.Scene, x: number, y: number, text: string, o
   t.setOrigin(o.originX ?? 0, o.originY ?? 0);
   if (!original) t.setTint(o.purple ? COLORS.lilac : (o.color ?? COLORS.text));
   if (rich.spans.length) {
-    // Phaser numbers the characters it draws: after wrapping, without line breaks (a wrap takes the place of a space)
-    // and without characters the font has no glyph for. The colours go by those numbers.
+    // (the colours go by the characters Phaser draws: see drawnIndexes)
     const wrapped = (o.maxWidth ? t.getTextBounds(false).wrappedText : '') || rich.plain;
     const chars = t.fontData.chars as Record<number, unknown>;
-    const at: number[] = [];
-    let ci = 0;
-    let p = 0;
-    for (let w = 0; w < wrapped.length && p < rich.plain.length; w++) {
-      const ch = wrapped[w];
-      if (ch === '\n') {
-        if (rich.plain[p] === ' ' || rich.plain[p] === '\n') p++;
-        continue;
-      }
-      at[p++] = chars[ch.charCodeAt(0)] ? ci++ : -1;
-    }
+    const at = drawnIndexes(rich.plain, wrapped, (code) => !!chars[code]);
     for (const sp of rich.spans)
-      for (let k = sp.start; k < sp.start + sp.length; k++) if (at[k] !== undefined && at[k] >= 0) t.setCharacterTint(at[k], 1, Phaser.TintModes.MULTIPLY, sp.color);
+      for (let k = sp.start; k < sp.start + sp.length; k++) if (at[k] >= 0) t.setCharacterTint(at[k], 1, Phaser.TintModes.MULTIPLY, sp.color);
   }
   // a shadow under every text, as in Balatro: it keeps the letters apart from what is behind them (not under the dark
   // text of a description, which is on white)

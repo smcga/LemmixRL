@@ -3,7 +3,7 @@ import { Bitmap32, createSessionFromInfo, getStyle, StyleDef } from '../../engin
 import { repoDataProvider } from '../../engine/src/node/repoData.ts';
 import { LevelCatalog } from '../src/run/catalog.ts';
 import { JOKERS, jokerDef, jokerText, keywordsOf, TAROTS } from '../src/run/content.ts';
-import { parseRich, plainText, RICH_COLORS } from '../src/run/rich.ts';
+import { drawnIndexes, parseRich, plainText, RICH_COLORS } from '../src/run/rich.ts';
 import { RunSession } from '../src/run/session.ts';
 import { SKILLS, type SkillCounts, zeroSkills } from '../src/run/skills.ts';
 import type { LemmingCard } from '../src/run/state.ts';
@@ -55,6 +55,18 @@ describe('the colours of a description', () => {
     expect(spans[1].color).toBe(RICH_COLORS['+']);
     expect(spans[2].color).toBe(RICH_COLORS.x);
     expect(parseRich('no tags at all').spans).toEqual([]);
+  });
+
+  it('colours the letters as they are drawn: a line break in place of a space shifts everything after it', () => {
+    // Conscription, wrapped after the 3: "Super" is the 40th character, the 39th drawn
+    const plain = '5 random plain lemmings leave, 3 random Super Lemmings join';
+    const at = drawnIndexes(plain, '5 random plain lemmings leave, 3\nrandom Super Lemmings join', () => true);
+    expect(at[plain.indexOf('3')]).toBe(31);
+    expect(at[plain.indexOf(' random S')]).toBe(-1);
+    expect(at[plain.indexOf('Super')]).toBe(39);
+    // two wraps, and a character the font cannot draw
+    expect(drawnIndexes('a b c', 'a\nb\nc', () => true)).toEqual([0, -1, 1, -1, 2]);
+    expect(drawnIndexes('a~b', 'a~b', (code) => code !== 126)).toEqual([0, -1, 1]);
   });
 
   it('every Power Card and Boost describes itself in known tags, without explaining the game in it', () => {
