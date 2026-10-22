@@ -12,7 +12,7 @@ import * as Phaser from 'phaser';
 import { SoundEffect } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
 import { type RunLevel, levelName } from '../run/catalog.ts';
-import { EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, type Fate, isDeath, JOKERS, jokerDef, jokerText, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
+import { EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, LEMMING_BADGE_COLORS, TRAIT_TEXTS, type Fate, isDeath, JOKERS, jokerDef, jokerText, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
 import { normalizeSeed, randomSeed } from '../run/rng.ts';
 import { type BlindPreview, cardTitle, isSpecial, jokerSellValue, RunSession, tarotSellPrice } from '../run/session.ts';
 import { colorsText } from '../run/colors.ts';
@@ -1698,7 +1698,7 @@ export class RunScene extends Phaser.Scene {
     const showInfo = () => {
       const c = picked;
       const tip: TipContent = c
-        ? { title: cardTitle(c), color: this.cardColor(c), lines: this.cardLines(c, squad.has(c.id)), x: 690, y: 96, width: 214, keywords: [] }
+        ? { ...this.cardTip(c, squad.has(c.id)), x: 690, y: 96, width: 214, keywords: [] }
         : tarot
           ? { title: tarot.name, color: COLORS.purple, lines: [...(tarot.text ? [tarot.text, ''] : []), touch.active ? 'Tap the lemmings to select them; tap one in the sky to put it back.' : 'Click the lemmings to select them; click one in the sky to put it back.'], x: 690, y: 96, width: 214, keywords: [] }
           : { title: 'Your colony', color: COLORS.gold, lines: [touch.active ? 'Tap a lemming to see who it is.' : 'Click a lemming to see who it is.'], x: 690, y: 96, width: 214, keywords: [] };
@@ -1810,14 +1810,23 @@ export class RunScene extends Phaser.Scene {
     return EDITION_TINTS[c.edition] === 0xffffff ? COLORS.text : EDITION_TINTS[c.edition];
   }
 
-  private cardLines(c: LemmingCard, inSquad: boolean): string[] {
-    const lines = [colorsText(c) + '.', EDITION_TEXTS[c.edition]];
-    if (c.climber) lines.push('Climber: climbs walls from the start of every level.');
-    if (c.floater) lines.push('Floater: has an umbrella in every level.');
-    if (c.insured) lines.push('Insured: comes back once after it dies.');
-    lines.push(`Reached the exit ${c.saves} time${c.saves === 1 ? '' : 's'}.`);
-    if (inSquad) lines.push('In the squad of the current level.');
-    return lines;
+  /**
+   * Who a lemming is, as Balatro describes a card: what it does first (in colour), then its hair and clothes, and how
+   * often it was saved; what it is (its edition, its abilities) in badges under it.
+   */
+  private cardTip(c: LemmingCard, inSquad: boolean): Pick<TipContent, 'title' | 'color' | 'lines' | 'badges'> {
+    const does = [EDITION_TEXTS[c.edition], c.climber ? TRAIT_TEXTS.climber : '', c.floater ? TRAIT_TEXTS.floater : '', c.insured ? TRAIT_TEXTS.insured : ''].filter((t) => t);
+    const saves = c.saves === 0 ? 'Not saved yet' : `Saved ${c.saves} time${c.saves === 1 ? '' : 's'}`;
+    // (a line between one effect and the next, as Balatro has a box for each)
+    const lines = [...does.flatMap((t) => [t, '']), colorsText(c), `{~}${saves}{}`];
+    const badges: { text: string; color: number }[] = [];
+    if (c.edition !== 'plain') badges.push({ text: EDITION_NAMES[c.edition], color: LEMMING_BADGE_COLORS[c.edition] });
+    if (c.climber && c.floater) badges.push({ text: 'Athlete', color: LEMMING_BADGE_COLORS.athlete });
+    else if (c.climber) badges.push({ text: 'Climber', color: LEMMING_BADGE_COLORS.climber });
+    else if (c.floater) badges.push({ text: 'Floater', color: LEMMING_BADGE_COLORS.floater });
+    if (c.insured) badges.push({ text: 'Insured', color: LEMMING_BADGE_COLORS.insured });
+    if (inSquad) badges.push({ text: 'In squad', color: LEMMING_BADGE_COLORS.squad });
+    return { title: c.name, color: this.cardColor(c), lines, badges };
   }
 
   /* -------------------------------------------------------------------------------------------- the end */

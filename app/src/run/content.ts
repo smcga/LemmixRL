@@ -18,13 +18,34 @@ export type Edition = 'plain' | 'gold' | 'lucky' | 'mentor' | 'champion' | 'wise
 
 export const EDITION_NAMES: Record<Edition, string> = { plain: 'Lemming', gold: 'Gold', lucky: 'Lucky', mentor: 'Mentor', champion: 'Champion', wise: 'Wise' };
 
+/** what the abilities of a lemming do (in every level), as a description is written */
+export const TRAIT_TEXTS = {
+  climber: '{!}Climbs{} walls in every level',
+  floater: 'Opens an {!}umbrella{} when it falls, in every level',
+  insured: '{!}Returns{} to the colony the first time it is lost',
+};
+
+/** the colours of the badges of a lemming (on a light tooltip: darker than the marks of the levels) */
+export const LEMMING_BADGE_COLORS = {
+  gold: 0xd99a20,
+  lucky: 0x2fae5f,
+  mentor: 0x3f7fd8,
+  champion: 0x9a5ae0,
+  wise: 0x8c8ca8,
+  climber: 0x3a9a3a,
+  floater: 0x4a70c8,
+  athlete: 0xd05020,
+  insured: 0x8a8a96,
+  squad: 0xf08a10,
+};
+
 export const EDITION_TEXTS: Record<Edition, string> = {
-  plain: 'An ordinary lemming.',
-  gold: 'Earns $2 when it reaches the exit.',
-  lucky: 'When it reaches the exit: 1 in 3 chance of $4, 1 in 5 chance of a Boost.',
-  mentor: 'When it reaches the exit: +1 ability in the skill you used most in that level.',
-  champion: 'When it reaches the exit, the rescue bonus of the level is multiplied (x2 for one champion, x3 for two, ...).',
-  wise: 'A wise old lemming. It does nothing itself, but some Power Cards count the Wise lemmings of your colony.',
+  plain: '',
+  gold: 'Earns {$}$2{} when saved',
+  lucky: '{%}1 in 3{} chance to earn {$}$4{} and {%}1 in 5{} chance to create a {!}Boost{} when saved',
+  mentor: '{!}+1{} ability in your most used skill when saved',
+  champion: 'Multiplies the rescue bonus when saved ({!}x2{} for one Champion, {!}x3{} for two)',
+  wise: 'Some Power Cards count the {!}Wise{} lemmings of your colony',
 };
 
 /**
