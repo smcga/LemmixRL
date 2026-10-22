@@ -9,7 +9,7 @@
  * a phone (see ui/cards.ts): tap a card for what it is and its buttons, or drag it to where it should go.
  */
 import * as Phaser from 'phaser';
-import { SoundEffect } from '../../../engine/src/index.ts';
+import { SoundEffect, SoundOption } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
 import { type RunLevel, levelName } from '../run/catalog.ts';
 import { EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, LEMMING_BADGE_COLORS, TRAIT_TEXTS, type Fate, isDeath, JOKERS, jokerDef, jokerText, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
@@ -23,7 +23,9 @@ import { loadMeta, loadRun, markSeen, recordLevel, saveMeta, saveRun } from '../
 import { ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
 import { type Art, CARD_H, CARD_W, type CardBehaviour, CardTable, CardView, type DropTarget, inRect, type Rect } from '../run/ui/cards.ts';
 import { EDITION_TINTS, JOKER_ART, PACK_LOOKS, RARITY_COLORS, RARITY_NAMES, TAROT_ART } from '../run/ui/art.ts';
-import { Habitat } from '../run/ui/habitat.ts';
+import { ColonyHome, HOME_LEVEL } from '../run/home.ts';
+import { HomeView } from '../run/ui/homeview.ts';
+import { plainText } from '../run/rich.ts';
 import { lematroLogo } from '../run/ui/logo.ts';
 import { soundSliders } from '../run/ui/settings.ts';
 import { Swirl, type SwirlColors, SWIRLS } from '../run/ui/swirl.ts';
@@ -124,6 +126,8 @@ export class RunScene extends Phaser.Scene {
   private previewPan: ((d: number) => void) | null = null;
   /** a key for the overlay that is open (the colony: the arrow keys browse it) */
   private overlayKey: ((key: string) => void) | null = null;
+  /** the colony at home, while it is open (for the tests) */
+  homeView: HomeView | null = null;
   /** where things are on the screen, by name: the middle of the buttons and cards (for the tests) */
   private spots: Record<string, { x: number; y: number }> = {};
   /** what the middle of the screen showed last: when it changes, the new one comes up from below */
@@ -1655,137 +1659,239 @@ export class RunScene extends Phaser.Scene {
   }
 
   private closeOverlay(): void {
-    for (const o of this.overlay) o.destroy();
+    const objects = this.overlay;
+    const cleanup = this.overlayCleanup;
+    // (taken first: a cleanup can render the screen again, which closes the overlay again)
     this.overlay = [];
-    for (const f of this.overlayCleanup) f();
     this.overlayCleanup = [];
     this.previewPan = null;
     this.overlayKey = null;
+    for (const o of objects) o.destroy();
+    for (const f of cleanup) f();
   }
 
   /**
-   * The colony: every lemming of it walking about a little level (see Habitat). A click on a lemming marks it and
-   * shows who it is in the panel at the side. With a boost, a click selects a lemming for it: the selected ones are
-   * lifted into the sky at the top (a click there drops one back), as Balatro lifts the cards selected from a hand.
+   * The colony at home (see home.ts and HomeView): every lemming of it in a little level of its own, played by the game.
+   * Pick shows who a lemming is (a drag picks a group); the skills are free at home, to sort the colony with walls,
+   * bridges and blockers, and the home stays as it is left. The lemmings picked can be preferred for squads or avoided.
+   * With a boost, the lemmings picked are the ones it is used on.
    */
   private showColony(tarot: TarotUse | null): void {
     const run = this.run;
     if (!run) return;
     const o = this.openOverlay(0.6);
-    const colony = run.state.colony;
-    const squad = new Set(run.state.setup?.hand ?? []);
-    const selected: number[] = [];
-    o(panel(this, 40, 20, 880, 500, COLORS.panel, tarot ? COLORS.purple : COLORS.purple, 12));
-    o(label(this, 64, 34, tarot ? `${tarot.name}: select ${tarot.max === 1 ? 'a lemming' : `up to ${tarot.max} lemmings`}` : `Your colony: ${colony.length} lemmings`, { size: 32, color: COLORS.gold, maxWidth: 820 }));
-    const specials = this.specialCounts(colony);
+    const s = run.state;
+    const colony = () => s.colony;
+    // the order of Previous and Next: the special lemmings first
+    const order = () => [...colony().filter(isSpecial), ...colony().filter((c) => !isSpecial(c))];
+    const inSquad = (c: LemmingCard) => (s.setup?.hand ?? []).includes(c.id);
+    o(panel(this, 40, 20, 880, 500, COLORS.panel, COLORS.purple, 12));
+    o(label(this, 64, 34, tarot ? `${tarot.name}: select ${tarot.max === 1 ? 'a lemming' : `up to ${tarot.max} lemmings`}` : `Your colony: ${colony().length} lemmings`, { size: 32, color: COLORS.gold, maxWidth: 820 }));
     const sub = o(label(this, 64, 72, '', { color: COLORS.dim, maxWidth: 620 }));
-    const updateSub = () =>
-      sub.setText(
-        tarot
-          ? `${selected.length} of ${tarot.max} selected${selected.length ? ': ' + selected.map((id) => run.card(id)?.name ?? '').join(', ') : ''}`
-          : specials
-            ? `Special: ${specials}`
-            : 'All of them plain lemmings.',
-      );
-    updateSub();
-
-    // (a crowd of at most 150: more would cover the level; the special ones first, also for Previous and Next)
-    const special = colony.filter(isSpecial);
-    const plain = colony.filter((c) => !isSpecial(c));
-    const shown = colony.length > 150 ? [...special, ...Phaser.Utils.Array.Shuffle(plain)].slice(0, 150) : [...special, ...plain];
-    const area = { x: 56, y: 96, w: 620, h: 370 };
-
-    // the panel at the side: who the lemming picked is (static, like a tooltip pinned to the corner)
-    const info = new Tooltip(this);
+    /** the lemmings picked: one, or a group (a box); with a boost, the ones selected for it */
+    let selection: number[] = [];
     let picked: LemmingCard | null = null;
-    const showInfo = () => {
-      const c = picked;
-      const tip: TipContent = c
-        ? { ...this.cardTip(c, squad.has(c.id)), x: 690, y: 96, width: 214, keywords: [] }
-        : tarot
-          ? { title: tarot.name, color: COLORS.purple, lines: [...(tarot.text ? [tarot.text, ''] : []), touch.active ? 'Tap the lemmings to select them; tap one in the sky to put it back.' : 'Click the lemmings to select them; click one in the sky to put it back.'], x: 690, y: 96, width: 214, keywords: [] }
-          : { title: 'Your colony', color: COLORS.gold, lines: [touch.active ? 'Tap a lemming to see who it is.' : 'Click a lemming to see who it is.'], x: 690, y: 96, width: 214, keywords: [] };
-      info.show(tip);
+    let changed = false;
+    let resetting = false;
+    const updateSub = () => {
+      if (tarot) {
+        sub.setText(`${selection.length} of ${tarot.max} selected${selection.length ? ': ' + selection.map((id) => run.card(id)?.name ?? '').join(', ') : ''}`);
+        return;
+      }
+      const specials = this.specialCounts(colony());
+      const prefer = colony().filter((c) => c.pref === 'prefer').length;
+      const avoid = colony().filter((c) => c.pref === 'avoid').length;
+      const prefs = prefer || avoid ? ` · {c:green}${prefer} preferred{}, {x}${avoid} avoided{}` : '';
+      sub.setText(plainText((specials ? `Special: ${specials}` : 'All of them plain lemmings.') + prefs));
     };
-    showInfo();
 
-    const habitat = new Habitat(this, area, shown, o, {
-      sky: tarot ? tarot.max : 0,
-      // the tooltip under the pointer: just who it is
+    // the home, played by the game (with its sounds, without its music)
+    const options = { soundMgr: this.app.sound, soundOptions: new Set([...this.app.config.soundOptions].filter((x) => x !== SoundOption.Music)) };
+    const home = new ColonyHome(this.app.data.provider, run.catalog.get(HOME_LEVEL).info, colony, s.home, options);
+    const info = new Tooltip(this);
+    const view = new HomeView(this, home, 56, 96, o, {
+      colony,
+      onPick: (c) => (tarot ? (c ? toggle(c) : null) : pickOne(c)),
+      onBox: (cards) => (tarot ? boxForBoost(cards) : pickGroup(cards)),
       onHover: (c, x, y) => {
         if (touch.active) return;
-        showTip(this.tip, { title: cardTitle(c), color: this.cardColor(c), lines: [], x, y: y - 44, center: true, width: Math.min(260, 40 + 8 * cardTitle(c).length), keywords: [] }, c);
+        if (!c) {
+          if (this.tip.owner && (this.tip.owner as { id?: number }).id !== undefined) this.tip.hide();
+          return;
+        }
+        if (this.tip.owner === c) return;
+        showTip(this.tip, { title: cardTitle(c), color: this.cardColor(c), lines: [], x, y: y - 58, center: true, width: Math.min(260, 40 + 8 * cardTitle(c).length), keywords: [] }, c);
       },
-      onOut: (c) => {
-        if (this.tip.owner === c) this.tip.hide();
-      },
-      onPick: (c) => {
-        pick(c);
-        if (tarot) toggle(c);
-      },
-      spot: (i, x, y) => this.spot(`colony:${i}`, x, y),
+      spot: (name, x, y) => this.spot(name, x, y),
     });
+    view.toolbar(56, 424);
+    this.homeView = view;
     this.overlayCleanup.push(() => {
-      habitat.destroy();
+      if (!resetting) s.home = home.save();
+      this.save();
+      view.destroy();
+      this.homeView = null;
       info.hide();
       this.tip.hide();
+      if (changed) this.render();
     });
 
-    // a lemming picked: marked, and who it is in the panel at the side
-    const pick = (c: LemmingCard) => {
-      picked = c;
-      habitat.mark(c.id);
-      showInfo();
-      updateSelectButton();
-      this.tip.hide();
-      this.sfx(SoundEffect.SkillButtonSelect);
+    // the panel at the side: who the lemmings picked are
+    const showInfo = () => {
+      const at = { x: 690, y: 96, width: 214, keywords: [] as { title: string; text: string }[] };
+      const group = tarot ? [] : selection.map((id) => run.card(id)).filter((c): c is LemmingCard => !!c);
+      if (picked && (tarot || group.length <= 1)) {
+        info.show({ ...this.cardTip(picked, inSquad(picked)), ...at });
+      } else if (group.length > 1) {
+        const names = group.slice(0, 6).map((c) => c.name).join(', ') + (group.length > 6 ? ` and ${group.length - 6} more` : '');
+        const specials = this.specialCounts(group);
+        const prefer = group.filter((c) => c.pref === 'prefer').length;
+        const avoid = group.filter((c) => c.pref === 'avoid').length;
+        info.show({
+          title: `${group.length} lemmings`,
+          color: COLORS.gold,
+          lines: [names, ...(specials ? ['', specials] : []), ...(prefer || avoid ? ['', `{c:green}${prefer} preferred{}, {x}${avoid} avoided{}`] : [])],
+          badges: group.some(inSquad) ? [{ text: `${group.filter(inSquad).length} in squad`, color: LEMMING_BADGE_COLORS.squad }] : [],
+          ...at,
+        });
+      } else
+        info.show({
+          title: tarot ? tarot.name : 'Your colony',
+          color: tarot ? COLORS.purple : COLORS.gold,
+          lines: tarot
+            ? [...(tarot.text ? [tarot.text, ''] : []), 'Pick the lemmings, or drag a box around them.']
+            : ['{!}Pick{} a lemming to see who it is, or drag a box around a group.', '', 'Skills are {$}free{} at home: build, dig and block to sort your colony. It stays as you leave it.'],
+          ...at,
+        });
+      updateButtons();
+      updateSub();
     };
-    // with a boost: selected (lifted into the sky), or put back
+
+    const mark = () => {
+      view.marked.clear();
+      for (const id of selection) view.marked.add(id);
+      if (picked) view.marked.add(picked.id);
+      view.focus = picked?.id ?? null;
+    };
+    const pickOne = (c: LemmingCard | null) => {
+      picked = c;
+      selection = c ? [c.id] : [];
+      mark();
+      showInfo();
+      if (c) this.sfx(SoundEffect.SkillButtonSelect);
+    };
+    const pickGroup = (cards: LemmingCard[]) => {
+      picked = cards.length === 1 ? cards[0] : null;
+      selection = cards.map((c) => c.id);
+      mark();
+      showInfo();
+      if (cards.length) this.sfx(SoundEffect.SkillButtonSelect);
+    };
+    // with a boost: selected, or put back
     const toggle = (c: LemmingCard) => {
       if (!tarot) return;
-      const i = selected.indexOf(c.id);
-      if (i >= 0) {
-        selected.splice(i, 1);
-        habitat.drop(c.id);
-      } else if (selected.length < tarot.max) {
-        selected.push(c.id);
-        habitat.lift(c.id);
-      } else this.toast(`${tarot.name} takes ${tarot.max === 1 ? 'one lemming' : `${tarot.max} lemmings`}: put one back first.`);
-      updateSub();
-      updateSelectButton();
+      picked = c;
+      const i = selection.indexOf(c.id);
+      if (i >= 0) selection.splice(i, 1);
+      else if (selection.length < tarot.max) selection.push(c.id);
+      else this.toast(`${tarot.name} takes ${tarot.max === 1 ? 'one lemming' : `${tarot.max} lemmings`}: put one back first.`);
+      mark();
+      showInfo();
+      this.sfx(SoundEffect.SkillButtonSelect);
     };
+    const boxForBoost = (cards: LemmingCard[]) => {
+      if (!tarot || !cards.length) return;
+      // a box of selected lemmings puts them back; else it selects as many as the boost takes
+      if (cards.every((c) => selection.includes(c.id))) selection = selection.filter((id) => !cards.some((c) => c.id === id));
+      else for (const c of cards) if (!selection.includes(c.id) && selection.length < tarot.max) selection.push(c.id);
+      picked = cards[0];
+      mark();
+      showInfo();
+      this.sfx(SoundEffect.SkillButtonSelect);
+    };
+
+    // Prefer / Normal / Avoid: for the squads (the lemmings picked)
+    const prefButtons: Button[] = [];
+    const setPref = (pref: 'prefer' | 'avoid' | null) => {
+      if (!selection.length) return;
+      run.setPreference(selection, pref);
+      changed = true;
+      this.save();
+      this.sfx(SoundEffect.AssignSkill);
+      showInfo();
+    };
+    if (!tarot) {
+      const prefs: [string, 'prefer' | 'avoid' | null, number, string][] = [
+        ['Prefer', 'prefer', COLORS.green, 'prefer'],
+        ['Normal', null, COLORS.gray, 'normal'],
+        ['Avoid', 'avoid', COLORS.red, 'avoid'],
+      ];
+      prefs.forEach(([caption, pref, color, spot], i) => {
+        const bx = 690 + i * 73;
+        this.spot(spot, bx + 34, 410);
+        prefButtons.push(o(new Button(this, bx, 396, 68, 28, caption, color, () => setPref(pref))));
+      });
+    }
+
     // Previous and Next: one lemming after the other (also with the arrow keys; Enter selects it for a boost)
     const position = o(label(this, 797, 446, '', { color: COLORS.text, originX: 0.5, originY: 0.5 }));
     const browse = (d: number) => {
-      const i = picked ? shown.indexOf(picked) : d > 0 ? -1 : 0;
-      pick(shown[(i + d + shown.length) % shown.length]);
-      position.setText(`${shown.indexOf(picked!) + 1} / ${shown.length}`);
+      const list = order();
+      if (!list.length) return;
+      const i = picked ? list.indexOf(picked) : d > 0 ? -1 : 0;
+      const c = list[(i + d + list.length) % list.length];
+      if (tarot) {
+        picked = c;
+        mark();
+        showInfo();
+      } else pickOne(c);
     };
-    position.setText(`${shown.length} lemmings`);
     this.spot('colonyPrev', 720, 446);
     this.spot('colonyNext', 874, 446);
     o(new Button(this, 690, 432, 60, 28, '<', COLORS.blue, () => browse(-1), { big: true }));
     o(new Button(this, 844, 432, 60, 28, '>', COLORS.blue, () => browse(1), { big: true }));
     let selectButton: Button | null = null;
-    const updateSelectButton = () => {
-      if (!selectButton) return;
-      selectButton.setVisible(!!picked);
-      selectButton.setCaption(picked && selected.includes(picked.id) ? 'Put back' : 'Select');
+    const updateButtons = () => {
+      const list = order();
+      position.setText(picked && list.includes(picked) ? `${list.indexOf(picked) + 1} / ${list.length}` : `${list.length} lemmings`);
+      for (const b of prefButtons) b.setVisible(selection.length > 0);
+      if (selectButton) {
+        selectButton.setVisible(!!picked);
+        selectButton.setCaption(picked && selection.includes(picked.id) ? 'Put back' : 'Select');
+      }
     };
     if (tarot) {
       this.spot('colonySelect', 797, 410);
       selectButton = o(new Button(this, 690, 396, 214, 28, 'Select', COLORS.purple, () => picked && toggle(picked)));
-      updateSelectButton();
     }
     this.overlayKey = (key) => {
       if (key === 'ArrowLeft' || key === 'ArrowRight') browse(key === 'ArrowLeft' ? -1 : 1);
-      else if (key === 'Enter' && picked) toggle(picked);
+      else if (key === 'Enter' && picked && tarot) toggle(picked);
     };
-    if (shown.length < colony.length) o(label(this, 64, 478, `and ${colony.length - shown.length} more at home`, { color: COLORS.dim }));
+
+    // a new home: the ground as at first (a second click to be sure)
+    if (!tarot) {
+      let sure = false;
+      this.spot('newHome', 596, 444);
+      const again = o(
+        new Button(this, 512, 424, 164, 40, 'New home', COLORS.gray, () => {
+          if (!sure) {
+            sure = true;
+            again.setCaption('Sure? Click again');
+            return;
+          }
+          resetting = true;
+          s.home = undefined;
+          this.closeOverlay();
+          this.showColony(null);
+        }),
+      );
+    }
+
     if (tarot) {
       this.spot('use', 665, 494);
       const use = () => {
-        const ids = [...selected];
+        const ids = [...selection];
         const notes = tarot.pack !== undefined ? run.choosePack(tarot.pack, ids) : tarot.offer !== undefined ? run.buyAndUse(tarot.offer, ids) : run.useTarot(tarot.uid!, ids);
         if (!notes) {
           this.toast(
@@ -1798,7 +1904,7 @@ export class RunScene extends Phaser.Scene {
           return;
         }
         this.sfx(SoundEffect.AssignSkill);
-        this.save();
+        this.closeOverlay();
         this.render();
         this.toast(notes.join('\n'));
       };
@@ -1806,6 +1912,7 @@ export class RunScene extends Phaser.Scene {
     }
     this.spot('back', 820, 494);
     o(new Button(this, 750, 478, 140, 32, tarot ? 'Cancel' : 'Back', COLORS.orange, () => this.closeOverlay()));
+    showInfo();
   }
 
   /** the colour of a lemming's name: its edition */

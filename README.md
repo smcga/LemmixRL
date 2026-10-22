@@ -147,10 +147,15 @@ window, as the screens of Lemmix do. The cards work as in Balatro, with its mobi
 click a card for its buttons, or drag it. A card of the shop dragged up to the Power Cards is bought; a boost of the shop
 dragged to the area above the colony is bought and used at once (it needs no free slot); a Power Card dragged to the boosts
 is sold (a boost to the Power Cards), a boost dragged above the colony is used, and a Power Card dragged along its row goes to
-another place. The colony (the deck in the corner) is every lemming walking about a little level: a click on one marks
-it and shows who it is in the panel at the side. Where a boost asks for lemmings, the same colony comes up: a click on a
-lemming lifts it into a patch of sky at the top, as Balatro lifts the cards selected from a hand (a click on it there puts
-it back). *Run Info* shows the levels of the round with their pictures, their previews and their hazards (water, fire,
+another place. The colony (the deck in the corner) lives at home: a little level of its own, played by the game, with a trapdoor
+and an exit (`app/src/run/home.ts`). *Pick* shows who a lemming is in the panel at the side (a drag picks every lemming
+in a box), and the eight skills can be used there as often as you like, for nothing: build bridges, dig, bash and blow
+up the ground, put blockers in the way, to keep lemmings in groups. The home is kept with the run as it was left (its
+ground, where every lemming is, its blockers); nothing is lost there (a lemming that dies or goes out comes back in by
+the trapdoor), and new lemmings come in by the trapdoor. The lemmings picked can be *preferred* or *avoided*: a squad
+is drawn from the preferred lemmings first and the avoided ones last (drawn again at once while its level has not
+begun). Where a boost asks for lemmings, the same home comes up and the lemmings picked are the ones it is used on.
+*Run Info* shows the levels of the round with their pictures, their previews and their hazards (water, fire,
 traps), to judge Power Cards like Lifeguard by. Next to the name of every level, *Wiki* opens its page on the
 [Lemmings Wiki](https://lemmings.fandom.com) (how it goes, how others solved it). Once a blind starts, it is the original
 level: the same terrain, objects, traps, physics, release rate, timer and rescue requirement, played with the original

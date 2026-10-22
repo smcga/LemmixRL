@@ -52,6 +52,23 @@ function hash01(text: string, ...nums: number[]): number {
 /** the lemming animations in the colours of the lemmings (shared by every game) */
 const recoloured = new Map<Bitmap32, Map<string, Bitmap32>>();
 
+/** An animation bitmap of the game in the colours of a lemming (made once for each palette; shared by the home). */
+export function recolouredBitmap(card: LemmingCard, bitmap: Bitmap32): Bitmap32 {
+  const palette = lemmingPalette(card);
+  const key = paletteKey(palette);
+  if (!key) return bitmap;
+  let byPalette = recoloured.get(bitmap);
+  if (!byPalette) recoloured.set(bitmap, (byPalette = new Map()));
+  let copy = byPalette.get(key);
+  if (!copy) {
+    copy = new Bitmap32();
+    copy.assign(bitmap);
+    for (let p = 0; p < copy.bits.length; p++) copy.bits[p] = remapColor(copy.bits[p], palette);
+    byPalette.set(key, copy);
+  }
+  return copy;
+}
+
 /** The Power Cards of a run in one game of a level: attach() sets the hooks of the game. */
 export class LevelPlay {
   /** the release index of every lemming that came out of an entrance */
@@ -187,20 +204,7 @@ export class LevelPlay {
   /** a lemming in the colours of its card */
   private bitmap(l: Lemming, bitmap: Bitmap32): Bitmap32 {
     const card = this.cardOf(l);
-    if (!card) return bitmap;
-    const palette = lemmingPalette(card);
-    const key = paletteKey(palette);
-    if (!key) return bitmap;
-    let byPalette = recoloured.get(bitmap);
-    if (!byPalette) recoloured.set(bitmap, (byPalette = new Map()));
-    let copy = byPalette.get(key);
-    if (!copy) {
-      copy = new Bitmap32();
-      copy.assign(bitmap);
-      for (let p = 0; p < copy.bits.length; p++) copy.bits[p] = remapColor(copy.bits[p], palette);
-      byPalette.set(key, copy);
-    }
-    return copy;
+    return card ? recolouredBitmap(card, bitmap) : bitmap;
   }
 
   /** SplngErr (the first splat), the Dead Lemmings Jogging Club (every explosion) */

@@ -1,0 +1,102 @@
+import { describe, expect, it } from 'vitest';
+import { getStyle, LemmingAction, StyleDef } from '../../engine/src/index.ts';
+import { repoDataProvider } from '../../engine/src/node/repoData.ts';
+import { LevelCatalog } from '../src/run/catalog.ts';
+import { ColonyHome, HOME_FLOORS, HOME_W } from '../src/run/home.ts';
+import { RunSession } from '../src/run/session.ts';
+import { SKILLS, type SkillCounts } from '../src/run/skills.ts';
+import type { LemmingCard } from '../src/run/state.ts';
+
+const data = repoDataProvider();
+const catalog = new LevelCatalog(getStyle(data, StyleDef.Orig));
+const base = catalog.get('Orig-1-01').info;
+
+function colony(n: number): LemmingCard[] {
+  return Array.from({ length: n }, (_, i) => ({ id: i + 1, name: `L${i + 1}`, climber: false, floater: false, edition: 'plain' as const, insured: false, saves: 0 }));
+}
+
+function frames(home: ColonyHome, n: number): void {
+  for (let i = 0; i < n; i++) home.update();
+}
+
+describe('the colony at home', () => {
+  it('every lemming of the colony is at home, on the floors, and stays there (the home never ends)', () => {
+    const cards = colony(40);
+    const home = new ColonyHome(data, base, () => cards, undefined);
+    expect(home.lemmings()).toHaveLength(40);
+    frames(home, 600);
+    expect(home.game.isFinished).toBe(false);
+    // nothing is lost at home: every lemming is still there (or on its way back by the trapdoor)
+    frames(home, 60);
+    expect(home.lemmings().length).toBeGreaterThanOrEqual(36);
+    for (const l of home.lemmings()) expect(l.xPos).toBeLessThan(HOME_W);
+  });
+
+  it('skills cost nothing; the ground and where the lemmings are is kept', () => {
+    const cards = colony(10);
+    const home = new ColonyHome(data, base, () => cards, undefined);
+    frames(home, 5);
+    // a blocker, and a digger through the bottom floor
+    const [a, b] = home.lemmings().filter((l) => l.yPos === HOME_FLOORS[3][2]);
+    expect(home.assign('blocker', a.xPos, a.yPos - 5)).toBe(true);
+    frames(home, 2);
+    const holeX = b.xPos;
+    expect(home.assign('digger', b.xPos, b.yPos - 5)).toBe(true);
+    frames(home, 40);
+    expect(home.game.skillCount(LemmingAction.Digging)).toBeGreaterThanOrEqual(98);
+    const saved = home.save();
+    expect(saved.lemmings.find((s) => s.id === home.card(a)!.id)?.blocker).toBe(true);
+    // a new visit: the hole is there, the blocker blocks
+    const again = new ColonyHome(data, base, () => cards, saved);
+    const hasGround = (h: ColonyHome) => h.game.hasPixelAt(holeX, HOME_FLOORS[3][2] + 2);
+    expect(hasGround(home)).toBe(false);
+    expect(hasGround(again)).toBe(false);
+    expect(again.lemmings().some((l) => l.action === LemmingAction.Blocking)).toBe(true);
+    expect(new ColonyHome(data, base, () => cards, undefined).game.hasPixelAt(holeX, HOME_FLOORS[3][2] + 2)).toBe(true);
+  });
+
+  it('a lemming lost at home comes back by the trapdoor; a new one comes in by it', () => {
+    const cards = colony(5);
+    const home = new ColonyHome(data, base, () => cards, undefined);
+    frames(home, 40);
+    const first = home.lemmings()[0];
+    const id = home.card(first)!.id;
+    expect(home.assign('bomber', first.xPos, first.yPos - 5)).toBe(true);
+    frames(home, 200);
+    expect(home.lemmings().filter((l) => home.card(l)?.id === id)).toHaveLength(1);
+    // the colony grows: the new lemming comes in on the next visit
+    const saved = home.save();
+    cards.push({ ...cards[0], id: 99, name: 'New' });
+    const again = new ColonyHome(data, base, () => cards, saved);
+    expect(again.lemmings().some((l) => again.card(l)?.id === 99)).toBe(false);
+    frames(again, 60);
+    expect(again.lemmings().some((l) => again.card(l)?.id === 99)).toBe(true);
+  });
+});
+
+describe('preferred and avoided lemmings', () => {
+  const SPREAD: SkillCounts = { climber: 6, floater: 6, bomber: 6, blocker: 6, builder: 12, basher: 8, miner: 8, digger: 8 };
+  it('the squad is drawn from the preferred lemmings first and the avoided ones last, again while the level has not begun', () => {
+    const run = RunSession.newRun(catalog, 'PREFS');
+    for (const sk of SKILLS) run.setAbility(sk, SPREAD[sk]);
+    expect(run.finishAssignment()).toBe(true);
+    // a level of 10 lemmings out of the colony of 80
+    run.state.blinds[0].levelId = 'Orig-1-02';
+    const before = run.ensureSetup().hand;
+    expect(before).toHaveLength(10);
+    const outside = run.state.colony.filter((c) => !before.includes(c.id)).slice(0, 4).map((c) => c.id);
+    run.setPreference(outside, 'prefer');
+    run.setPreference(before.slice(0, 2), 'avoid');
+    const after = run.ensureSetup().hand;
+    expect(after).toHaveLength(10);
+    for (const id of outside) expect(after).toContain(id);
+    for (const id of before.slice(0, 2)) expect(after).not.toContain(id);
+    // neither: back to the draw as it was
+    run.setPreference([...outside, ...before.slice(0, 2)], null);
+    expect(run.ensureSetup().hand).toEqual(before);
+    // once the level has begun, the squad stays
+    run.startBlind();
+    run.setPreference(outside, 'prefer');
+    expect(run.state.setup!.hand).toEqual(before);
+  });
+});
