@@ -4,6 +4,8 @@
  */
 import type { Art } from './cards.ts';
 import { POWER_CARD_LIBRARY } from '../power-cards/catalogue.ts';
+import type { LemmingAnim } from '../power-cards/animations.ts';
+import type { PowerCardDesign } from '../power-cards/schema.ts';
 import { COLORS } from './widgets.ts';
 import type { PackKind, Rarity } from '../content.ts';
 import type { LemmingCard, SpecialTrait } from '../state.ts';
@@ -34,6 +36,21 @@ export const PACK_LOOKS: Record<PackKind, { color: number; art: Art; band: strin
 
 export const JOKER_ART: Record<string, Art> = Object.fromEntries(POWER_CARD_LIBRARY.cards.map((design) => [design.id, { design }]));
 
+type Layer = PowerCardDesign['appearance']['layers'][number];
+
+function lemmingLayer(animation: LemmingAnim, scale: number, x: number, y: number, colors: Record<string, string> = {}): Layer {
+  return { type: 'lemming', animation, scale, x, y, colors, playback: 'animated', frame: 0 };
+}
+
+function textLayer(text: string, color: string, scale: number, x: number, y: number): Layer {
+  return { type: 'text', text, color, scale, x, y };
+}
+
+/** the picture of a boost drawn as a Power Card is (lemmings in their own colours) */
+function boostArt(id: string, layers: Layer[]): Art {
+  return { design: { id, name: id, rarity: 'common', price: 0, description: '', appearance: { background: '#4a2f72', border: '#f4f1e6', layers } } };
+}
+
 export const TAROT_ART: Record<string, Art> = {
   umbrella: { icon: 'floater' },
   gear: { icon: 'climber' },
@@ -49,6 +66,14 @@ export const TAROT_ART: Record<string, Art> = {
   recruiter: { anim: 'walk' },
   bootcamp: { anim: 'climb', tint: 0x7dd0ff },
   rethink: { anim: 'shrug', tint: 0xd0a0ff },
+  sage: { anim: 'walk', tint: 0xe8e8f0 },
+  // the dyes: a lemming with the hair it gives; the Barber and the Tailor: the left one becomes like the right one
+  ember: boostArt('ember', [lemmingLayer('walk', 3, 0, 6, { '#00b000': '#e03030' })]),
+  tangerine: boostArt('tangerine', [lemmingLayer('walk', 3, 0, 6, { '#00b000': '#f08820' })]),
+  amethyst: boostArt('amethyst', [lemmingLayer('walk', 3, 0, 6, { '#00b000': '#a040e0' })]),
+  sapphire: boostArt('sapphire', [lemmingLayer('walk', 3, 0, 6, { '#00b000': '#3070f0' })]),
+  barber: boostArt('barber', [lemmingLayer('walk', 2, -12, 10), lemmingLayer('walkLeft', 2, 12, 10, { '#00b000': '#e03030' }), textLayer('<', '#f3b958', 1.6, 0, -18)]),
+  tailor: boostArt('tailor', [lemmingLayer('walk', 2, -12, 10), lemmingLayer('walkLeft', 2, 12, 10, { '#4040e0': '#e07020' }), textLayer('<', '#f3b958', 1.6, 0, -18)]),
 };
 
 export const EDITION_TINTS: Record<string, number> = { plain: 0xffffff, gold: COLORS.gold, lucky: 0x7dff7d, mentor: 0x9fd0ff, champion: 0xd090ff, wise: 0xe8e8f0 };

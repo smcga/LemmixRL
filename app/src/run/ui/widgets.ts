@@ -2,6 +2,7 @@
 import * as Phaser from 'phaser';
 import { touch } from '../../touch.ts';
 import { keywordsOf } from '../content.ts';
+import { parseRich, plainText } from '../rich.ts';
 import { FONT, FONT_PURPLE } from './assets.ts';
 
 /** The colours of Balatro's interface (its G.C table), for the panels, buttons and texts of the run screens. */
@@ -45,10 +46,13 @@ export function label(scene: Phaser.Scene, x: number, y: number, text: string, o
   // purple DOS font of Lemmings is left for a title of its own (48 pixels or more)
   const original = !!o.purple && (o.size ?? 16) >= 48;
   const size = original ? (o.size ?? 16) : o.big ? Math.round((o.size ?? 16) * 1.5) : o.purple ? 24 : (o.size ?? 16);
-  const t = scene.add.bitmapText(x, y, original ? FONT_PURPLE : FONT, text, size, o.align ?? 0);
+  // (the colours of a description: see rich.ts)
+  const rich = parseRich(text);
+  const t = scene.add.bitmapText(x, y, original ? FONT_PURPLE : FONT, rich.plain, size, o.align ?? 0);
   if (o.maxWidth) t.setMaxWidth(o.maxWidth);
   t.setOrigin(o.originX ?? 0, o.originY ?? 0);
   if (!original) t.setTint(o.purple ? COLORS.lilac : (o.color ?? COLORS.text));
+  for (const sp of rich.spans) t.setCharacterTint(sp.start, sp.length, Phaser.TintModes.MULTIPLY, sp.color);
   // a shadow under every text, as in Balatro: it keeps the letters apart from what is behind them (not under the dark
   // text of a description, which is on white)
   if (o.color !== COLORS.ink) t.setDropShadow(size / 16, size / 16, 0x000000, 0.55);
@@ -256,7 +260,7 @@ export class Tooltip {
     }
     box.add(parts);
     // the keywords: small boxes beside it, as in Balatro (on the side with room)
-    const keywords = c.keywords ?? keywordsOf(c.lines.join(' '));
+    const keywords = c.keywords ?? keywordsOf(plainText(c.lines.join(' ')));
     const kw = 170;
     const x = c.center ? c.x - width / 2 : c.x;
     const y = c.above ? c.y - h : c.y;

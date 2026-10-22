@@ -2,6 +2,7 @@ import './style.css';
 import { loadLemmixData } from '../data.ts';
 import { POWER_CARD_LIBRARY } from '../run/power-cards/catalogue.ts';
 import { POWER_CARD_EFFECTS } from '../run/content.ts';
+import { parseRich } from '../run/rich.ts';
 import { LEMMING_ANIMS, type LemmingAnim } from '../run/power-cards/animations.ts';
 import { artBounds, drawPowerCard, powerCardAssets, powerCardFrameCount, type PowerCardAssets } from '../run/power-cards/render.ts';
 import {
@@ -127,7 +128,20 @@ function updatePreviewText(): void {
   const c = card();
   $('price-preview').textContent = `$${Number.isFinite(c.price) ? c.price : '—'}`;
   $('name-preview').textContent = c.name || 'Untitled card';
-  $('description-preview').textContent = c.description || 'Your description will appear here as the in-game tooltip.';
+  // the description as the game shows it: its colours (see rich.ts)
+  const preview = $('description-preview');
+  preview.replaceChildren();
+  const { plain, spans } = parseRich(c.description || 'Your description will appear here as the in-game tooltip.');
+  let at = 0;
+  for (const sp of spans) {
+    if (sp.start > at) preview.append(plain.slice(at, sp.start));
+    const span = document.createElement('span');
+    span.style.color = '#' + sp.color.toString(16).padStart(6, '0');
+    span.textContent = plain.slice(sp.start, sp.start + sp.length);
+    preview.append(span);
+    at = sp.start + sp.length;
+  }
+  if (at < plain.length) preview.append(plain.slice(at));
   const badge = $('rarity-preview');
   badge.textContent = c.rarity[0].toUpperCase() + c.rarity.slice(1);
   badge.style.backgroundColor = rarityColors[c.rarity];

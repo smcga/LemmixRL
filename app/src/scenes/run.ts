@@ -12,10 +12,10 @@ import * as Phaser from 'phaser';
 import { SoundEffect } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
 import { type RunLevel, levelName } from '../run/catalog.ts';
-import { EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, type Fate, isDeath, JOKERS, jokerDef, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
+import { EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, type Fate, isDeath, JOKERS, jokerDef, jokerText, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
 import { normalizeSeed, randomSeed } from '../run/rng.ts';
 import { type BlindPreview, cardTitle, isSpecial, jokerSellValue, RunSession, tarotSellPrice } from '../run/session.ts';
-import { COLOR_NAMES, colorsText } from '../run/colors.ts';
+import { colorsText } from '../run/colors.ts';
 import { hazardsText, levelHazards } from '../run/hazards.ts';
 import { describeSkills, SKILL_NAMES, SKILL_PLURALS, SKILLS, type Skill, totalSkills } from '../run/skills.ts';
 import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type JokerInstance, type PackChoice, type RescueLine, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
@@ -75,7 +75,7 @@ const FATE_ANIMS: Partial<Record<Fate, LemmingAnim>> = {
 };
 
 /** a tarot that is used: one of the player's, one of the shop that is bought for it, or the card of an open pack */
-type TarotUse = { uid?: number; offer?: number; pack?: number; max: number; name: string; text?: string };
+type TarotUse = { uid?: number; offer?: number; pack?: number; max: number; name: string; text?: string; pair?: boolean };
 
 /** "Rescue 72/80 (90%)": the requirement of a level, of the squad you bring to it */
 function rescueText(p: BlindPreview): string {
@@ -676,7 +676,7 @@ export class RunScene extends Phaser.Scene {
       const card = k(new CardView(this, jx[i], cy, { color: RARITY_COLORS[d.rarity], art: JOKER_ART[j.id] }));
       this.spot(`joker:${i}`, jx[i], cy);
       this.table.add(card, {
-        tip: () => ({ title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text, ...jokerState(j)], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } }),
+        tip: () => ({ title: d.name, color: RARITY_COLORS[d.rarity], lines: jokerLines(run, j), badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } }),
         buttons: () => (canSell ? [{ label: 'SELL', sub: `$${jokerSellValue(j)}`, color: COLORS.green, side: 'right', run: sell }] : []),
         targets: () => (canSell ? [{ rect: SELL_JOKER_ZONE, color: COLORS.gold, lines: ['SELL', `$${jokerSellValue(j)}`], active: true, release: sell }] : []),
         // dropped among the jokers: it goes where it was dropped
@@ -1468,7 +1468,7 @@ export class RunScene extends Phaser.Scene {
     if (c.type === 'tarot') {
       const d = tarotDef(c.id);
       if (d.select > 0) {
-        this.showColony({ pack: index, max: d.select, name: d.name, text: d.text });
+        this.showColony({ pack: index, max: d.select, name: d.name, text: d.text, pair: d.pair });
         return;
       }
     }
@@ -1612,7 +1612,7 @@ export class RunScene extends Phaser.Scene {
     }
     const d = tarotDef(o.id);
     if (d.select > 0) {
-      this.showColony({ offer: o.uid, max: d.select, name: d.name, text: d.text });
+      this.showColony({ offer: o.uid, max: d.select, name: d.name, text: d.text, pair: d.pair });
       return;
     }
     const notes = run.buyAndUse(o.uid);
@@ -1648,7 +1648,7 @@ export class RunScene extends Phaser.Scene {
       }
       return;
     }
-    this.showColony({ uid, max: d.select, name: d.name, text: d.text });
+    this.showColony({ uid, max: d.select, name: d.name, text: d.text, pair: d.pair });
   }
 
   private closeOverlay(): void {
@@ -1785,7 +1785,13 @@ export class RunScene extends Phaser.Scene {
         const ids = [...selected];
         const notes = tarot.pack !== undefined ? run.choosePack(tarot.pack, ids) : tarot.offer !== undefined ? run.buyAndUse(tarot.offer, ids) : run.useTarot(tarot.uid!, ids);
         if (!notes) {
-          this.toast(ids.length === 0 ? 'Select at least one lemming.' : 'That does not work (the squad of a level cannot leave the colony).');
+          this.toast(
+            tarot.pair && ids.length !== 2
+              ? `${tarot.name} needs 2 lemmings: the first becomes like the second.`
+              : ids.length === 0
+                ? 'Select at least one lemming.'
+                : 'That does not work (the squad of a level cannot leave the colony).',
+          );
           return;
         }
         this.sfx(SoundEffect.AssignSkill);
@@ -1895,11 +1901,36 @@ export function describeRun(run: RunSession): string {
 }
 
 /** what a Power Card of the run is at now: the colour on the Checklist, the sell value it gained, the Trainings */
-function jokerState(j: JokerInstance): string[] {
+/**
+ * The description of a Power Card of the run, as Balatro shows a joker: its colour or its lemming in the text, and
+ * what it is at now at the end, "(Currently X1.4)".
+ */
+function jokerLines(run: RunSession, j: JokerInstance): string[] {
   const d = jokerDef(j.id);
-  const lines: string[] = [];
-  if (d.afterLevel === 'checklist') lines.push(`On the list: ${COLOR_NAMES[j.color ?? 'red']} clothes.`);
-  if (d.countsTraining) lines.push(`Now X${(1 + 0.1 * (j.counter ?? 0)).toFixed(1)} Rescues.`);
-  if (j.sellBonus) lines.push(`Sells for $${jokerSellValue(j)}.`);
-  return lines.length ? ['', ...lines] : [];
+  const s = run.state;
+  const text = jokerText(d, j, (id) => run.card(id)?.name);
+  const now = (v: string) => `{~}(Currently{} ${v}{~}){}`;
+  let current: string | null = null;
+  switch (j.id) {
+    case 'personalspace':
+      current = `{x}X${Math.max(1, JOKER_SLOTS - s.jokers.length)}{}`;
+      break;
+    case 'elders':
+      current = `{x}X${+(1 + 0.2 * s.colony.filter((c) => c.edition === 'wise').length).toFixed(1)}{}`;
+      break;
+    case 'abstract':
+      current = `{+}+${3 * s.jokers.length}{}`;
+      break;
+    case 'gym':
+      current = `{x}X${+(1 + 0.1 * (j.counter ?? 0)).toFixed(1)}{}`;
+      break;
+    case 'inversecurve':
+      current = `{!}-${Math.min(100, s.stats.blindsWon)}%{}`;
+      break;
+  }
+  if (d.copies) {
+    const t = run.copyOf(j.uid);
+    return [text, t ? `{~}(Copying{} {!}${jokerDef(t.id).name}{}{~}){}` : '{~}(Nothing it can copy){}'];
+  }
+  return current ? [text, now(current)] : [text];
 }

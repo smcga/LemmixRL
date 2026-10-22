@@ -10,7 +10,7 @@
  *   cash out  = blind reward + rescue bonus + card and joker money + interest, then the shop
  */
 import { type Lemming, LEMMING_MAX_Y, LemmingAction, type LemmingGame, type Level, raf_SkillAssignment } from '../../../engine/src/index.ts';
-import { clothesOf, COLOR_NAMES, hasHair, LEMMING_COLORS, type LemmingColor, randomColors } from './colors.ts';
+import { clothesOf, COLOR_NAMES, hairOf, hasHair, LEMMING_COLORS, type LemmingColor, randomColors } from './colors.ts';
 import { FINAL_LAP_SECONDS, LevelPlay } from './level-rules.ts';
 import { type LevelCatalog, type RunLevel } from './catalog.ts';
 import {
@@ -31,6 +31,7 @@ import {
   tarotDef,
   PACKS,
   type PackKind,
+  type JokerDef,
   type RescueContext,
 } from './content.ts';
 import { type Rng, RunRandom } from './rng.ts';
@@ -89,6 +90,18 @@ const KINDS: readonly BlindKind[] = ['small', 'big', 'boss'];
  * and Power Cards (+Rescues, X Rescues) are what makes the later rounds possible (a requirement can be more lemmings
  * than there are).
  */
+/** a Power Card as it acts: its own ability, or the one of the card it copies (j: whose colour and counts it uses) */
+export interface ActiveJoker {
+  slot: JokerInstance;
+  j: JokerInstance;
+  d: JokerDef;
+  /** its name in the rescue count and the cash out ("Copycat (Abstract Lemming)") */
+  label: string;
+}
+
+/** the colours of the Trendsetter (not green: nearly every lemming has green hair at the start) */
+const TREND_COLORS: readonly LemmingColor[] = ['orange', 'red', 'purple', 'blue'];
+
 export const ROUND_SCALE: readonly number[] = [1, 1, 1.1, 1.25, 1.4, 1.6, 1.8, 2];
 
 /**
@@ -179,34 +192,66 @@ export class RunSession {
     return this.catalog.get(id);
   }
 
+  /**
+   * The Power Cards as they act, from left to right: Copycat acts as the Power Card to its right, Hive Mind as the
+   * leftmost one (with that card's colour, lemming and counts), as Balatro's Blueprint and Brainstorm do. A copy of
+   * nothing (or of a card that cannot be copied) does nothing.
+   */
+  activeJokers(): ActiveJoker[] {
+    const js = this.state.jokers;
+    const target = (i: number, seen: Set<number>): number | null => {
+      const d = jokerDef(js[i].id);
+      if (!d.copies) return i;
+      if (seen.has(i)) return null;
+      seen.add(i);
+      const t = d.copies === 'right' ? i + 1 : 0;
+      return t < js.length ? target(t, seen) : null;
+    };
+    const out: ActiveJoker[] = [];
+    js.forEach((slot, i) => {
+      const t = target(i, new Set());
+      if (t === null) return;
+      const d = jokerDef(js[t].id);
+      if (t !== i && d.noCopy) return;
+      out.push({ slot, j: js[t], d, label: t === i ? d.name : `${jokerDef(slot.id).name} (${d.name})` });
+    });
+    return out;
+  }
+
+  /** what a Copycat or Hive Mind copies now (null: nothing it can copy) */
+  copyOf(uid: number): JokerInstance | null {
+    const a = this.activeJokers().find((x) => x.slot.uid === uid);
+    return a && a.j !== a.slot ? a.j : null;
+  }
+
   /** the abilities of the colony plus those of the jokers */
   capability(): SkillCounts {
     const c = { ...this.state.capacity };
-    for (const j of this.state.jokers) {
-      const d = jokerDef(j.id);
-      if (d.capacity) for (const s of SKILLS) c[s] += d.capacity[s] ?? 0;
-    }
+    for (const { d } of this.activeJokers()) if (d.capacity) for (const s of SKILLS) c[s] += d.capacity[s] ?? 0;
     return c;
   }
 
   /** the skills the jokers add above the level maximum (without the random one of the Smuggler) */
   fixedAboveMax(): SkillCounts {
     const c = zeroSkills();
-    for (const j of this.state.jokers) {
-      const d = jokerDef(j.id);
-      if (d.aboveMax) for (const s of SKILLS) c[s] += d.aboveMax[s] ?? 0;
-    }
+    for (const { d } of this.activeJokers()) if (d.aboveMax) for (const s of SKILLS) c[s] += d.aboveMax[s] ?? 0;
     return c;
   }
 
   private jokerSum(f: (d: (typeof JOKERS)[number]) => number | undefined): number {
     let n = 0;
-    for (const j of this.state.jokers) n += f(jokerDef(j.id)) ?? 0;
+    for (const a of this.activeJokers()) n += f(a.d) ?? 0;
     return n;
   }
 
+  /** a Power Card acts (itself, or copied) */
   hasJoker(id: string): boolean {
-    return this.state.jokers.some((j) => j.id === id);
+    return this.activeJokers().some((a) => a.d.id === id);
+  }
+
+  /** some Power Card that acts does this */
+  private anyJoker(f: (d: JokerDef) => unknown): boolean {
+    return this.activeJokers().some((a) => !!f(a.d));
   }
 
   card(id: number): LemmingCard | undefined {
@@ -383,7 +428,7 @@ export class RunSession {
     setup.aboveMax = aboveMax;
     setup.usable = this.usableSkills(level, aboveMax, setup.hires);
     // Sneak Attack: three times the skills, above the level maximum
-    if (this.state.jokers.some((j) => jokerDef(j.id).sneakAttack)) for (const sk of SKILLS) setup.usable[sk] = Math.min(99, setup.usable[sk] * 3);
+    if (this.anyJoker((d) => d.sneakAttack)) for (const sk of SKILLS) setup.usable[sk] = Math.min(99, setup.usable[sk] * 3);
     setup.rescue = this.requiredFor(level);
     setup.extra = this.jokerSum((d) => d.dropsExtra);
     setup.minutes = level.time + this.jokerSum((d) => d.extraMinutes);
@@ -451,7 +496,7 @@ export class RunSession {
     // (the level's own count: what it can show; the run's rescue count decides)
     level.info.rescueCount = Math.min(setup.rescue, level.info.lemmingsCount);
     level.info.timeLimit = setup.minutes;
-    if (this.state.jokers.some((j) => jokerDef(j.id).sneakAttack)) level.info.releaseRate = 99;
+    if (this.anyJoker((d) => d.sneakAttack)) level.info.releaseRate = 99;
     setSkills(level.info, setup.usable);
   }
 
@@ -491,7 +536,7 @@ export class RunSession {
     const saved = order.length;
     const lines: RescueLine[] = [{ label: 'Lemmings saved', total: saved }];
     let score = saved;
-    const ginger = s.jokers.some((j) => jokerDef(j.id).ginger);
+    const ginger = this.anyJoker((d) => d.ginger);
     const base: Omit<RescueContext, 'counter'> = {
       saved,
       savedCards: order.filter((c): c is LemmingCard => !!c),
@@ -503,15 +548,15 @@ export class RunSession {
       wise: s.colony.filter((c) => c.edition === 'wise').length,
       ginger,
     };
-    for (const j of s.jokers) {
-      const d = jokerDef(j.id);
-      const r = d.rescues?.({ ...base, counter: j.counter ?? 0 });
+    for (const a of this.activeJokers()) {
+      const d = a.d;
+      const r = d.rescues?.({ ...base, counter: a.j.counter ?? 0, color: a.j.color, target: a.j.target });
       if (!r) continue;
       const plus = r.plus ?? 0;
       const times = r.times ?? 1;
       if (plus === 0 && times === 1) continue;
       score = (score + plus) * times;
-      lines.push({ label: d.name, ...(plus ? { plus } : {}), ...(times !== 1 ? { times: Math.round(times * 100) / 100 } : {}), total: Math.floor(score + 1e-9) });
+      lines.push({ label: a.label, ...(plus ? { plus } : {}), ...(times !== 1 ? { times: Math.round(times * 100) / 100 } : {}), total: Math.floor(score + 1e-9) });
     }
     return { score: Math.floor(score + 1e-9), lines };
   }
@@ -647,11 +692,12 @@ export class RunSession {
 
     // the colony
     const returns = new Set<Fate>();
-    for (const j of s.jokers) for (const f of jokerDef(j.id).returns ?? []) returns.add(f);
+    for (const { d } of this.activeJokers()) for (const f of d.returns ?? []) returns.add(f);
     const deadIdx = out.fates.map((f, i) => (isDeath(f) ? i : -1)).filter((i) => i >= 0);
-    let hardHat = this.hasJoker('hardhat');
+    let hardHats = this.activeJokers().filter((a) => a.d.id === 'hardhat').length;
     let respawns = this.jokerSum((d) => d.respawns);
-    const respawnClothes = new Set(s.jokers.map((j) => jokerDef(j.id).respawnClothes).filter((c): c is LemmingColor => !!c));
+    const respawnClothes = new Set(this.activeJokers().map((a) => a.d.respawnClothes).filter((c): c is LemmingColor => !!c));
+    const lostRespawn = new Set(this.activeJokers().map((a) => a.d.lostRespawnClothes).filter((c): c is LemmingColor => !!c));
     const exploded = new Set<Fate>(['bombed', 'exploded', 'nuked']);
     // the hard hat saves the most valuable lemming
     const value = (c: LemmingCard | undefined) => (c ? (c.edition !== 'plain' ? 4 : 0) + (c.climber ? 1 : 0) + (c.floater ? 1 : 0) + (c.insured ? -2 : 0) : 0);
@@ -664,14 +710,15 @@ export class RunSession {
       const who = cardTitle(card);
       if (returns.has(f)) notes.push(`${who} ${FATE_TEXTS[f]} but came back.`);
       else if (exploded.has(f) && respawnClothes.has(clothesOf(card))) notes.push(`${who} ${FATE_TEXTS[f]}, and respawned (Blue Bombers).`);
+      else if (lostRespawn.has(clothesOf(card))) notes.push(`${who} ${FATE_TEXTS[f]}, and respawned (Camouflage).`);
       else if (respawns > 0) {
         respawns--;
         notes.push(`${who} ${FATE_TEXTS[f]}, and respawned.`);
       } else if (card.insured) {
         card.insured = false;
         notes.push(`${who} ${FATE_TEXTS[f]}; the insurance brought it back.`);
-      } else if (hardHat) {
-        hardHat = false;
+      } else if (hardHats > 0) {
+        hardHats--;
         notes.push(`${who} ${FATE_TEXTS[f]}; the Hard Hat saved it.`);
       } else {
         lost.add(card.id);
@@ -733,10 +780,9 @@ export class RunSession {
       skillsAvailable: totalSkills(setup.usable),
       colonySize: s.colony.length,
     };
-    for (const j of s.jokers) {
-      const d = jokerDef(j.id);
-      const n = d.payout ? d.payout(ctx) : 0;
-      if (n > 0) lines.push({ label: d.name, amount: n });
+    for (const a of this.activeJokers()) {
+      const n = a.d.payout ? a.d.payout(ctx) : 0;
+      if (n > 0) lines.push({ label: a.label, amount: n });
     }
 
     // what happened in the level, then the Power Cards that act after a level
@@ -781,15 +827,18 @@ export class RunSession {
       const c = i >= 0 ? this.squadCard(out, i) : undefined;
       if (c) saved.push(c);
     }
-    const ginger = s.jokers.some((j) => jokerDef(j.id).ginger);
+    const ginger = this.anyJoker((d) => d.ginger);
     const join = (make: (c: LemmingCard) => void) => {
       const c = this.newCard(names);
       make(c);
       s.colony.push(c);
       return c;
     };
-    for (const j of [...s.jokers]) {
-      const d = jokerDef(j.id);
+    for (const a of this.activeJokers()) {
+      // (a copy acts on the card it copies; only the card itself changes its colour or its lemming, or is destroyed)
+      const j = a.j;
+      const own = a.slot === a.j;
+      const d = { ...a.d, name: a.label };
       if (d.joinsAfterLevel) {
         const c = join((c) => (c[d.joinsAfterLevel!] = true));
         notes.push(`${c.name} the ${d.joinsAfterLevel === 'climber' ? 'Climber' : 'Floater'} joined the colony (${d.name}).`);
@@ -846,6 +895,22 @@ export class RunSession {
               notes.push(`${c.name} found ${tarotDef(t.id).name} (${d.name}).`);
             }
           break;
+        case 'royalPurple': {
+          const n = saved.filter((c) => clothesOf(c) === 'purple').length;
+          if (n) lines.push({ label: d.name, amount: n });
+          break;
+        }
+        case 'salon': {
+          const n = new Set(saved.map((c) => hairOf(c))).size;
+          if (n) lines.push({ label: d.name, amount: n });
+          break;
+        }
+        case 'trendsetter':
+          if (own) j.color = colors.pick(TREND_COLORS.filter((c) => c !== j.color));
+          break;
+        case 'teacherspet':
+          if (own) j.target = this.pickPet(colors, j.target);
+          break;
         case 'finalLap':
           if (out.lapGold) lines.push({ label: `${d.name} (${out.lapGold} Gold)`, amount: 5 * out.lapGold });
           break;
@@ -866,7 +931,7 @@ export class RunSession {
           notes.push(`${original.name} was the only one out: a copy joined the colony (${d.name}).`);
         }
       }
-      if (d.destroyChance && rng.chance(d.destroyChance)) {
+      if (own && d.destroyChance && rng.chance(d.destroyChance)) {
         s.jokers = s.jokers.filter((x) => x.uid !== j.uid);
         notes.push(`${d.name} was destroyed.`);
       }
@@ -900,8 +965,7 @@ export class RunSession {
       const sources: string[] = [];
       let points = 0;
       let reassign = BOSS_REASSIGN_POINTS;
-      for (const j of s.jokers) {
-        const d = jokerDef(j.id);
+      for (const { d } of this.activeJokers()) {
         if (d.pointsAfterBoss) {
           points += d.pointsAfterBoss;
           sources.push(`${d.name}: +${d.pointsAfterBoss} points`);
@@ -1402,7 +1466,7 @@ export class RunSession {
     const t = s.tarots[i];
     const d = tarotDef(t.id);
     const cards = [...new Set(selected)].map((id) => this.card(id)).filter((c): c is LemmingCard => !!c);
-    if (cards.length > d.select || (d.select > 0 && cards.length === 0)) return null;
+    if (cards.length > d.select || (d.select > 0 && cards.length === 0) || (d.pair && cards.length !== 2)) return null;
     // the squad of a blind that has started is fixed: its lemmings cannot leave the colony
     const squad = new Set(s.setup?.hand ?? []);
     if ((t.id === 'manual' || t.id === 'hermit') && cards.some((c) => squad.has(c.id))) return null;
@@ -1426,6 +1490,21 @@ export class RunSession {
         notes.push(`${names(cards)}: ${EDITION_NAMES[e]}.`);
         break;
       }
+      case 'ember':
+      case 'tangerine':
+      case 'amethyst':
+      case 'sapphire':
+        for (const c of cards) c.hair = d.hair;
+        notes.push(`${names(cards)}: ${COLOR_NAMES[d.hair!]} hair.`);
+        break;
+      case 'barber':
+        cards[0].hair = hairOf(cards[1]);
+        notes.push(`${cards[0].name} has the hair of ${cards[1].name}: ${COLOR_NAMES[cards[0].hair]}.`);
+        break;
+      case 'tailor':
+        cards[0].clothes = clothesOf(cards[1]);
+        notes.push(`${cards[0].name} has the clothes of ${cards[1].name}: ${COLOR_NAMES[cards[0].clothes]}.`);
+        break;
       case 'sage':
         for (const c of cards) c.edition = 'wise';
         notes.push(`${names(cards)}: ${EDITION_NAMES.wise}.`);
@@ -1549,8 +1628,18 @@ export class RunSession {
   /** a Power Card as it is bought (the Checklist starts with Red clothes on its list) */
   private newJoker(id: string): JokerInstance {
     const j: JokerInstance = { uid: this.uid(), id };
-    if (jokerDef(id).afterLevel === 'checklist') j.color = 'red';
+    const d = jokerDef(id);
+    if (d.afterLevel === 'checklist') j.color = 'red';
+    const rng = this.random.stream('colors');
+    if (d.afterLevel === 'trendsetter') j.color = rng.pick(TREND_COLORS);
+    if (d.afterLevel === 'teacherspet') j.target = this.pickPet(rng);
     return j;
+  }
+
+  /** Teacher's Pet: a lemming of the colony (another one than before, when there is one) */
+  private pickPet(rng: Rng, not?: number): number | undefined {
+    const c = this.state.colony.filter((x) => x.id !== not);
+    return c.length ? rng.pick(c).id : not;
   }
 
   recruit(n: number): void {

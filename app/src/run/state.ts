@@ -77,8 +77,10 @@ export interface JokerInstance {
   sellBonus?: number;
   /** what it has counted (the Trainings of the Gym Membership) */
   counter?: number;
-  /** the colour on its list (the Checklist) */
+  /** its colour (the Checklist's list, the Trendsetter's hair) */
   color?: LemmingColor;
+  /** its lemming (Teacher's Pet), by id */
+  target?: number;
 }
 
 export interface TarotInstance {
