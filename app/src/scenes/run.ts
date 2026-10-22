@@ -1760,7 +1760,11 @@ export class RunScene extends Phaser.Scene {
           color: tarot ? COLORS.purple : COLORS.gold,
           lines: tarot
             ? [...(tarot.text ? [tarot.text, ''] : []), 'Pick the lemmings, or drag a box around them.']
-            : ['{!}Pick{} a lemming to see who it is, or drag a box around a group.', '', 'Skills are {$}free{} at home, and {!}Dirt{} and {!}Erase{} paint the ground: sort your colony into pens. It stays as you leave it.'],
+            : [
+                '{!}Pick{} a lemming to see who it is, or drag a box around a group.',
+                '',
+                'Skills are {$}free{} at home. {!}Dirt{} and {!}Erase{} paint the ground, {!}Poof{} sends a lemming back to the {!}Trapdoor{}, which you can move.',
+              ],
           ...at,
         });
       updateButtons();
@@ -1872,9 +1876,9 @@ export class RunScene extends Phaser.Scene {
     // a new home: the ground as at first (a second click to be sure)
     if (!tarot) {
       let sure = false;
-      this.spot('newHome', 634, 444);
+      this.spot('newHome', 116, 494);
       const again = o(
-        new Button(this, 592, 424, 84, 40, 'New home', COLORS.gray, () => {
+        new Button(this, 56, 478, 120, 32, 'New home', COLORS.gray, () => {
           if (!sure) {
             sure = true;
             again.setCaption('Sure?');

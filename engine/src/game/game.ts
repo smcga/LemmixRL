@@ -3088,6 +3088,33 @@ export class LemmingGame {
     return l;
   }
 
+  /**
+   * LemmixRL, not in the original: a lemming gone at once, in the particles of an explosion but without its hole in the
+   * ground (a blocker's field goes with it).
+   */
+  vanishLemming(l: Lemming): void {
+    if (l.isRemoved) return;
+    if (l.isBlocking) {
+      l.isBlocking = false;
+      this.restoreMap(l);
+    }
+    l.explosionTimer = 0;
+    this.removeLemming(l);
+    l.particleTimer = PARTICLE_FRAMECOUNT;
+    l.particleFrame = 0;
+    if (this.gameOptions.has(GameOption.ShowParticles)) this.particleFinishTimer = PARTICLE_FRAMECOUNT;
+    this.cueSoundEffect(this.soundIds.SFX_EXPLOSION);
+  }
+
+  /** LemmixRL, not in the original: puts an entrance somewhere else (its picture goes from where it was). */
+  moveEntrance(i: number, left: number, top: number): void {
+    const e = this.entrances[i];
+    if (!e) return;
+    this.renderer.eraseObject(this.targetBitmap, e.obj, this.world);
+    e.obj.left = left;
+    e.obj.top = top;
+  }
+
   /** LemmixRL: where the lemmings of an entrance appear (its feet), entrance i of the release order */
   entrancePoint(i: number): { x: number; y: number } | null {
     if (this.entrances.length === 0) return null;

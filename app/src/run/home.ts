@@ -71,6 +71,8 @@ export interface HomeState {
   terrain: string;
   /** where every lemming is (feet), its way and whether it blocks */
   lemmings: { id: number; x: number; y: number; dir: 1 | -1; blocker?: true }[];
+  /** where the trapdoor is (its top left), if it was moved */
+  entrance?: { left: number; top: number };
 }
 
 /** a lemming that is not there yet: it comes in by the trapdoor */
@@ -122,7 +124,8 @@ export class ColonyHome {
         o.top = top;
         level.interactiveObjects.push(o);
       };
-      obj(1, ENTRANCE.left, ENTRANCE.top);
+      const e = saved?.entrance ?? ENTRANCE;
+      obj(1, e.left, e.top);
       obj(0, EXIT.left, EXIT.top);
       obj(7, EXIT.left, EXIT.top - 8);
     });
@@ -170,6 +173,18 @@ export class ColonyHome {
     this.game.update();
   }
 
+  /** Poof: the lemming is gone at once, without a hole in the ground; it comes back in by the trapdoor. */
+  poof(l: Lemming): void {
+    if (this.cardOf.has(l)) this.game.vanishLemming(l);
+  }
+
+  /** Puts the trapdoor where the lemmings come in at x, y (the point they drop from), inside the home. */
+  moveTrapdoor(x: number, y: number): void {
+    const left = Math.max(0, Math.min(HOME_W - 48, Math.round(x) - 24));
+    const top = Math.max(0, Math.min(HOME_H - 25, Math.round(y) - 14));
+    this.game.moveEntrance(0, left, top);
+  }
+
   /** Uses a skill on the lemming at x, y (of the home), for nothing. Returns whether a lemming took it. */
   assign(skill: (typeof SKILLS)[number], x: number, y: number): boolean {
     const game = this.game;
@@ -188,7 +203,8 @@ export class ColonyHome {
       seen.add(id);
       lemmings.push({ id, x: l.xPos, y: l.yPos, dir: l.xDelta > 0 ? 1 : -1, ...(l.action === LemmingAction.Blocking ? { blocker: true as const } : {}) });
     }
-    return { v: 1, terrain: this.saveTerrain(), lemmings };
+    const e = this.game.entrances[0]?.obj;
+    return { v: 1, terrain: this.saveTerrain(), lemmings, ...(e && (e.left !== ENTRANCE.left || e.top !== ENTRANCE.top) ? { entrance: { left: e.left, top: e.top } } : {}) };
   }
 
   /* ------------------------------------------------------------------------------------------------- inside */

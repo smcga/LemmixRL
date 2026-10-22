@@ -106,6 +106,34 @@ describe('the home as it starts, and the brush', () => {
   });
 });
 
+describe('Poof and the trapdoor', () => {
+  it('Poof: a lemming gone without a hole, back in by the trapdoor, which can be moved (and is kept where it was put)', () => {
+    const cards = colony(6);
+    const home = new ColonyHome(data, base, () => cards, undefined);
+    frames(home, 40);
+    // the trapdoor over the middle pen of the middle row: lemmings drop in there
+    home.moveTrapdoor(150, 70);
+    const l = home.lemmings()[0];
+    const floor = l.yPos;
+    const id = home.card(l)!.id;
+    const ground = () => Array.from({ length: 9 }, (_, d) => home.game.hasPixelAt(l.xPos - 4 + d, floor + 1)).every(Boolean);
+    expect(ground()).toBe(true);
+    home.poof(l);
+    expect(l.isRemoved).toBe(true);
+    frames(home, 80);
+    expect(ground()).toBe(true);
+    const back = home.lemmings().find((x) => home.card(x)?.id === id)!;
+    expect(back).toBeDefined();
+    // it came in by the trapdoor where it was put: it is in the middle pen of the middle row now
+    expect(back.xPos).toBeGreaterThan(105);
+    expect(back.xPos).toBeLessThan(200);
+    expect(back.yPos).toBeLessThanOrEqual(100);
+    const saved = home.save();
+    expect(saved.entrance).toEqual({ left: 126, top: 56 });
+    expect(new ColonyHome(data, base, () => cards, saved).game.entrancePoint(0)).toEqual({ x: 150, y: 70 });
+  });
+});
+
 describe('preferred and avoided lemmings', () => {
   const SPREAD: SkillCounts = { climber: 6, floater: 6, bomber: 6, blocker: 6, builder: 12, basher: 8, miner: 8, digger: 8 };
   it('the squad is drawn from the preferred lemmings first and the avoided ones last, again while the level has not begun', () => {

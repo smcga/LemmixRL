@@ -1,8 +1,9 @@
 /**
  * The colony at home on the screen (see home.ts): the game's picture of the home at twice its size, the marks of the
  * special lemmings over it (as in a level), the lemmings selected, and the tools: Pick (a click picks a lemming, a drag
- * picks every lemming in a box), the eight skills (a click gives the lemming under it the skill, for nothing), and the
- * brush: Dirt paints ground where it is dragged, Erase takes it away.
+ * picks every lemming in a box), the eight skills (a click gives the lemming under it the skill, for nothing), the
+ * brush (Dirt paints ground where it is dragged, Erase takes it away), Poof (the lemming clicked is gone without a hole,
+ * and comes back in by the trapdoor) and Trapdoor (a click or a drag puts the trapdoor there).
  */
 import * as Phaser from 'phaser';
 import { Bitmap32, type Lemming } from '../../../../engine/src/index.ts';
@@ -10,13 +11,15 @@ import { ColonyHome, HOME_H, HOME_W, homePicture } from '../home.ts';
 import { type Skill, SKILLS } from '../skills.ts';
 import type { LemmingCard } from '../state.ts';
 import { markerColor } from './art.ts';
-import { SKILL_ICONS } from './assets.ts';
+import { ENTRANCE, SKILL_ICONS } from './assets.ts';
 import { COLORS, label, shade } from './widgets.ts';
 
-export type HomeTool = 'pick' | Skill | 'dirt' | 'erase';
+export type HomeTool = 'pick' | Skill | 'dirt' | 'erase' | 'poof' | 'trapdoor';
 
 /** the tools, in the order of the toolbar */
-const TOOLS: readonly HomeTool[] = ['pick', ...SKILLS, 'dirt', 'erase'];
+const TOOLS: readonly HomeTool[] = ['pick', ...SKILLS, 'dirt', 'erase', 'poof', 'trapdoor'];
+/** the room of a tool on the toolbar */
+const TOOL_PITCH = 47;
 /** the brush: its radius (pixels of the home) */
 const BRUSH = 4;
 
@@ -97,10 +100,12 @@ export class HomeView {
     this.toolY = y;
     const scene = this.scene;
     TOOLS.forEach((t, i) => {
-      const bx = x + i * 48;
+      const bx = x + i * TOOL_PITCH;
       const g = this.add(scene.add.graphics());
       this.tools.set(t, g);
-      if (t === 'pick' || t === 'erase') this.add(label(scene, bx + 21, y + 20, t === 'pick' ? 'Pick' : 'Erase', { originX: 0.5, originY: 0.5, size: t === 'erase' ? 12 : 16 }));
+      if (t === 'pick' || t === 'erase' || t === 'poof')
+        this.add(label(scene, bx + 21, y + 20, t === 'pick' ? 'Pick' : t === 'erase' ? 'Erase' : 'Poof', { originX: 0.5, originY: 0.5, size: t === 'pick' ? 16 : 12 }));
+      else if (t === 'trapdoor') this.add(scene.add.image(bx + 21, y + 21, ENTRANCE, '9').setScale(0.75));
       // (the Dirt tool is a lump of earth, drawn with its button: see drawTools)
       else if (t !== 'dirt') this.add(scene.add.image(bx + 21, y + 20, SKILL_ICONS, t).setScale(1.4));
       const zone = this.add(scene.add.zone(bx, y, 42, 40).setOrigin(0, 0).setInteractive({ useHandCursor: true }));
@@ -117,7 +122,7 @@ export class HomeView {
   private drawTools(): void {
     for (const [t, g] of this.tools) {
       const i = TOOLS.indexOf(t);
-      const bx = this.toolX + i * 48;
+      const bx = this.toolX + i * TOOL_PITCH;
       const on = this.tool === t;
       g.clear();
       g.fillStyle(shade(on ? COLORS.gold : COLORS.panelLight, 0.6), 1);
@@ -171,6 +176,16 @@ export class HomeView {
       this.home.paint(w.x, w.y, BRUSH, this.tool === 'dirt');
       return;
     }
+    if (this.tool === 'poof') {
+      const l = this.lemmingAt(w.x, w.y);
+      if (l) this.home.poof(l);
+      return;
+    }
+    if (this.tool === 'trapdoor') {
+      this.stroke = w;
+      this.home.moveTrapdoor(w.x, w.y);
+      return;
+    }
     if (this.tool !== 'pick') {
       this.home.assign(this.tool, Math.round(w.x), Math.round(w.y));
       return;
@@ -184,6 +199,10 @@ export class HomeView {
   private move(p: Phaser.Input.Pointer): void {
     const w = this.world(p);
     this.pointer = w;
+    if (this.stroke && p.isDown && this.tool === 'trapdoor') {
+      this.home.moveTrapdoor(w.x, w.y);
+      return;
+    }
     if (this.stroke && p.isDown && (this.tool === 'dirt' || this.tool === 'erase')) {
       // the line from where the brush was: a spot every pixel of it
       const a = this.stroke;
