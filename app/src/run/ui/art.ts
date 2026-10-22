@@ -4,8 +4,10 @@
  */
 import type { Art } from './cards.ts';
 import { POWER_CARD_LIBRARY } from '../power-cards/catalogue.ts';
+import type { LemmingAnim } from '../power-cards/animations.ts';
+import type { PowerCardDesign } from '../power-cards/schema.ts';
 import { COLORS } from './widgets.ts';
-import type { PackKind, Rarity } from '../content.ts';
+import { EDITION_TEXTS, type PackKind, type Rarity, TRAIT_TEXTS } from '../content.ts';
 import type { LemmingCard, SpecialTrait } from '../state.ts';
 
 /** the colour of the small mark above a special lemming (in a level and in the colony), or none */
@@ -34,6 +36,21 @@ export const PACK_LOOKS: Record<PackKind, { color: number; art: Art; band: strin
 
 export const JOKER_ART: Record<string, Art> = Object.fromEntries(POWER_CARD_LIBRARY.cards.map((design) => [design.id, { design }]));
 
+type Layer = PowerCardDesign['appearance']['layers'][number];
+
+function lemmingLayer(animation: LemmingAnim, scale: number, x: number, y: number, colors: Record<string, string> = {}): Layer {
+  return { type: 'lemming', animation, scale, x, y, colors, playback: 'animated', frame: 0 };
+}
+
+function textLayer(text: string, color: string, scale: number, x: number, y: number): Layer {
+  return { type: 'text', text, color, scale, x, y };
+}
+
+/** the picture of a boost drawn as a Power Card is (lemmings in their own colours) */
+function boostArt(id: string, layers: Layer[]): Art {
+  return { design: { id, name: id, rarity: 'common', price: 0, description: '', appearance: { background: '#4a2f72', border: '#f4f1e6', layers } } };
+}
+
 export const TAROT_ART: Record<string, Art> = {
   umbrella: { icon: 'floater' },
   gear: { icon: 'climber' },
@@ -49,6 +66,14 @@ export const TAROT_ART: Record<string, Art> = {
   recruiter: { anim: 'walk' },
   bootcamp: { anim: 'climb', tint: 0x7dd0ff },
   rethink: { anim: 'shrug', tint: 0xd0a0ff },
+  sage: { anim: 'walk', tint: 0xe8e8f0 },
+  // the dyes: a lemming with the hair it gives; the Barber and the Tailor: the left one becomes like the right one
+  ember: boostArt('ember', [lemmingLayer('walk', 3, 0, 6, { '#00b000': '#e03030' })]),
+  tangerine: boostArt('tangerine', [lemmingLayer('walk', 3, 0, 6, { '#00b000': '#f08820' })]),
+  amethyst: boostArt('amethyst', [lemmingLayer('walk', 3, 0, 6, { '#00b000': '#a040e0' })]),
+  sapphire: boostArt('sapphire', [lemmingLayer('walk', 3, 0, 6, { '#00b000': '#3070f0' })]),
+  barber: boostArt('barber', [lemmingLayer('walk', 2, -12, 10), lemmingLayer('walkLeft', 2, 12, 10, { '#00b000': '#e03030' }), textLayer('<', '#f3b958', 1.6, 0, -18)]),
+  tailor: boostArt('tailor', [lemmingLayer('walk', 2, -12, 10), lemmingLayer('walkLeft', 2, 12, 10, { '#4040e0': '#e07020' }), textLayer('<', '#f3b958', 1.6, 0, -18)]),
 };
 
 export const EDITION_TINTS: Record<string, number> = { plain: 0xffffff, gold: COLORS.gold, lucky: 0x7dff7d, mentor: 0x9fd0ff, champion: 0xd090ff, wise: 0xe8e8f0 };
@@ -68,13 +93,13 @@ export const TAG_ART: Record<string, Art> = {
 
 /** the kinds of special lemmings: their name, what they do, and their picture */
 export const TRAIT_LOOKS: Record<SpecialTrait, { name: string; text: string; art: Art }> = {
-  gold: { name: 'Gold', text: 'Earns $2 when it reaches the exit.', art: { anim: 'walk', tint: COLORS.gold } },
-  lucky: { name: 'Lucky', text: 'When it reaches the exit: 1 in 3 chance of $4, 1 in 5 chance of a Boost.', art: { anim: 'walk', tint: 0x7dff7d } },
-  mentor: { name: 'Mentor', text: 'When it reaches the exit: +1 ability in the skill you used most in that level.', art: { anim: 'build', tint: 0x9fd0ff } },
-  champion: { name: 'Champion', text: 'When it reaches the exit, the rescue bonus of the level is multiplied.', art: { anim: 'exit', tint: 0xd090ff } },
-  climber: { name: 'Climber', text: 'Climbs walls from the start of every level.', art: { anim: 'climb' } },
-  floater: { name: 'Floater', text: 'Has an umbrella in every level.', art: { anim: 'float' } },
-  athlete: { name: 'Athlete', text: 'A climber and a floater.', art: { anim: 'climb', tint: 0x9fd0ff } },
-  insured: { name: 'Insured', text: 'Comes back once after it dies.', art: { anim: 'block', tint: 0xffd0a0 } },
-  wise: { name: 'Wise', text: 'A wise old lemming: some Power Cards count the Wise lemmings of your colony.', art: { anim: 'walk', tint: 0xe8e8f0 } },
+  gold: { name: 'Gold', text: EDITION_TEXTS.gold, art: { anim: 'walk', tint: COLORS.gold } },
+  lucky: { name: 'Lucky', text: EDITION_TEXTS.lucky, art: { anim: 'walk', tint: 0x7dff7d } },
+  mentor: { name: 'Mentor', text: EDITION_TEXTS.mentor, art: { anim: 'build', tint: 0x9fd0ff } },
+  champion: { name: 'Champion', text: EDITION_TEXTS.champion, art: { anim: 'exit', tint: 0xd090ff } },
+  climber: { name: 'Climber', text: TRAIT_TEXTS.climber, art: { anim: 'climb' } },
+  floater: { name: 'Floater', text: TRAIT_TEXTS.floater, art: { anim: 'float' } },
+  athlete: { name: 'Athlete', text: 'A {s}Climber{} and a {s}Floater{}', art: { anim: 'climb', tint: 0x9fd0ff } },
+  insured: { name: 'Insured', text: TRAIT_TEXTS.insured, art: { anim: 'block', tint: 0xffd0a0 } },
+  wise: { name: 'Wise', text: EDITION_TEXTS.wise, art: { anim: 'walk', tint: 0xe8e8f0 } },
 };

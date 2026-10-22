@@ -77,8 +77,10 @@ export interface JokerInstance {
   sellBonus?: number;
   /** what it has counted (the Trainings of the Gym Membership) */
   counter?: number;
-  /** the colour on its list (the Checklist) */
+  /** its colour (the Checklist's list, the Trendsetter's hair) */
   color?: LemmingColor;
+  /** its lemming (Teacher's Pet), by id */
+  target?: number;
 }
 
 export interface TarotInstance {
@@ -107,7 +109,9 @@ export interface ShopState {
   /** the packs of the shop (they are not rerolled); runs saved before packs existed do not have them */
   packs?: ShopOffer[];
   rerolls: number;
-  /** rerolls left that cost nothing (the Generous Clown) */
+  /** the free rerolls used in this shop (the Generous Clown's) */
+  freeRerollsUsed?: number;
+  /** (saves of old: the free rerolls left when the shop opened; no longer used) */
   freeRerolls?: number;
 }
 

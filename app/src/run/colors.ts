@@ -91,11 +91,12 @@ export function isFully(c: LemmingCard, color: LemmingColor): boolean {
   return hairOf(c) === color && clothesOf(c) === color;
 }
 
-/** "Green hair, Blue clothes" */
+/** "Green hair, Blue clothes", the colours in colour */
 export function colorsText(c: LemmingCard): string {
   const h = hairOf(c);
   const cl = clothesOf(c);
-  return h === cl ? `Fully ${COLOR_NAMES[h]}` : `${COLOR_NAMES[h]} hair, ${COLOR_NAMES[cl]} clothes`;
+  // (in the colours of a description: see rich.ts)
+  return h === cl ? `{!}Fully{} {c:${h}}${COLOR_NAMES[h]}{}` : `{c:${h}}${COLOR_NAMES[h]}{} hair, {c:${cl}}${COLOR_NAMES[cl]}{} clothes`;
 }
 
 /** the colours of the sprites of a lemming in place of those of Lemmings (as #rrggbb to #rrggbb) */

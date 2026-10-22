@@ -12,10 +12,10 @@ import * as Phaser from 'phaser';
 import { SoundEffect } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
 import { type RunLevel, levelName } from '../run/catalog.ts';
-import { EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, type Fate, isDeath, JOKERS, jokerDef, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
+import { EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, LEMMING_BADGE_COLORS, TRAIT_TEXTS, type Fate, isDeath, JOKERS, jokerDef, jokerText, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
 import { normalizeSeed, randomSeed } from '../run/rng.ts';
 import { type BlindPreview, cardTitle, isSpecial, jokerSellValue, RunSession, tarotSellPrice } from '../run/session.ts';
-import { COLOR_NAMES, colorsText } from '../run/colors.ts';
+import { colorsText } from '../run/colors.ts';
 import { hazardsText, levelHazards } from '../run/hazards.ts';
 import { describeSkills, SKILL_NAMES, SKILL_PLURALS, SKILLS, type Skill, totalSkills } from '../run/skills.ts';
 import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type JokerInstance, type PackChoice, type RescueLine, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
@@ -75,7 +75,7 @@ const FATE_ANIMS: Partial<Record<Fate, LemmingAnim>> = {
 };
 
 /** a tarot that is used: one of the player's, one of the shop that is bought for it, or the card of an open pack */
-type TarotUse = { uid?: number; offer?: number; pack?: number; max: number; name: string; text?: string };
+type TarotUse = { uid?: number; offer?: number; pack?: number; max: number; name: string; text?: string; pair?: boolean };
 
 /** "Rescue 72/80 (90%)": the requirement of a level, of the squad you bring to it */
 function rescueText(p: BlindPreview): string {
@@ -676,7 +676,7 @@ export class RunScene extends Phaser.Scene {
       const card = k(new CardView(this, jx[i], cy, { color: RARITY_COLORS[d.rarity], art: JOKER_ART[j.id] }));
       this.spot(`joker:${i}`, jx[i], cy);
       this.table.add(card, {
-        tip: () => ({ title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text, ...jokerState(j)], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } }),
+        tip: () => ({ title: d.name, color: RARITY_COLORS[d.rarity], lines: jokerLines(run, j), badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } }),
         buttons: () => (canSell ? [{ label: 'SELL', sub: `$${jokerSellValue(j)}`, color: COLORS.green, side: 'right', run: sell }] : []),
         targets: () => (canSell ? [{ rect: SELL_JOKER_ZONE, color: COLORS.gold, lines: ['SELL', `$${jokerSellValue(j)}`], active: true, release: sell }] : []),
         // dropped among the jokers: it goes where it was dropped
@@ -1329,7 +1329,7 @@ export class RunScene extends Phaser.Scene {
       this.save();
       this.render();
     };
-    this.btn('reroll', x + 12, y + 80, 124, 58, 'Reroll', COLORS.green, reroll, { big: true, enabled: run.canAfford(run.rerollPrice()), sub: run.rerollPrice() === 0 ? `FREE (${s.shop?.freeRerolls ?? 0})` : `$${run.rerollPrice()}` });
+    this.btn('reroll', x + 12, y + 80, 124, 58, 'Reroll', COLORS.green, reroll, { big: true, enabled: run.canAfford(run.rerollPrice()), sub: run.rerollPrice() === 0 ? `FREE (${run.freeRerollsLeft()})` : `$${run.rerollPrice()}` });
 
     // the cards on offer
     const top: Rect = { x: x + 146, y: y + 12, w: w - 158, h: 130 };
@@ -1468,7 +1468,7 @@ export class RunScene extends Phaser.Scene {
     if (c.type === 'tarot') {
       const d = tarotDef(c.id);
       if (d.select > 0) {
-        this.showColony({ pack: index, max: d.select, name: d.name, text: d.text });
+        this.showColony({ pack: index, max: d.select, name: d.name, text: d.text, pair: d.pair });
         return;
       }
     }
@@ -1485,36 +1485,39 @@ export class RunScene extends Phaser.Scene {
     const lemmings = (title: string, line: string, art: Art) => ({ title, color: COLORS.blue, lines: [line], art, badge: { text: 'Lemmings', color: COLORS.blue } });
     switch (c.type) {
       case 'recruits':
-        return lemmings(`${c.amount} Lemmings`, `${c.amount} plain lemmings join the colony.`, { anim: 'walk' });
+        return lemmings(`${c.amount} Lemmings`, `{!}${c.amount}{} plain lemmings join the colony`, { anim: 'walk' });
       case 'specials': {
         const n = c.amount;
         switch (c.trait) {
           case 'floater':
-            return lemmings(`${n} Floaters`, `${n} lemmings with an umbrella in every level join the colony.`, { anim: 'float' });
+            return lemmings(`${n} Floaters`, `{!}${n}{} {s}Floaters{} join the colony`, { anim: 'float' });
           case 'climber':
-            return lemmings(`${n} Climbers`, `${n} lemmings that climb walls in every level join the colony.`, { anim: 'climb' });
+            return lemmings(`${n} Climbers`, `{!}${n}{} {s}Climbers{} join the colony`, { anim: 'climb' });
           case 'athlete':
-            return lemmings('An Athlete', 'A lemming that climbs and floats in every level joins the colony.', { anim: 'climb', tint: 0x9fd0ff });
+            return lemmings('An Athlete', 'A {s}Climber{} and {s}Floater{} joins the colony', { anim: 'climb', tint: 0x9fd0ff });
           case 'insured':
-            return lemmings(`${n} Insured`, `${n} lemmings that come back once after they die join the colony.`, { anim: 'block', tint: 0xffd0a0 });
+            return lemmings(`${n} Insured`, `{!}${n}{} {!}Insured{} lemmings join the colony. ${TRAIT_TEXTS.insured}`, { anim: 'block', tint: 0xffd0a0 });
           default:
-            return lemmings(`A ${EDITION_NAMES[c.trait]} Lemming`, `Joins the colony. ${EDITION_TEXTS[c.trait]}`, { anim: c.trait === 'mentor' ? 'build' : c.trait === 'champion' ? 'exit' : 'walk', tint: EDITION_TINTS[c.trait] });
+            return lemmings(`A ${EDITION_NAMES[c.trait]} Lemming`, `A {!}${EDITION_NAMES[c.trait]}{} lemming joins the colony. ${EDITION_TEXTS[c.trait]}`, { anim: c.trait === 'mentor' ? 'build' : c.trait === 'champion' ? 'exit' : 'walk', tint: EDITION_TINTS[c.trait] });
         }
       }
       case 'ability':
         return {
           title: `+${c.amount} ${SKILL_PLURALS[c.skill]}`,
           color: COLORS.teal,
-          lines: [`+${c.amount} ${SKILL_NAMES[c.skill]} ability for good${c.minus ? `, but ${c.minusAmount} less ${SKILL_NAMES[c.minus]}` : ''}.`, `You have ${run.capability()[c.skill]}${c.minus ? ` and ${run.capability()[c.minus]}` : ''}.`],
+          lines: [
+            `{!}+${c.amount}{} {s}${SKILL_NAMES[c.skill]}{} ability${c.minus ? `, {x}-${c.minusAmount}{} {s}${SKILL_NAMES[c.minus]}{} ability` : ''}`,
+            `{~}(Currently{} {!}${run.capability()[c.skill]}{}${c.minus ? `{~} and{} {!}${run.capability()[c.minus]}{}` : ''}{~}){}`,
+          ],
           art: { icon: c.skill },
           badge: { text: c.minus ? 'Trade' : 'Training', color: COLORS.teal },
         };
       case 'allSkills':
-        return { title: 'All-round Training', color: COLORS.teal, lines: [`+${c.amount} ability in every skill, for good.`], art: { text: `+${c.amount}`, color: COLORS.teal }, badge: { text: 'Training', color: COLORS.teal } };
+        return { title: 'All-round Training', color: COLORS.teal, lines: [`{!}+${c.amount}{} ability in every skill`], art: { text: `+${c.amount}`, color: COLORS.teal }, badge: { text: 'Training', color: COLORS.teal } };
       case 'tarot': {
         const d = tarotDef(c.id);
         const text = c.skill && d.skillText ? d.skillText(SKILL_NAMES[c.skill]) : d.text;
-        return { title: d.name, color: COLORS.purple, lines: [text, '', 'Used as soon as you choose it.'], art: c.id === 'manual' && c.skill ? { icon: c.skill } : TAROT_ART[c.id], badge: { text: 'Boost', color: COLORS.purple } };
+        return { title: d.name, color: COLORS.purple, lines: [text, '{~}(Used at once){}'], art: c.id === 'manual' && c.skill ? { icon: c.skill } : TAROT_ART[c.id], badge: { text: 'Boost', color: COLORS.purple } };
       }
       case 'joker': {
         const d = jokerDef(c.id);
@@ -1576,7 +1579,7 @@ export class RunScene extends Phaser.Scene {
         return {
           title: `${SKILL_NAMES[sk]} Training`,
           color: COLORS.teal,
-          lines: [`+${o.amount} ${SKILL_NAMES[sk]} ability for good.`, `You have ${run.capability()[sk]}.`],
+          lines: [`{!}+${o.amount}{} {s}${SKILL_NAMES[sk]}{} ability`, `{~}(Currently{} {!}${run.capability()[sk]}{}{~}){}`],
           art: { icon: sk },
           badge: { text: 'Training', color: COLORS.teal },
         };
@@ -1586,7 +1589,7 @@ export class RunScene extends Phaser.Scene {
         return {
           title: `${SKILL_NAMES[sk]} Recruitment Drive`,
           color: COLORS.teal,
-          lines: [`+${o.amount} lemmings and +${o.amount} ${SKILL_NAMES[sk]} ability.`],
+          lines: [`{!}${o.amount}{} lemmings join the colony and {!}+${o.amount}{} {s}${SKILL_NAMES[sk]}{} ability`],
           art: { anim: 'walk', tint: 0x9ff0e0 },
           badge: { text: 'Recruitment Drive', color: COLORS.teal },
         };
@@ -1612,7 +1615,7 @@ export class RunScene extends Phaser.Scene {
     }
     const d = tarotDef(o.id);
     if (d.select > 0) {
-      this.showColony({ offer: o.uid, max: d.select, name: d.name, text: d.text });
+      this.showColony({ offer: o.uid, max: d.select, name: d.name, text: d.text, pair: d.pair });
       return;
     }
     const notes = run.buyAndUse(o.uid);
@@ -1648,7 +1651,7 @@ export class RunScene extends Phaser.Scene {
       }
       return;
     }
-    this.showColony({ uid, max: d.select, name: d.name, text: d.text });
+    this.showColony({ uid, max: d.select, name: d.name, text: d.text, pair: d.pair });
   }
 
   private closeOverlay(): void {
@@ -1698,7 +1701,7 @@ export class RunScene extends Phaser.Scene {
     const showInfo = () => {
       const c = picked;
       const tip: TipContent = c
-        ? { title: cardTitle(c), color: this.cardColor(c), lines: this.cardLines(c, squad.has(c.id)), x: 690, y: 96, width: 214, keywords: [] }
+        ? { ...this.cardTip(c, squad.has(c.id)), x: 690, y: 96, width: 214, keywords: [] }
         : tarot
           ? { title: tarot.name, color: COLORS.purple, lines: [...(tarot.text ? [tarot.text, ''] : []), touch.active ? 'Tap the lemmings to select them; tap one in the sky to put it back.' : 'Click the lemmings to select them; click one in the sky to put it back.'], x: 690, y: 96, width: 214, keywords: [] }
           : { title: 'Your colony', color: COLORS.gold, lines: [touch.active ? 'Tap a lemming to see who it is.' : 'Click a lemming to see who it is.'], x: 690, y: 96, width: 214, keywords: [] };
@@ -1785,7 +1788,13 @@ export class RunScene extends Phaser.Scene {
         const ids = [...selected];
         const notes = tarot.pack !== undefined ? run.choosePack(tarot.pack, ids) : tarot.offer !== undefined ? run.buyAndUse(tarot.offer, ids) : run.useTarot(tarot.uid!, ids);
         if (!notes) {
-          this.toast(ids.length === 0 ? 'Select at least one lemming.' : 'That does not work (the squad of a level cannot leave the colony).');
+          this.toast(
+            tarot.pair && ids.length !== 2
+              ? `${tarot.name} needs 2 lemmings: the first becomes like the second.`
+              : ids.length === 0
+                ? 'Select at least one lemming.'
+                : 'That does not work (the squad of a level cannot leave the colony).',
+          );
           return;
         }
         this.sfx(SoundEffect.AssignSkill);
@@ -1804,14 +1813,23 @@ export class RunScene extends Phaser.Scene {
     return EDITION_TINTS[c.edition] === 0xffffff ? COLORS.text : EDITION_TINTS[c.edition];
   }
 
-  private cardLines(c: LemmingCard, inSquad: boolean): string[] {
-    const lines = [colorsText(c) + '.', EDITION_TEXTS[c.edition]];
-    if (c.climber) lines.push('Climber: climbs walls from the start of every level.');
-    if (c.floater) lines.push('Floater: has an umbrella in every level.');
-    if (c.insured) lines.push('Insured: comes back once after it dies.');
-    lines.push(`Reached the exit ${c.saves} time${c.saves === 1 ? '' : 's'}.`);
-    if (inSquad) lines.push('In the squad of the current level.');
-    return lines;
+  /**
+   * Who a lemming is, as Balatro describes a card: what it does first (in colour), then its hair and clothes, and how
+   * often it was saved; what it is (its edition, its abilities) in badges under it.
+   */
+  private cardTip(c: LemmingCard, inSquad: boolean): Pick<TipContent, 'title' | 'color' | 'lines' | 'badges'> {
+    const does = [EDITION_TEXTS[c.edition], c.climber ? TRAIT_TEXTS.climber : '', c.floater ? TRAIT_TEXTS.floater : '', c.insured ? TRAIT_TEXTS.insured : ''].filter((t) => t);
+    const saves = c.saves === 0 ? 'Not saved yet' : `Saved ${c.saves} time${c.saves === 1 ? '' : 's'}`;
+    // (a line between one effect and the next, as Balatro has a box for each)
+    const lines = [...does.flatMap((t) => [t, '']), colorsText(c), `{~}${saves}{}`];
+    const badges: { text: string; color: number }[] = [];
+    if (c.edition !== 'plain') badges.push({ text: EDITION_NAMES[c.edition], color: LEMMING_BADGE_COLORS[c.edition] });
+    if (c.climber && c.floater) badges.push({ text: 'Athlete', color: LEMMING_BADGE_COLORS.athlete });
+    else if (c.climber) badges.push({ text: 'Climber', color: LEMMING_BADGE_COLORS.climber });
+    else if (c.floater) badges.push({ text: 'Floater', color: LEMMING_BADGE_COLORS.floater });
+    if (c.insured) badges.push({ text: 'Insured', color: LEMMING_BADGE_COLORS.insured });
+    if (inSquad) badges.push({ text: 'In squad', color: LEMMING_BADGE_COLORS.squad });
+    return { title: c.name, color: this.cardColor(c), lines, badges };
   }
 
   /* -------------------------------------------------------------------------------------------- the end */
@@ -1895,11 +1913,36 @@ export function describeRun(run: RunSession): string {
 }
 
 /** what a Power Card of the run is at now: the colour on the Checklist, the sell value it gained, the Trainings */
-function jokerState(j: JokerInstance): string[] {
+/**
+ * The description of a Power Card of the run, as Balatro shows a joker: its colour or its lemming in the text, and
+ * what it is at now at the end, "(Currently X1.4)".
+ */
+function jokerLines(run: RunSession, j: JokerInstance): string[] {
   const d = jokerDef(j.id);
-  const lines: string[] = [];
-  if (d.afterLevel === 'checklist') lines.push(`On the list: ${COLOR_NAMES[j.color ?? 'red']} clothes.`);
-  if (d.countsTraining) lines.push(`Now X${(1 + 0.1 * (j.counter ?? 0)).toFixed(1)} Rescues.`);
-  if (j.sellBonus) lines.push(`Sells for $${jokerSellValue(j)}.`);
-  return lines.length ? ['', ...lines] : [];
+  const s = run.state;
+  const text = jokerText(d, j, (id) => run.card(id)?.name);
+  const now = (v: string) => `{~}(Currently{} ${v}{~}){}`;
+  let current: string | null = null;
+  switch (j.id) {
+    case 'personalspace':
+      current = `{x}X${Math.max(1, JOKER_SLOTS - s.jokers.length)}{}`;
+      break;
+    case 'elders':
+      current = `{x}X${+(1 + 0.2 * s.colony.filter((c) => c.edition === 'wise').length).toFixed(1)}{}`;
+      break;
+    case 'abstract':
+      current = `{+}+${3 * s.jokers.length}{}`;
+      break;
+    case 'gym':
+      current = `{x}X${+(1 + 0.1 * (j.counter ?? 0)).toFixed(1)}{}`;
+      break;
+    case 'inversecurve':
+      current = `{!}-${Math.min(100, s.stats.blindsWon)}%{}`;
+      break;
+  }
+  if (d.copies) {
+    const t = run.copyOf(j.uid);
+    return [text, t ? `{~}(Copying{} {!}${jokerDef(t.id).name}{}{~}){}` : '{~}(Nothing it can copy){}'];
+  }
+  return current ? [text, now(current)] : [text];
 }

@@ -36,6 +36,28 @@ slower/faster release, pause or nuke. All layer types have their own scale and
 position controls. **Selected layer type** replaces only that element with another
 type; the Add buttons preserve the other artwork on the card.
 
+## Writing descriptions
+
+Write descriptions the way Balatro writes its jokers: short, no explaining of the game's terms (those get their own
+boxes next to the tooltip, such as *+Rescues*, *X Rescues*, *Respawns*, *Fully* and *Drop in*), and the numbers in
+the colour of what they are. Colours are tags; `{}` ends one. The designer's preview shows them.
+
+| Tag | Colour | For |
+|---|---|---|
+| `{+}+1{} Rescues` | blue | added to the rescue count (Balatro's Chips) |
+| `{x}X2{} Rescues` | red | multiplies the rescue count (Balatro's Mult) |
+| `{$}$3{}` | gold | money |
+| `{%}1 in 4{}` | green | a chance |
+| `{s}Floaters{}` | green | a skill or ability: Builder, Floaters |
+| `{!}Gold{}` | orange | something to notice: an edition, a number of lemmings |
+| `{~}(Currently X1.4){}` | grey | what a card is at now |
+| `{c:orange}Orange{}` | the colour | a hair or clothes colour (`green`, `orange`, `red`, `purple`, `blue`) |
+
+A Power Card that has a colour or a lemming of its own writes `#clothes#`, `#hair#` or `#lemming#`: the game fills in
+the card's own (and Red, Orange or "a random lemming" before it has one).
+
+Example: `Saved lemmings with {c:orange}Orange{} hair give {+}+1{} Rescues`.
+
 ## Save and exchange designs
 
 Valid changes save automatically in this browser, under the designer’s own

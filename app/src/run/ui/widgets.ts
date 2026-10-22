@@ -2,6 +2,7 @@
 import * as Phaser from 'phaser';
 import { touch } from '../../touch.ts';
 import { keywordsOf } from '../content.ts';
+import { drawnIndexes, parseRich, plainText } from '../rich.ts';
 import { FONT, FONT_PURPLE } from './assets.ts';
 
 /** The colours of Balatro's interface (its G.C table), for the panels, buttons and texts of the run screens. */
@@ -45,10 +46,20 @@ export function label(scene: Phaser.Scene, x: number, y: number, text: string, o
   // purple DOS font of Lemmings is left for a title of its own (48 pixels or more)
   const original = !!o.purple && (o.size ?? 16) >= 48;
   const size = original ? (o.size ?? 16) : o.big ? Math.round((o.size ?? 16) * 1.5) : o.purple ? 24 : (o.size ?? 16);
-  const t = scene.add.bitmapText(x, y, original ? FONT_PURPLE : FONT, text, size, o.align ?? 0);
+  // (the colours of a description: see rich.ts)
+  const rich = parseRich(text);
+  const t = scene.add.bitmapText(x, y, original ? FONT_PURPLE : FONT, rich.plain, size, o.align ?? 0);
   if (o.maxWidth) t.setMaxWidth(o.maxWidth);
   t.setOrigin(o.originX ?? 0, o.originY ?? 0);
   if (!original) t.setTint(o.purple ? COLORS.lilac : (o.color ?? COLORS.text));
+  if (rich.spans.length) {
+    // (the colours go by the characters Phaser draws: see drawnIndexes)
+    const wrapped = (o.maxWidth ? t.getTextBounds(false).wrappedText : '') || rich.plain;
+    const chars = t.fontData.chars as Record<number, unknown>;
+    const at = drawnIndexes(rich.plain, wrapped, (code) => !!chars[code]);
+    for (const sp of rich.spans)
+      for (let k = sp.start; k < sp.start + sp.length; k++) if (at[k] >= 0) t.setCharacterTint(at[k], 1, Phaser.TintModes.MULTIPLY, sp.color);
+  }
   // a shadow under every text, as in Balatro: it keeps the letters apart from what is behind them (not under the dark
   // text of a description, which is on white)
   if (o.color !== COLORS.ink) t.setDropShadow(size / 16, size / 16, 0x000000, 0.55);
@@ -196,6 +207,8 @@ export type TipContent = {
   y: number;
   width?: number;
   badge?: { text: string; color: number };
+  /** several badges in a row (a lemming: its edition, its abilities), after the badge */
+  badges?: { text: string; color: number }[];
   center?: boolean;
   above?: boolean;
   /** the boxes of the keywords next to it (by default the keywords its lines use: see KEYWORDS) */
@@ -226,12 +239,35 @@ export class Tooltip {
     let h = boxY + boxH + (text ? 8 : 2);
     const g = s.add.graphics();
     const parts: Phaser.GameObjects.GameObject[] = [g, title, body];
-    let badge: { y: number; w: number } | null = null;
-    if (c.badge) {
-      const b = label(s, width / 2, h + 9, c.badge.text, { originX: 0.5, originY: 0.5 });
-      badge = { y: h, w: b.width + 20 };
-      parts.push(b);
-      h += 26;
+    // the badges: pills in rows, centred
+    const pills = [...(c.badge ? [c.badge] : []), ...(c.badges ?? [])];
+    const placed: { x: number; y: number; w: number; color: number }[] = [];
+    if (pills.length) {
+      const texts = pills.map((p) => label(s, 0, 0, p.text, { originX: 0.5, originY: 0.5 }));
+      const rows: number[][] = [[]];
+      let rowW = 0;
+      texts.forEach((t, i) => {
+        const w = t.width + 20 + 6;
+        if (rowW + w > width - 12 && rows[rows.length - 1].length) {
+          rows.push([]);
+          rowW = 0;
+        }
+        rows[rows.length - 1].push(i);
+        rowW += w;
+      });
+      for (const row of rows) {
+        const total = row.reduce((n, i) => n + texts[i].width + 20, 0) + 6 * (row.length - 1);
+        let x = width / 2 - total / 2;
+        for (const i of row) {
+          const w = texts[i].width + 20;
+          texts[i].setPosition(Math.round(x + w / 2), h + 9);
+          placed.push({ x, y: h, w, color: pills[i].color });
+          x += w + 6;
+        }
+        h += 24;
+      }
+      h += 2;
+      parts.push(...texts);
     }
     // the box: a light edge, a title on slate, the description on white
     g.fillStyle(0x000000, 0.35);
@@ -244,11 +280,13 @@ export class Tooltip {
       g.fillStyle(COLORS.cream, 1);
       g.fillRoundedRect(8, boxY, width - 16, boxH, 6);
     }
-    if (badge && c.badge) {
-      g.fillStyle(shade(c.badge.color, 0.6), 1);
-      g.fillRoundedRect(width / 2 - badge.w / 2, badge.y + 2, badge.w, 18, 6);
-      g.fillStyle(c.badge.color, 1);
-      g.fillRoundedRect(width / 2 - badge.w / 2, badge.y, badge.w, 18, 6);
+    if (placed.length) {
+      for (const p of placed) {
+        g.fillStyle(shade(p.color, 0.6), 1);
+        g.fillRoundedRect(p.x, p.y + 2, p.w, 18, 6);
+        g.fillStyle(p.color, 1);
+        g.fillRoundedRect(p.x, p.y, p.w, 18, 6);
+      }
     } else {
       // no badge: a line in the colour of what it is about
       g.fillStyle(c.color, 1);
@@ -256,7 +294,7 @@ export class Tooltip {
     }
     box.add(parts);
     // the keywords: small boxes beside it, as in Balatro (on the side with room)
-    const keywords = c.keywords ?? keywordsOf(c.lines.join(' '));
+    const keywords = c.keywords ?? keywordsOf(plainText(c.lines.join(' ')));
     const kw = 170;
     const x = c.center ? c.x - width / 2 : c.x;
     const y = c.above ? c.y - h : c.y;

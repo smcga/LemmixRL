@@ -172,13 +172,30 @@ describe('Power Cards: money, the shop and after a level', () => {
   it('the Generous Clown: 2 free rerolls in every shop', () => {
     const run = runOn('Orig-1-02', ['clown']);
     run.state.money = 0;
-    run.state.shop = { offers: [], packs: [], rerolls: 0, freeRerolls: 2 };
+    run.state.shop = { offers: [], packs: [], rerolls: 0 };
     expect(run.rerollPrice()).toBe(0);
     expect(run.reroll()).toBe(true);
     expect(run.reroll()).toBe(true);
     expect(run.rerollPrice()).toBe(2);
     expect(run.reroll()).toBe(false);
     expect(run.state.money).toBe(0);
+  });
+
+  it('the Generous Clown gives its free rerolls at once when it is bought in the shop (and not after it is sold)', () => {
+    const run = runOn('Orig-1-02');
+    run.state.money = 5;
+    run.state.phase = 'shop';
+    run.state.shop = { offers: [{ uid: 1, type: 'joker', id: 'clown', price: 5, sold: false }], packs: [], rerolls: 0, freeRerollsUsed: 0 };
+    expect(run.rerollPrice()).toBe(2);
+    expect(run.buy(1)).toBe(true);
+    expect(run.state.money).toBe(0);
+    expect(run.freeRerollsLeft()).toBe(2);
+    expect(run.reroll()).toBe(true);
+    expect(run.freeRerollsLeft()).toBe(1);
+    // sold: the free reroll left goes with it
+    expect(run.sellJoker(run.state.jokers[0].uid)).toBe(true);
+    expect(run.freeRerollsLeft()).toBe(0);
+    expect(run.rerollPrice()).toBe(2);
   });
 });
 

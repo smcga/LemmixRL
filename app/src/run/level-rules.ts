@@ -7,7 +7,7 @@
  */
 import { Bitmap32, DOM_FIRE, DOM_WATER, type Lemming, LEMMING_MAX_Y, LemmingAction, type LemmingGame } from '../../../engine/src/index.ts';
 import { hairOf, type LemmingColor, lemmingPalette, paletteKey, remapColor } from './colors.ts';
-import { jokerDef, type JokerDef } from './content.ts';
+import type { JokerDef } from './content.ts';
 import { SKILL_ACTIONS, SKILLS } from './skills.ts';
 import type { BlindSetup, LemmingCard, RunState } from './state.ts';
 
@@ -31,6 +31,8 @@ const SPECTRUM_COLORS = 4;
 export interface LevelRulesHost {
   readonly state: RunState;
   card(id: number): LemmingCard | undefined;
+  /** the Power Cards as they act (Copycat and Hive Mind as the card they copy) */
+  activeJokers(): { d: JokerDef }[];
 }
 
 /** a number from 0 to 1 of a text and some numbers (the random choices of a level) */
@@ -85,7 +87,7 @@ export class LevelPlay {
   }
 
   private has(f: (d: JokerDef) => unknown): boolean {
-    return this.host.state.jokers.some((j) => !!f(jokerDef(j.id)));
+    return this.host.activeJokers().some((a) => !!f(a.d));
   }
 
   /** a random number from 0 to 1, the same in every replay of the level */
