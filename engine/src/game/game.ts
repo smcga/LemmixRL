@@ -742,6 +742,8 @@ export class LemmingGame {
    * extra step every five frames). When it is not set the game is exactly the original.
    */
   lemmingSpeed: ((l: Lemming) => number) | null = null;
+  /** LemmixRL, not in the original: extra bricks laid by every Builder. Zero keeps the original 12-brick bridge. */
+  extraBuilderBricks = 0;
   /** LemmixRL: the lemmings that did not come out of an entrance (spawnLemming) */
   private spawnedCount = 0;
   /** LemmixRL: a free assignment (assignSkillFree) is not recorded in the replay */
@@ -1461,7 +1463,7 @@ export class LemmingGame {
         if (hasMechanic(this.mechanics, Mechanic.FallerStartsWith3)) l.fallen = 3;
         break;
       case LemmingAction.Building:
-        l.numberOfBricksLeft = 12;
+        l.numberOfBricksLeft = 12 + this.extraBuilderBricks;
         l.combineFlags = l.combineFlags & ~COMBINE_FLAG_BUILDER;
         break;
       case LemmingAction.Ohnoing:

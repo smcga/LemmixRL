@@ -546,6 +546,7 @@ export class RunSession {
 
   /** Sets the hooks of a game of the current level: the Power Cards of the run act in it (see level-rules.ts). */
   attach(game: LemmingGame): LevelPlay {
+    game.extraBuilderBricks = this.jokerSum((d) => d.extraBuilderBricks);
     this.play = new LevelPlay(this, game);
     this.play.attach();
     return this.play;

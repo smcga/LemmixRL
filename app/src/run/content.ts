@@ -229,6 +229,8 @@ export interface JokerDef {
   randomAboveMax?: boolean;
   /** extra minutes on the clock */
   extraMinutes?: number;
+  /** extra bridge blocks laid by every Builder */
+  extraBuilderBricks?: number;
   /** the first lemmings of the squad start with an ability */
   startClimbers?: number;
   startFloaters?: number;
@@ -316,6 +318,7 @@ export const POWER_CARD_EFFECTS: Record<string, Omit<JokerDef, 'id' | 'name' | '
   minimalist: { payout: (c) => (c.skillsUsed * 2 <= c.skillsAvailable ? 4 : 0) },
   headcount: { payout: (c) => Math.floor(c.colonySize / 20) },
   guild: { capacity: { builder: 2 } },
+  longbridge: { extraBuilderBricks: 4 },
   demolition: { capacity: { basher: 1, miner: 1, digger: 1 } },
   climbclub: { capacity: { climber: 2, floater: 2 } },
   bombsquad: { capacity: { bomber: 2, blocker: 2 } },

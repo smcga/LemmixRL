@@ -46,6 +46,21 @@ function finish(game: LemmingGame): void {
 }
 
 describe('Power Cards in the level', () => {
+  it('Long Bridge gives every Builder 4 extra bridge blocks', () => {
+    const bricks = (jokers: string[]) => {
+      const game = startGame(runOn('Orig-1-01', jokers));
+      runTo(game, 160);
+      const walkers = game.lemmingList.filter((l) => l.action === LemmingAction.Walking);
+      expect(walkers.length).toBeGreaterThan(1);
+      game.setSkillCount(LemmingAction.Building, 2);
+      for (const lemming of walkers.slice(0, 2)) expect(game.assignSkill(lemming, null, LemmingAction.Building)).toBe(lemming);
+      return walkers.slice(0, 2).map((l) => l.numberOfBricksLeft);
+    };
+
+    expect(bricks([])).toEqual([12, 12]);
+    expect(bricks(['longbridge'])).toEqual([16, 16]);
+  });
+
   it('SplngErr: 0 to 6 lemmings drop in at the first splat, the same ones in every replay', () => {
     // Fun 2: without umbrellas every lemming splats
     const counts: number[] = [];
