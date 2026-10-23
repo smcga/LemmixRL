@@ -293,6 +293,55 @@ describe('Power Cards inspired by missing Balatro Joker families', () => {
   });
 });
 
+describe('Legendary Power Cards', () => {
+  it('Triboulet doubles Rescues for every saved Gold or Champion lemming', () => {
+    const run = runOn('Orig-1-02', ['triboulet']);
+    const gold = { ...card(run, 'green'), edition: 'gold' as const };
+    const champion = { ...card(run, 'orange'), edition: 'champion' as const };
+    const plain = { ...card(run, 'red'), edition: 'plain' as const };
+    expect(run.rescueCount([gold, champion, plain], [], zeroSkills()).score).toBe(12);
+  });
+
+  it('Yorick counts lost lemmings and gains X1 Rescues for every 23', () => {
+    const run = runOn('Orig-1-02', ['yorick']);
+    const yorick = run.state.jokers[0];
+    yorick.counter = 22;
+    expect(run.rescueCount([card(run, 'green')], [], zeroSkills()).score).toBe(1);
+
+    const setup = run.startBlind();
+    run.state.outcome = {
+      success: true,
+      rescued: setup.hand.length - 1,
+      required: setup.rescue,
+      hand: setup.hand.length,
+      fates: setup.hand.map((_, i) => (i === 0 ? 'splat' : 'saved')),
+      skillsUsed: zeroSkills(),
+      secondsLeft: 60,
+      timeUp: false,
+      nuked: false,
+      done: 100,
+      target: 0,
+      exitOrder: setup.hand.slice(1).map((_, i) => i + 1),
+    };
+    setup.attempts++;
+    run.state.phase = 'result';
+    run.accept();
+    expect(yorick.counter).toBe(23);
+    expect(run.rescueCount([card(run, 'green')], [], zeroSkills()).score).toBe(2);
+  });
+
+  it('Chicot halves only the Level 3 rescue requirement', () => {
+    const run = runOn('Orig-1-02');
+    const level1 = run.level(run.state.blinds[0].levelId);
+    const boss = run.level(run.state.blinds[2].levelId);
+    const level1Before = run.requiredFor(level1);
+    const bossBefore = run.requiredFor(boss);
+    run.state.jokers.push({ uid: 990, id: 'chicot' });
+    expect(run.requiredFor(level1)).toBe(level1Before);
+    expect(run.requiredFor(boss)).toBe(Math.ceil(bossBefore / 2));
+  });
+});
+
 describe('Power Cards: colours and keywords', () => {
   it('the colony a run starts with is classic lemmings, nearly all of it; recruits bring the colours', () => {
     const run = started();

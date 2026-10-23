@@ -2957,6 +2957,121 @@
           }
         ]
       }
+    },
+    {
+      "id": "triboulet",
+      "name": "Triboulet",
+      "rarity": "legendary",
+      "price": 20,
+      "description": "Each saved {!}Gold{} or {!}Champion{} lemming gives {x}X2{} Rescues",
+      "appearance": {
+        "background": "#4a1768",
+        "border": "#f3b958",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "exit",
+            "scale": 2,
+            "x": -12,
+            "y": 10,
+            "colors": {
+              "#00b000": "#f3b958",
+              "#4040e0": "#d99a20"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "exit",
+            "scale": 2,
+            "x": 12,
+            "y": 10,
+            "colors": {
+              "#00b000": "#c070ff",
+              "#4040e0": "#8030c0"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "X2",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "yorick",
+      "name": "Yorick",
+      "rarity": "legendary",
+      "price": 20,
+      "description": "Gains {x}X1{} Rescues for every {!}23{} lemmings lost",
+      "appearance": {
+        "background": "#4a1768",
+        "border": "#f3b958",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "splat",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#00b000": "#d8b8ff",
+              "#4040e0": "#71308e"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "X1",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "chicot",
+      "name": "Chicot",
+      "rarity": "legendary",
+      "price": 20,
+      "description": "Level 3 requires {!}50%{} fewer Rescues",
+      "appearance": {
+        "background": "#4a1768",
+        "border": "#f3b958",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "block",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#00b000": "#d8b8ff",
+              "#4040e0": "#71308e"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "-50%",
+            "color": "#f3b958",
+            "scale": 1.1,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
     }
   ]
 }

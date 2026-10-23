@@ -2062,6 +2062,9 @@ function jokerLines(run: RunSession, j: JokerInstance): string[] {
     case 'popcorn':
       current = `{+}+${Math.max(0, 20 - 4 * (j.counter ?? 0))}{}`;
       break;
+    case 'yorick':
+      current = `{x}X${1 + Math.floor((j.counter ?? 0) / 23)}{} (${j.counter ?? 0} lost)`;
+      break;
   }
   if (d.copies) {
     const t = run.copyOf(j.uid);

@@ -103,6 +103,9 @@ export interface ActiveJoker {
 const TREND_COLORS: readonly LemmingColor[] = ['orange', 'red', 'purple', 'blue'];
 
 export const ROUND_SCALE: readonly number[] = [1, 1, 1.1, 1.25, 1.4, 1.6, 1.8, 2];
+const SHOP_RARITIES = ['common', 'uncommon', 'rare'] as const satisfies readonly Rarity[];
+/** The chance that one choice in a Boost Pack is replaced by a Legendary Power Card. */
+export const LEGENDARY_POWER_CARD_CHANCE = 0.003;
 
 /**
  * The levels of a band a blind is drawn from: the easier half for Level 1, the middle half for Level 2, the harder half
@@ -300,7 +303,9 @@ export class RunSession {
     const s = this.state;
     const scale = ROUND_SCALE[Math.min(s.ante, ANTES) - 1] ?? 1;
     const lower = Math.max(0, 1 - this.jokerSum((d) => d.requirementPerLevel) * s.stats.blindsWon);
-    return Math.max(1, Math.ceil(level.rescue * scale * lower - 1e-9));
+    const isBoss = s.blinds.some((b) => b.kind === 'boss' && b.levelId === level.id);
+    const boss = isBoss ? this.activeJokers().reduce((n, a) => n * (a.d.bossRequirementMultiplier ?? 1), 1) : 1;
+    return Math.max(1, Math.ceil(level.rescue * scale * lower * boss - 1e-9));
   }
 
   /** the money can go this far into debt (the Payday Loan) */
@@ -828,7 +833,7 @@ export class RunSession {
 
     // what happened in the level, then the Power Cards that act after a level
     notes.push(...(out.events ?? []));
-    this.afterLevel(out, setup, lines, notes, rng);
+    this.afterLevel(out, setup, lines, notes, rng, lost.size);
 
     // boss tags
     if (blind.kind === 'boss') {
@@ -860,7 +865,7 @@ export class RunSession {
   }
 
   /** What the Power Cards do after a level (accept): money, lemmings that join or leave, sell value, being destroyed. */
-  private afterLevel(out: AttemptOutcome, setup: BlindSetup, lines: PayoutLine[], notes: string[], rng: Rng): void {
+  private afterLevel(out: AttemptOutcome, setup: BlindSetup, lines: PayoutLine[], notes: string[], rng: Rng, lostForGood: number): void {
     const s = this.state;
     const names = this.random.stream('names');
     const colors = this.random.stream('colors');
@@ -957,6 +962,14 @@ export class RunSession {
             if (j.counter >= 5) {
               s.jokers = s.jokers.filter((x) => x.uid !== j.uid);
               notes.push(`${d.name} was eaten.`);
+            }
+          }
+          break;
+        case 'yorick':
+          if (own) {
+            if (lostForGood) {
+              j.counter = (j.counter ?? 0) + lostForGood;
+              notes.push(`${d.name} counted ${lostForGood} lost lemming${lostForGood === 1 ? '' : 's'} (${j.counter} total).`);
             }
           }
           break;
@@ -1252,9 +1265,12 @@ export class RunSession {
     const type = rng.pickWeighted(['joker', 'tarot', 'training'] as const, [40, 30, 30]);
     if (type === 'joker') {
       const owned = new Set([...this.state.jokers.map((j) => j.id), ...others.filter((o) => o.type === 'joker').map((o) => o.id)]);
-      const rarity = rng.pickWeighted(['common', 'uncommon', 'rare'] as Rarity[], [RARITY_WEIGHTS.common, RARITY_WEIGHTS.uncommon, RARITY_WEIGHTS.rare]);
+      const rarity = rng.pickWeighted(
+        SHOP_RARITIES,
+        SHOP_RARITIES.map((r) => RARITY_WEIGHTS[r]),
+      );
       let pool = JOKERS.filter((j) => j.rarity === rarity && !owned.has(j.id));
-      if (!pool.length) pool = JOKERS.filter((j) => !owned.has(j.id));
+      if (!pool.length) pool = JOKERS.filter((j) => j.rarity !== 'legendary' && !owned.has(j.id));
       if (pool.length) {
         const d = rng.pick(pool);
         return { uid: this.uid(), type: 'joker', id: d.id, price: d.price, sold: false };
@@ -1373,14 +1389,20 @@ export class RunSession {
         return { type: 'ability', skill, amount: 3 };
       }
       case 'boost': {
+        const owned = new Set([...this.state.jokers.map((j) => j.id), ...others.map((o) => (o.type === 'joker' ? o.id : ''))]);
+        const legendary = JOKERS.filter((j) => j.rarity === 'legendary' && !owned.has(j.id));
+        if (legendary.length && this.random.stream('legendary').chance(LEGENDARY_POWER_CARD_CHANCE)) return { type: 'joker', id: rng.pick(legendary).id };
         const t = this.newTarot(rng);
         return { type: 'tarot', id: t.id, skill: t.skill };
       }
       case 'gadget': {
         const owned = new Set([...this.state.jokers.map((j) => j.id), ...others.map((o) => (o.type === 'joker' ? o.id : ''))]);
-        const rarity = rng.pickWeighted(['common', 'uncommon', 'rare'] as Rarity[], [RARITY_WEIGHTS.common, RARITY_WEIGHTS.uncommon, RARITY_WEIGHTS.rare]);
+        const rarity = rng.pickWeighted(
+          SHOP_RARITIES,
+          SHOP_RARITIES.map((r) => RARITY_WEIGHTS[r]),
+        );
         let pool = JOKERS.filter((j) => j.rarity === rarity && !owned.has(j.id));
-        if (!pool.length) pool = JOKERS.filter((j) => !owned.has(j.id));
+        if (!pool.length) pool = JOKERS.filter((j) => j.rarity !== 'legendary' && !owned.has(j.id));
         return pool.length ? { type: 'joker', id: rng.pick(pool).id } : null;
       }
     }

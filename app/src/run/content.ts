@@ -167,7 +167,8 @@ export const LEMMING_NAMES = [
 
 /* ---------------------------------------------------------------------------------------------- jokers */
 
-export const RARITY_WEIGHTS: Record<Rarity, number> = { common: 70, uncommon: 25, rare: 5 };
+/** Legendary Power Cards are found in Boost Packs, not ordinary shop or Power Pack rarity rolls. */
+export const RARITY_WEIGHTS: Record<Rarity, number> = { common: 70, uncommon: 25, rare: 5, legendary: 0 };
 
 /**
  * What a Power Card can see of a level when the rescue count is made (at the end of the level). The count starts with
@@ -269,6 +270,8 @@ export interface JokerDef {
   destroyChance?: number;
   /** the rescue requirement, this much lower for every level beaten in the run */
   requirementPerLevel?: number;
+  /** multiplier applied to the rescue requirement of Level 3 */
+  bossRequirementMultiplier?: number;
   /** all lemmings drop at once, with three times the skills */
   sneakAttack?: boolean;
   /** when a level begins, the Power Card to its left goes, its sell value to a random ability */
@@ -286,7 +289,7 @@ export interface JokerDef {
   /** counts the Trainings used */
   countsTraining?: boolean;
   /** what it does after a level (see RunSession.accept) */
-  afterLevel?: 'wasteNot' | 'rainyDay' | 'purpleRain' | 'purpleBoost' | 'marmalade' | 'checklist' | 'changeling' | 'finalLap' | 'royalPurple' | 'salon' | 'trendsetter' | 'teacherspet' | 'popcorn';
+  afterLevel?: 'wasteNot' | 'rainyDay' | 'purpleRain' | 'purpleBoost' | 'marmalade' | 'checklist' | 'changeling' | 'finalLap' | 'royalPurple' | 'salon' | 'trendsetter' | 'teacherspet' | 'popcorn' | 'yorick';
   /** a copy of the only lemming out after 10 seconds joins the colony */
   selfReplication?: boolean;
   /** in the level (see level-rules.ts): 0 to 6 lemmings drop in at the first splat */
@@ -430,6 +433,12 @@ export const POWER_CARD_EFFECTS: Record<string, Omit<JokerDef, 'id' | 'name' | '
   cartomancer: { boostsAtLevelStart: 1, noCopy: true },
   popcorn: { rescues: (c) => ({ plus: Math.max(0, 20 - 4 * c.counter) }), afterLevel: 'popcorn' },
   tothemoon: { interestPerFive: 1 },
+  // Legendaries: found very rarely in Boost Packs, never in ordinary shops or Power Packs
+  triboulet: {
+    rescues: (c) => ({ times: 2 ** c.savedCards.filter((x) => x.edition === 'gold' || x.edition === 'champion').length }),
+  },
+  yorick: { rescues: (c) => ({ times: 1 + Math.floor(c.counter / 23) }), afterLevel: 'yorick' },
+  chicot: { bossRequirementMultiplier: 0.5, noCopy: true },
 };
 
 /** what the placeholders of a description say before a Power Card has a colour or a lemming of its own */
@@ -536,7 +545,7 @@ export interface PackDef {
 export const PACKS: Record<PackKind, PackDef> = {
   lemmings: { kind: 'lemmings', name: 'Lemmings Pack', price: 4, size: 3, text: 'Choose {!}1{} of {!}3{} groups of lemmings to join your colony' },
   training: { kind: 'training', name: 'Training Pack', price: 4, size: 3, text: 'Choose {!}1{} of {!}3{} ways to train your abilities' },
-  boost: { kind: 'boost', name: 'Boost Pack', price: 4, size: 3, text: 'Choose {!}1{} of {!}3{} {!}Boosts{} to use at once' },
+  boost: { kind: 'boost', name: 'Boost Pack', price: 4, size: 3, text: 'Choose {!}1{} of {!}3{} {!}Boosts{} to use at once. A {!}Legendary{} Power Card can rarely appear' },
   gadget: { kind: 'gadget', name: 'Power Pack', price: 6, size: 2, text: 'Choose {!}1{} of {!}2{} {!}Power Cards{}' },
 };
 
