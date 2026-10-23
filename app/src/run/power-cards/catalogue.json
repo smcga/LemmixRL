@@ -410,6 +410,37 @@
       }
     },
     {
+      "id": "longbridge",
+      "name": "Long Bridge",
+      "rarity": "rare",
+      "price": 8,
+      "description": "All {s}Builders{} lay {!}+4{} extra bridge blocks",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "build",
+            "scale": 3,
+            "x": 0,
+            "y": 4,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+4",
+            "color": "#f4f1e6",
+            "scale": 1.3,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
       "id": "demolition",
       "name": "Demolition Crew",
       "rarity": "common",
