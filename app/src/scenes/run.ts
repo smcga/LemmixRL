@@ -2050,6 +2050,18 @@ function jokerLines(run: RunSession, j: JokerInstance): string[] {
     case 'inversecurve':
       current = `{!}-${Math.min(100, s.stats.blindsWon)}%{}`;
       break;
+    case 'bootstraps':
+      current = `{+}+${2 * Math.floor(Math.max(0, s.money) / 5)}{}`;
+      break;
+    case 'baseball':
+      current = `{x}X${+(1.5 ** s.jokers.filter((x) => jokerDef(x.id).rarity === 'uncommon').length).toFixed(2)}{}`;
+      break;
+    case 'flashcard':
+      current = `{+}+${j.counter ?? 0}{}`;
+      break;
+    case 'popcorn':
+      current = `{+}+${Math.max(0, 20 - 4 * (j.counter ?? 0))}{}`;
+      break;
   }
   if (d.copies) {
     const t = run.copyOf(j.uid);

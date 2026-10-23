@@ -509,7 +509,7 @@ export class RunSession {
     return setup;
   }
 
-  /** The Power Cards that act when a level begins: the Recycling Plant takes the Power Card to its left. */
+  /** The Power Cards that act when a level begins: Recycling Plants and Boost Cartomancers. */
   private levelBegins(): void {
     const s = this.state;
     const rng = this.random.stream('begin');
@@ -520,6 +520,8 @@ export class RunSession {
       s.capacity[skill] += jokerSellValue(left);
       i--;
     }
+    for (const { d } of this.activeJokers())
+      for (let i = 0; i < (d.boostsAtLevelStart ?? 0) && s.tarots.length < TAROT_SLOTS; i++) s.tarots.push(this.newTarot(rng));
     if (s.setup) this.refreshSetup(s.setup);
   }
 
@@ -581,6 +583,8 @@ export class RunSession {
       blockersUsed: skillsUsed.blocker,
       emptySlots: JOKER_SLOTS - s.jokers.length,
       powerCards: s.jokers.length,
+      money: s.money,
+      uncommonPowerCards: s.jokers.filter((j) => jokerDef(j.id).rarity === 'uncommon').length,
       wise: s.colony.filter((c) => c.edition === 'wise').length,
       ginger,
     };
@@ -806,7 +810,7 @@ export class RunSession {
     if (gold > 0) lines.push({ label: `Gold lemmings (${gold})`, amount: 2 * gold });
 
     // the jokers
-    const ctx: PayoutContext = {
+    const ctx: Omit<PayoutContext, 'counter'> = {
       hand: out.hand,
       required: out.required,
       rescued: out.rescued,
@@ -815,9 +819,10 @@ export class RunSession {
       skillsUsed: totalSkills(out.skillsUsed),
       skillsAvailable: totalSkills(setup.usable),
       colonySize: s.colony.length,
+      goldSaved: gold,
     };
     for (const a of this.activeJokers()) {
-      const n = a.d.payout ? a.d.payout(ctx) : 0;
+      const n = a.d.payout ? a.d.payout({ ...ctx, counter: a.j.counter ?? 0 }) : 0;
       if (n > 0) lines.push({ label: a.label, amount: n });
     }
 
@@ -835,8 +840,9 @@ export class RunSession {
     }
 
     // interest on the money you had
-    const interest = Math.min(Math.max(0, Math.floor(s.money / 5)), MAX_INTEREST + this.jokerSum((d) => d.interestCap));
-    if (interest > 0) lines.push({ label: `Interest ($1 per $5)`, amount: interest });
+    const interestRate = 1 + this.jokerSum((d) => d.interestPerFive);
+    const interest = interestRate * Math.min(Math.max(0, Math.floor(s.money / 5)), MAX_INTEREST + this.jokerSum((d) => d.interestCap));
+    if (interest > 0) lines.push({ label: `Interest ($${interestRate} per $5)`, amount: interest });
 
     // after the blind
     const recruits = this.jokerSum((d) => d.recruitsAfterBlind);
@@ -885,6 +891,10 @@ export class RunSession {
           j.sellBonus = (j.sellBonus ?? 0) + d.splatValue * splats;
           notes.push(`${d.name}: +$${d.splatValue * splats} of sell value.`);
         }
+      }
+      if (own && d.sellValueAfterLevel) {
+        j.sellBonus = (j.sellBonus ?? 0) + d.sellValueAfterLevel;
+        notes.push(`${d.name}: +$${d.sellValueAfterLevel} of sell value.`);
       }
       switch (d.afterLevel) {
         case 'wasteNot': {
@@ -941,6 +951,15 @@ export class RunSession {
           if (n) lines.push({ label: d.name, amount: n });
           break;
         }
+        case 'popcorn':
+          if (own) {
+            j.counter = (j.counter ?? 0) + 1;
+            if (j.counter >= 5) {
+              s.jokers = s.jokers.filter((x) => x.uid !== j.uid);
+              notes.push(`${d.name} was eaten.`);
+            }
+          }
+          break;
         case 'trendsetter':
           if (own) j.color = colors.pick(TREND_COLORS.filter((c) => c !== j.color));
           break;
@@ -1222,6 +1241,10 @@ export class RunSession {
     const offers: ShopOffer[] = [];
     for (let i = 0; i < 3; i++) offers.push(this.newOffer(rng, offers));
     shop.offers = offers;
+    for (const j of s.jokers) {
+      const gain = jokerDef(j.id).gainsOnReroll ?? 0;
+      if (gain) j.counter = (j.counter ?? 0) + gain;
+    }
     return true;
   }
 

@@ -6,7 +6,7 @@ import { hairOf, lemmingPalette, remapColor } from '../src/run/colors.ts';
 import { keywordsOf } from '../src/run/content.ts';
 import { jokerSellValue, ROUND_SCALE, RunSession } from '../src/run/session.ts';
 import { SKILLS, type SkillCounts, zeroSkills } from '../src/run/skills.ts';
-import { JOKER_SLOTS, type LemmingCard } from '../src/run/state.ts';
+import { JOKER_SLOTS, TAROT_SLOTS, type LemmingCard } from '../src/run/state.ts';
 
 const data = repoDataProvider();
 const catalog = new LevelCatalog(getStyle(data, StyleDef.Orig));
@@ -25,6 +25,32 @@ function runOn(levelId: string, jokers: string[] = [], seed = 'TEST'): RunSessio
   run.state.blinds[0].levelId = levelId;
   jokers.forEach((id, i) => run.state.jokers.push({ uid: 900 + i, id }));
   return run;
+}
+
+/** accepts a perfect result without running the engine, then advances to the next blind */
+function winPerfect(run: RunSession) {
+  const setup = run.startBlind();
+  run.state.outcome = {
+    success: true,
+    rescued: setup.hand.length,
+    required: setup.rescue,
+    hand: setup.hand.length,
+    fates: setup.hand.map(() => 'saved'),
+    skillsUsed: zeroSkills(),
+    secondsLeft: 60,
+    timeUp: false,
+    nuked: false,
+    done: 100,
+    target: 0,
+    exitOrder: setup.hand.map((_, i) => i),
+  };
+  setup.attempts++;
+  run.state.phase = 'result';
+  const cash = run.accept();
+  run.cashOut();
+  if (run.assignment()) expect(run.finishAssignment()).toBe(true);
+  if ((run.state.phase as string) === 'shop') run.nextRound();
+  return cash;
 }
 
 /** plays the level without any input, with every hook of the player screen */
@@ -196,6 +222,74 @@ describe('Power Cards: money, the shop and after a level', () => {
     expect(run.sellJoker(run.state.jokers[0].uid)).toBe(true);
     expect(run.freeRerollsLeft()).toBe(0);
     expect(run.rerollPrice()).toBe(2);
+  });
+});
+
+describe('Power Cards inspired by missing Balatro Joker families', () => {
+  it('Bootstraps, Baseball Card and Hanging Chad score from money, rarity and the first save', () => {
+    const saved = (run: RunSession) => [card(run, 'green'), card(run, 'orange')];
+
+    const boots = runOn('Orig-1-02', ['bootstraps']);
+    boots.state.money = 14;
+    expect(boots.rescueCount(saved(boots), [], zeroSkills()).score).toBe(6); // 2 saved + 4 for $10
+
+    const baseball = runOn('Orig-1-02', ['baseball', 'bootstraps', 'overtime']);
+    expect(baseball.rescueCount(saved(baseball), [], zeroSkills()).score).toBe(4); // floor(2 x 1.5 x 1.5)
+
+    const chad = runOn('Orig-1-02', ['hangingchad']);
+    expect(chad.rescueCount(saved(chad), [], zeroSkills()).score).toBe(4);
+    expect(chad.rescueCount([], [], zeroSkills()).score).toBe(0);
+  });
+
+  it('Flash Card gains +2 Rescues on paid and free shop rerolls', () => {
+    const run = runOn('Orig-1-02', ['flashcard', 'clown']);
+    run.state.money = 20;
+    run.state.phase = 'shop';
+    run.state.shop = { offers: [], packs: [], rerolls: 0, freeRerollsUsed: 0 };
+    expect(run.reroll()).toBe(true);
+    expect(run.reroll()).toBe(true);
+    expect(run.state.jokers[0].counter).toBe(4);
+    expect(run.state.money).toBe(20);
+    expect(run.rescueCount([card(run, 'green')], [], zeroSkills()).score).toBe(5);
+  });
+
+  it('Golden Lemming, Golden Ticket and To the Moon pay out, while Nest Egg grows in value', () => {
+    const run = runOn('Orig-1-02', ['goldenlemming', 'goldenticket', 'tothemoon', 'nestegg']);
+    run.state.money = 25;
+    const setup = run.ensureSetup();
+    run.card(setup.hand[0])!.edition = 'gold';
+    run.card(setup.hand[1])!.edition = 'gold';
+    const cash = winPerfect(run);
+    expect(cash.lines).toContainEqual({ label: 'Golden Lemming', amount: 4 });
+    expect(cash.lines).toContainEqual({ label: 'Golden Ticket', amount: 8 });
+    expect(cash.lines).toContainEqual({ label: 'Interest ($2 per $5)', amount: 10 });
+    const egg = run.state.jokers.find((j) => j.id === 'nestegg')!;
+    expect(egg.sellBonus).toBe(3);
+    expect(jokerSellValue(egg)).toBe(5);
+  });
+
+  it('Boost Cartomancer creates one Boost once per level, only when there is room', () => {
+    const run = runOn('Orig-1-02', ['cartomancer']);
+    expect(run.state.tarots).toHaveLength(0);
+    run.startBlind();
+    expect(run.state.tarots).toHaveLength(1);
+    run.abandonAttempt();
+    run.startBlind();
+    expect(run.state.tarots).toHaveLength(1);
+
+    const full = runOn('Orig-1-02', ['cartomancer']);
+    full.state.tarots = Array.from({ length: TAROT_SLOTS }, (_, i) => ({ uid: 8000 + i, id: 'recruiter' }));
+    full.startBlind();
+    expect(full.state.tarots).toHaveLength(TAROT_SLOTS);
+  });
+
+  it('Popcorn loses 4 Rescues after each level and disappears when exhausted', () => {
+    const run = runOn('Orig-1-02', ['popcorn']);
+    for (const bonus of [20, 16, 12, 8, 4]) {
+      expect(run.rescueCount([card(run, 'green')], [], zeroSkills()).score).toBe(1 + bonus);
+      winPerfect(run);
+    }
+    expect(run.state.jokers.some((j) => j.id === 'popcorn')).toBe(false);
   });
 });
 
