@@ -4,7 +4,7 @@ export const POWER_CARD_VERSION = 2;
 export const MAX_ART_LAYERS = 16;
 export const POWER_CARD_WIDTH = 66;
 export const POWER_CARD_HEIGHT = 88;
-export const RARITIES = ['common', 'uncommon', 'rare'] as const;
+export const RARITIES = ['common', 'uncommon', 'rare', 'legendary'] as const;
 export type Rarity = (typeof RARITIES)[number];
 export const ICONS = ['climber', 'floater', 'bomber', 'blocker', 'builder', 'basher', 'miner', 'digger', 'slower', 'faster', 'pause', 'nuke'] as const;
 

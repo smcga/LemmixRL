@@ -22,7 +22,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const input = (id: string) => $<HTMLInputElement>(id);
 const select = (id: string) => $<HTMLSelectElement>(id);
 const STORAGE = 'lemmatro-power-card-designer-v1';
-const rarityColors = { common: '#009dff', uncommon: '#4bc292', rare: '#fe5f55' };
+const rarityColors = { common: '#009dff', uncommon: '#4bc292', rare: '#fe5f55', legendary: '#a75cff' };
 let library: PowerCardLibrary = structuredClone(POWER_CARD_LIBRARY);
 let selected = 0;
 let selectedLayer = 0;

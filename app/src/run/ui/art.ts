@@ -24,8 +24,8 @@ export function markerColor(c: LemmingCard): number | null {
   return null;
 }
 
-export const RARITY_COLORS: Record<Rarity, number> = { common: COLORS.blue, uncommon: COLORS.green, rare: COLORS.red };
-export const RARITY_NAMES: Record<Rarity, string> = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare' };
+export const RARITY_COLORS: Record<Rarity, number> = { common: COLORS.blue, uncommon: COLORS.green, rare: COLORS.red, legendary: COLORS.purple };
+export const RARITY_NAMES: Record<Rarity, string> = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', legendary: 'Legendary' };
 /** the packs of the shop: their colour, picture and the name on their band */
 export const PACK_LOOKS: Record<PackKind, { color: number; art: Art; band: string }> = {
   lemmings: { color: 0x3fae4f, art: { anim: 'walk' }, band: 'LEMMINGS' },

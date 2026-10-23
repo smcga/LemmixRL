@@ -66,6 +66,7 @@ try {
   await page.fill('#name', 'Midnight Mason');
   await page.fill('#card-id', 'midnight-mason');
   await page.fill('#description', 'An idea for a future Power Card.\nThe night shift has arrived.');
+  assert.deepEqual(await page.locator('#rarity option').allTextContents(), ['Common', 'Uncommon', 'Rare', 'Legendary']);
   await page.selectOption('#rarity', 'rare');
   await page.fill('#price', '9');
   await page.selectOption('#animation', 'buildLeft');

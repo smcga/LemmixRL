@@ -4,7 +4,7 @@ import { repoDataProvider } from '../../engine/src/node/repoData.ts';
 import { LevelCatalog } from '../src/run/catalog.ts';
 import { ANTE_BANDS, RunSession } from '../src/run/session.ts';
 import { SKILLS, type SkillCounts, totalSkills, zeroSkills } from '../src/run/skills.ts';
-import { ABILITY_CAP, ANTES, BOSS_REASSIGN_POINTS, type RunState, START_ABILITY_POINTS, START_COLONY } from '../src/run/state.ts';
+import { ABILITY_CAP, ANTES, BOSS_REASSIGN_POINTS, type PackChoice, type RunState, START_ABILITY_POINTS, START_COLONY } from '../src/run/state.ts';
 
 const data = repoDataProvider();
 const catalog = new LevelCatalog(getStyle(data, StyleDef.Orig));
@@ -300,6 +300,21 @@ describe('roguelike run', () => {
     const money = s.money;
     run.skipPack();
     expect([s.phase, s.pack, s.money]).toEqual(['shop', null, money]);
+  });
+
+  it('Legendary Power Cards can replace a Boost Pack choice but never enter ordinary Power Packs', () => {
+    type PackMaker = { packChoices(kind: 'boost' | 'gadget'): PackChoice[] };
+    const legendaryRun = started('LEGEND73');
+    const boost = (legendaryRun as unknown as PackMaker).packChoices('boost');
+    expect(boost[0]).toMatchObject({ type: 'joker' });
+    if (boost[0].type !== 'joker') throw new Error('expected a Legendary Power Card');
+    expect(['triboulet', 'yorick', 'chicot']).toContain(boost[0].id);
+
+    const regularRun = started('POWER-PACKS');
+    for (let i = 0; i < 200; i++) {
+      const choices = (regularRun as unknown as PackMaker).packChoices('gadget');
+      expect(choices.every((c) => c.type !== 'joker' || !['triboulet', 'yorick', 'chicot'].includes(c.id))).toBe(true);
+    }
   });
 
   it('the cash out tells how the level went', () => {
