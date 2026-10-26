@@ -76,9 +76,9 @@ export interface BlindState {
 export interface JokerInstance {
   uid: number;
   id: string;
-  /** sell value it has gained (the Omelette) */
+  /** sell value it has gained (the Omelette, Nest Egg) */
   sellBonus?: number;
-  /** what it has counted (the Trainings of the Gym Membership) */
+  /** what it has counted (Trainings, rerolls or levels, depending on the Power Card) */
   counter?: number;
   /** its colour (the Checklist's list, the Trendsetter's hair) */
   color?: LemmingColor;
