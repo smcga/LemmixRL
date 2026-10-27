@@ -97,7 +97,7 @@ export class LemmixApp {
     this.config.styleName = this.style.name;
     this.graphicSet = new GraphicSet(this.style);
     this.currentLevelInfo = null;
-    this.sound.setMusicArchive(this.data.music.get(this.style.name.toLowerCase()) ?? null);
+    this.sound.setMusicArchive(this.data.music.get(this.style.name.toLowerCase()) ?? null, this.style.name);
   }
 
   /**

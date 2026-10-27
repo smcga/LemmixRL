@@ -4,6 +4,7 @@
  */
 import { type Archive, type GameSoundManager, SoundEffect, SoundEffectFileNames } from '../../engine/src/index.ts';
 import { ModPlayer } from './modplayer.ts';
+import { musicGain } from './musicloudness.ts';
 
 interface PlayingSound {
   source: AudioBufferSourceNode;
@@ -13,9 +14,17 @@ interface PlayingSound {
 /** TMusic: the volume of a level's music (Game.Sound: AddMusicFromFileName) */
 const MUSIC_VOLUME = 0.2;
 
+/**
+ * LemmixRL: the sounds play 6 dB quieter than in Lemmix (below the volume of the settings): with the volumes of
+ * Lemmix they were about 20 dB louder than the music.
+ */
+const SFX_LEVEL = 0.5;
+
 interface Music {
   player: ModPlayer | null;
   volume: number;
+  /** LemmixRL: the gain that brings the track to the loudness of the others (musicloudness.ts) */
+  gain: number;
   isPlaying: boolean;
 }
 
@@ -25,12 +34,14 @@ export class WebSoundManager implements GameSoundManager {
   private readonly playing = new Map<number, PlayingSound>();
   private musics: Music[] = [];
   private musicArchive: Archive | null = null;
+  private musicStyle = '';
   /** LemmixRL: the volumes of the sounds and of the music (the settings), on top of what the game sets */
   private readonly sfxGain: GainNode;
   private readonly musicGain: GainNode;
   private musicSettingValue = 1;
+  private normalize = true;
   /** LemmixRL (the music panel, ?music): a track played on its own */
-  private preview: ModPlayer | null = null;
+  private preview: { player: ModPlayer; gain: number } | null = null;
 
   private constructor(context: AudioContext) {
     this.context = context;
@@ -44,7 +55,7 @@ export class WebSoundManager implements GameSoundManager {
   setVolumes(sfx: number, music: number): void {
     const v = (x: number) => Math.min(1, Math.max(0, x));
     // (a curve: the ear hears the square of the slider about evenly)
-    this.sfxGain.gain.value = v(sfx) ** 2;
+    this.sfxGain.gain.value = v(sfx) ** 2 * SFX_LEVEL;
     this.musicGain.gain.value = v(music) ** 2;
     this.musicSettingValue = v(music);
   }
@@ -77,8 +88,26 @@ export class WebSoundManager implements GameSoundManager {
     if (state === 'suspended' || state === 'interrupted') this.context.resume().catch(() => {});
   }
 
-  setMusicArchive(archive: Archive | null): void {
+  /** the music archive of a style (the style name finds the loudness of its tracks) */
+  setMusicArchive(archive: Archive | null, styleName: string): void {
     this.musicArchive = archive;
+    this.musicStyle = styleName;
+  }
+
+  /** LemmixRL: every track as loud as the others (on), or as loud as its file (off: the music panel compares them) */
+  get normalizeMusic(): boolean {
+    return this.normalize;
+  }
+
+  set normalizeMusic(on: boolean) {
+    this.normalize = on;
+    for (const m of this.musics) m.player?.setVolume(this.musicVolume(m.volume, m.gain));
+    this.preview?.player.setVolume(this.musicVolume(MUSIC_VOLUME, this.preview.gain));
+  }
+
+  /** the volume of a music player: the volume the game sets, with the gain of its track when the music is normalised */
+  private musicVolume(volume: number, gain: number): number {
+    return this.normalize ? volume * gain : volume;
   }
 
   /**
@@ -122,7 +151,7 @@ export class WebSoundManager implements GameSoundManager {
         player = null;
       }
     }
-    this.musics.push({ player, volume: MUSIC_VOLUME, isPlaying: false });
+    this.musics.push({ player, volume: MUSIC_VOLUME, gain: musicGain(this.musicStyle, fileName), isPlaying: false });
     return this.musics.length - 1;
   }
 
@@ -130,7 +159,7 @@ export class WebSoundManager implements GameSoundManager {
     const m = this.musics[index];
     if (!m) return;
     this.stopPreview(); // the track of the music panel stops when a level starts its music
-    m.player?.play(m.volume);
+    m.player?.play(this.musicVolume(m.volume, m.gain));
     m.isPlaying = true;
   }
 
@@ -158,26 +187,28 @@ export class WebSoundManager implements GameSoundManager {
     const m = this.musics[index];
     if (!m) return;
     m.volume = Math.min(1, Math.max(0, volume));
-    m.player?.setVolume(m.volume);
+    m.player?.setVolume(this.musicVolume(m.volume, m.gain));
   }
 
   /**
-   * LemmixRL (the music panel, ?music): plays a music file on its own, like a level plays it (its volume, then the
-   * music setting), until stopPreview. Returns false when the file cannot be played.
+   * LemmixRL (the music panel, ?music): plays a track of a style on its own, like a level plays it (its volume, its
+   * gain, then the music setting), until stopPreview. Returns false when the file cannot be played.
    */
-  previewMusic(data: Uint8Array): boolean {
+  previewMusic(data: Uint8Array, styleName: string, fileName: string): boolean {
     this.stopPreview();
+    let player: ModPlayer;
     try {
-      this.preview = new ModPlayer(this.context, data, this.musicGain);
+      player = new ModPlayer(this.context, data, this.musicGain);
     } catch {
       return false;
     }
-    this.preview.play(MUSIC_VOLUME);
+    this.preview = { player, gain: musicGain(styleName, fileName) };
+    player.play(this.musicVolume(MUSIC_VOLUME, this.preview.gain));
     return true;
   }
 
   stopPreview(): void {
-    this.preview?.stop();
+    this.preview?.player.stop();
     this.preview = null;
   }
 
