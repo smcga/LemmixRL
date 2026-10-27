@@ -1,14 +1,15 @@
 /**
  * ?music (LemmixRL, a debug tool): a panel that plays the music of the levels track by track, to compare how loud the
- * tracks are. It lists the tracks of every style with music (Orig, Ohno, H94) with the levels that play them and their
- * loudness, measured by rendering each song once without playing it. A track plays like a level plays it (the volume
- * of a level's music, then the music setting) and loops; "Play all" plays every track for some seconds, one after the
- * other. `?music` turns the panel on (also for the next visits), `?music=0` off again.
+ * tracks are. It lists the tracks of every style with music (Orig, Ohno, H94) with the levels that play them, the
+ * loudness of their files and the gain that normalises them (musicloudness.ts). A track plays like a level plays it
+ * (the volume of a level's music, its gain, then the music setting) and loops; "Play all" plays every track for some
+ * seconds, one after the other; "Normalise" off plays the tracks as loud as their files, to hear the difference.
+ * `?music` turns the panel on (also for the next visits), `?music=0` off again.
  */
 import { type Archive, type DataProvider, getStyle, STYLE_DESCRIPTIONS, StyleDef } from '../../engine/src/index.ts';
 import type { LemmixApp } from './app.ts';
 import { urlSwitch } from './diagnostics.ts';
-import { ModPlayer } from './modplayer.ts';
+import { MUSIC_TARGET_LUFS, musicGainDb, musicLoudness } from './musicloudness.ts';
 import { whenApp } from './scenes/shared.ts';
 
 export interface LevelTrack {
@@ -58,29 +59,21 @@ export function initMusicPanel(): void {
   whenApp((app) => new MusicPanel(app));
 }
 
-interface Loudness {
-  rms: number;
-  peak: number;
-  seconds: number;
-}
-
 interface Row {
   track: LevelTrack;
   el: HTMLDivElement;
-  bar: HTMLSpanElement;
-  db: HTMLSpanElement;
-  diff: HTMLSpanElement;
-  info: HTMLDivElement;
-  /** undefined while not measured, null when it cannot be */
-  loudness?: Loudness | null;
+  gain: HTMLSpanElement;
+  /** it has a file, and the file could be played */
+  playable: boolean;
 }
 
 const HIDDEN_KEY = 'lemmix.music.hidden';
 const BUTTON_CSS = 'background:#303060;color:#fff;border:1px solid #6060a0;padding:3px 8px;cursor:pointer;font:inherit;';
 const ACTIVE_BORDER = '#e0e0ff';
+/** the file is louder than the median track (the gain lowers it) */
 const LOUDER = '#ff9a7a';
 const QUIETER = '#7ab8ff';
-/** a difference from the median track that is easy to hear (in dB) */
+/** a difference with the median track that is easy to hear (in dB) */
 const NOTICEABLE_DB = 2;
 const TEXT = '#d0d0e0';
 const DIM = '#8080a0';
@@ -93,7 +86,6 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, css: string, text = '
   return e;
 }
 
-const dB = (x: number) => 20 * Math.log10(Math.max(x, 1e-6));
 const time = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 /** Track_01.mod: Track 01 */
 const trackName = (t: LevelTrack) => t.fileName.replace(/\.mod$/i, '').replace(/_/g, ' ');
@@ -108,6 +100,7 @@ class MusicPanel {
   private readonly setting: HTMLDivElement;
   private readonly seconds: HTMLInputElement;
   private readonly playAllButton: HTMLButtonElement;
+  private readonly normalize: HTMLInputElement;
 
   constructor(private readonly app: LemmixApp) {
     const root = el(
@@ -139,6 +132,16 @@ class MusicPanel {
     this.seconds.max = '600';
     this.seconds.value = '15';
     this.seconds.title = 'seconds of every track with Play all';
+    const normalize = el('label', 'display:flex;align-items:center;gap:4px;cursor:pointer;');
+    this.normalize = el('input', 'margin:0;');
+    this.normalize.type = 'checkbox';
+    this.normalize.checked = app.sound.normalizeMusic;
+    this.normalize.addEventListener('change', () => {
+      this.normalize.blur();
+      app.sound.normalizeMusic = this.normalize.checked;
+      this.update();
+    });
+    normalize.append(this.normalize, 'Normalise');
     controls.append(
       this.button('Stop', () => this.stop()),
       this.button('Prev', () => this.step(-1)),
@@ -146,6 +149,7 @@ class MusicPanel {
       this.playAllButton,
       this.seconds,
       el('span', `color:${DIM};`, 's each'),
+      normalize,
     );
     this.status = el('div', 'padding:0 8px 4px;color:#fff;min-height:1.4em;');
     this.setting = el('div', `padding:0 8px 6px;color:${DIM};`);
@@ -153,13 +157,17 @@ class MusicPanel {
     body.append(controls, this.status, this.setting, list);
     root.append(header, body);
 
+    const tracks = levelTracks(app.data.provider, app.data.music);
+    const levels = tracks.flatMap((t) => musicLoudness(t.styleName, t.fileName) ?? []);
+    const low = Math.min(...levels) - 3;
+    const high = Math.max(...levels);
     let group: StyleDef | null = null;
-    for (const track of levelTracks(app.data.provider, app.data.music)) {
+    for (const track of tracks) {
       if (track.style !== group) {
         group = track.style;
         list.append(el('div', 'padding:6px 8px 2px;color:#a0a0ff;font-weight:bold;', STYLE_DESCRIPTIONS[track.style]));
       }
-      this.rows.push(this.row(track, list));
+      this.rows.push(this.row(track, list, low, high));
     }
 
     const setHidden = (hidden: boolean) => {
@@ -183,7 +191,6 @@ class MusicPanel {
 
     this.update();
     setInterval(() => this.tick(), 250);
-    void this.measureAll();
   }
 
   private button(text: string, onClick: () => void): HTMLButtonElement {
@@ -195,83 +202,51 @@ class MusicPanel {
     return b;
   }
 
-  private row(track: LevelTrack, list: HTMLDivElement): Row {
+  /** a track: its name, its loudness (a bar from low to high, and in LUFS), the gain of the game, its levels */
+  private row(track: LevelTrack, list: HTMLDivElement, low: number, high: number): Row {
     const e = el('div', 'padding:4px 8px;cursor:pointer;border-left:3px solid transparent;');
     const line = el('div', 'display:flex;align-items:center;gap:8px;');
     const name = el('span', 'width:6.5em;color:#fff;', trackName(track));
     const barBox = el('span', 'flex:1;height:6px;background:#202038;');
-    const bar = el('span', `display:block;height:100%;width:0;background:${BAR};`);
+    const bar = el('span', 'display:block;height:100%;');
     barBox.appendChild(bar);
-    const db = el('span', 'width:5.5em;text-align:right;');
-    const diff = el('span', 'width:3.5em;text-align:right;');
-    line.append(name, barBox, db, diff);
+    const loudness = el('span', 'width:6.5em;text-align:right;');
+    const gain = el('span', 'width:4.5em;text-align:right;');
+    line.append(name, barBox, loudness, gain);
     const info = el('div', `color:${DIM};font-size:11px;`);
+    info.textContent = `${track.levelCount} level${track.levelCount === 1 ? '' : 's'}: ${track.levels}`;
     e.append(line, info);
     list.appendChild(e);
-    const row: Row = { track, el: e, bar, db, diff, info };
+    const row: Row = { track, el: e, gain, playable: track.data !== null };
     const index = this.rows.length;
-    if (track.data) e.addEventListener('click', () => this.play(index));
+    if (row.playable) e.addEventListener('click', () => this.play(index));
     else {
-      row.loudness = null;
       e.style.cursor = 'default';
       name.style.color = DIM;
+      loudness.textContent = 'missing';
     }
-    this.showRow(row, 0, 0, 0);
-    return row;
-  }
-
-  /** the loudness of every track, one after the other, between the frames of the game */
-  private async measureAll(): Promise<void> {
-    for (const row of this.rows) {
-      if (row.loudness !== undefined) continue;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      try {
-        row.loudness = new ModPlayer(this.app.sound.context, row.track.data!).measure();
-      } catch {
-        row.loudness = null;
-      }
-      this.showLoudness();
-    }
-  }
-
-  private showLoudness(): void {
-    const levels = this.rows.flatMap((r) => (r.loudness ? [dB(r.loudness.rms)] : [])).sort((a, b) => a - b);
-    const median = levels.length ? (levels[(levels.length - 1) >> 1] + levels[levels.length >> 1]) / 2 : 0;
-    const low = (levels[0] ?? 0) - 3;
-    const high = levels[levels.length - 1] ?? 0;
-    for (const row of this.rows) this.showRow(row, median, low, high);
-  }
-
-  private showRow(row: Row, median: number, low: number, high: number): void {
-    const l = row.loudness;
-    const t = row.track;
-    const levels = `${t.levelCount} level${t.levelCount === 1 ? '' : 's'}: ${t.levels}`;
+    const l = musicLoudness(track.styleName, track.fileName);
     if (l === undefined) {
-      row.db.textContent = '...';
-      row.info.textContent = levels;
-    } else if (l === null) {
-      row.db.textContent = t.data ? 'error' : 'missing';
-      row.info.textContent = levels;
-    } else {
-      const level = dB(l.rms);
-      const d = level - median;
-      const marked = d >= NOTICEABLE_DB ? LOUDER : d <= -NOTICEABLE_DB ? QUIETER : null;
-      row.db.textContent = `${level.toFixed(1)} dB`;
-      row.diff.textContent = `${d >= 0 ? '+' : ''}${d.toFixed(1)}`;
-      row.diff.style.color = marked ?? TEXT;
-      row.bar.style.width = `${high > low ? Math.max(2, ((level - low) / (high - low)) * 100) : 100}%`;
-      row.bar.style.background = marked ?? BAR;
-      row.info.textContent = `${time(l.seconds)} long, peak ${dB(l.peak).toFixed(1)} dB · ${levels}`;
+      if (row.playable) loudness.textContent = 'not measured';
+      return row;
     }
+    const d = musicGainDb(track.styleName, track.fileName);
+    const marked = d <= -NOTICEABLE_DB ? LOUDER : d >= NOTICEABLE_DB ? QUIETER : null;
+    loudness.textContent = `${l.toFixed(1)} LUFS`;
+    gain.textContent = `${d >= 0 ? '+' : ''}${d.toFixed(1)} dB`;
+    gain.dataset.color = marked ?? TEXT;
+    bar.style.width = `${high > low ? Math.max(2, ((l - low) / (high - low)) * 100) : 100}%`;
+    bar.style.background = marked ?? BAR;
+    return row;
   }
 
   private play(index: number): void {
     const row = this.rows[index];
-    if (!row?.track.data) return;
+    if (!row?.playable || !row.track.data) return;
     this.app.sound.resume();
-    if (!this.app.sound.previewMusic(row.track.data)) {
-      row.loudness = null;
-      this.showLoudness();
+    if (!this.app.sound.previewMusic(row.track.data, row.track.styleName, row.track.fileName)) {
+      row.playable = false;
+      row.gain.textContent = 'error';
       return;
     }
     this.current = index;
@@ -292,7 +267,7 @@ class MusicPanel {
     let i = this.current < 0 ? (dir > 0 ? -1 : n) : this.current;
     for (let k = 0; k < n; k++) {
       i = (i + dir + n) % n;
-      if (this.rows[i].track.data && this.rows[i].loudness !== null) return this.play(i);
+      if (this.rows[i].playable) return this.play(i);
     }
   }
 
@@ -318,7 +293,7 @@ class MusicPanel {
       this.playAll = false;
     }
     if (this.current >= 0 && this.playAll && this.app.sound.context.currentTime - this.startedAt >= this.secondsEach()) {
-      if (this.rows.slice(this.current + 1).some((r) => r.track.data && r.loudness !== null)) this.step(1);
+      if (this.rows.slice(this.current + 1).some((r) => r.playable)) this.step(1);
       else this.stop();
     }
     this.update();
@@ -333,16 +308,23 @@ class MusicPanel {
       const of = this.playAll ? ` of ${time(this.secondsEach())}` : '';
       this.status.textContent = `Playing ${count}${trackLabel(cur.track)} · ${time(elapsed)}${of}`;
     }
+    const normalized = this.app.sound.normalizeMusic;
     for (const [i, row] of this.rows.entries()) {
       const on = i === this.current;
       row.el.style.background = on ? '#28284a' : '';
       row.el.style.borderLeftColor = on ? ACTIVE_BORDER : 'transparent';
+      // the gain is not applied without normalising
+      row.gain.style.color = normalized ? (row.gain.dataset.color ?? TEXT) : DIM;
+      row.gain.style.textDecoration = normalized ? '' : 'line-through';
     }
     this.playAllButton.style.borderColor = this.playAll ? ACTIVE_BORDER : BAR;
     this.playAllButton.style.background = this.playAll ? '#505090' : '#303060';
     const setting = this.app.sound.musicSetting;
     this.setting.textContent =
-      (setting > 0 ? `Music setting ${Math.round(setting * 100)}%.` : 'The music setting is off: turn it up to hear the tracks.') +
-      ' dB: the RMS of one pass of the song (before any volume), then the difference with the median track.';
+      (setting > 0 ? `Music setting ${Math.round(setting * 100)}%. ` : 'The music setting is off: turn it up to hear the tracks. ') +
+      'LUFS: the loudness of the file (one pass of the song). ' +
+      (normalized
+        ? `The game plays every track at the median, ${MUSIC_TARGET_LUFS.toFixed(1)} LUFS, with the gain on the right.`
+        : 'Not normalised: every track plays as loud as its file.');
   }
 }

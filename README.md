@@ -62,9 +62,10 @@ In the menu F2 opens the level code screen, F3 the sound setting, F4 selects the
 Lemmings, Holiday Lemmings 94, XMas Lemmings 91 and 92), F5 the options, `l` loads a replay file.
 
 `?music` at the end of the address shows a debug panel with the music of the levels, to compare how loud the tracks
-are: every track of Orig, Oh No and Holiday 94 with the levels that play it and its loudness (the RMS of one pass of
-the song, and the difference with the median track). A click plays a track like a level plays it, looping; *Play all*
-plays every track for some seconds, one after the other. `?music=0` hides the panel again.
+are: every track of Orig, Oh No and Holiday 94 with the levels that play it, the loudness of its file (LUFS, after
+ITU-R BS.1770) and the gain the game plays it with. A click plays a track like a level plays it, looping; *Play all*
+plays every track for some seconds, one after the other; with *Normalise* off the tracks play as loud as their files.
+`?music=0` hides the panel again.
 
 ### On a phone or a tablet
 
@@ -336,6 +337,9 @@ The simulation is the same. The program around it is a browser application, so s
   without anti-aliasing, like Lemmix.
 * The music is played by a small ProTracker player instead of the BASS library, the voice by the Web Speech API
   instead of SAPI.
+* The music of the levels is normalised: every track plays as loud as the median track (the files differ by up to
+  11 dB; their loudness is in `app/src/musicloudness.ts`). The sounds are 6 dB quieter than in Lemmix, where they were
+  about 20 dB louder than the music.
 * Replay files are downloaded (`u`) and loaded with a file dialog (`l`); there is no replay finder, level finder,
   autosave or result text file. The options are browser dialogs. User styles (custom levels) are not available yet.
 * Touch screens are an addition (see [On a phone or a tablet](#on-a-phone-or-a-tablet)); with a mouse the screens

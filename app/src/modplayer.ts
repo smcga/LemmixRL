@@ -2,6 +2,7 @@
  * A small ProTracker (M.K., 4 channels, 31 samples) player for the Lemmings music, standing in for the BASS library
  * (BASS_MusicLoad with BASS_MUSIC_LOOP: the song restarts when it ends).
  */
+import { LoudnessMeter } from './loudness.ts';
 
 const PAULA_CLOCK = 3546894.6; // PAL
 const ROWS = 64;
@@ -185,30 +186,27 @@ export class ModPlayer {
   }
 
   /**
-   * LemmixRL (the music panel, ?music): renders the song once from its start without playing it (at most maxSeconds)
-   * and returns how loud it is: the RMS and the peak of both channels (1 = full scale), before any volume.
+   * LemmixRL (the loudness of the music, musicloudness.ts): renders the song once from its start without playing it
+   * (at most maxSeconds) and returns how loud it is, before any volume: its loudness in LUFS and the peak of both
+   * channels (1 = full scale).
    */
-  measure(maxSeconds = 300): { rms: number; peak: number; seconds: number } {
+  measure(maxSeconds = 300): { loudness: number; peak: number; seconds: number } {
     this.stop();
     this.rewind();
     const block = 4096;
     const left = new Float32Array(block);
     const right = new Float32Array(block);
+    const meter = new LoudnessMeter(this.rate);
     const maxFrames = maxSeconds * this.rate;
     let frames = 0;
-    let sum = 0;
     let peak = 0;
     while (!this.songEnded && frames < maxFrames) {
       this.render(left, right);
-      for (let i = 0; i < block; i++) {
-        const l = left[i];
-        const r = right[i];
-        sum += l * l + r * r;
-        peak = Math.max(peak, Math.abs(l), Math.abs(r));
-      }
+      meter.add(left, right);
+      for (let i = 0; i < block; i++) peak = Math.max(peak, Math.abs(left[i]), Math.abs(right[i]));
       frames += block;
     }
-    return { rms: Math.sqrt(sum / (2 * frames)), peak, seconds: frames / this.rate };
+    return { loudness: meter.integrated(), peak, seconds: frames / this.rate };
   }
 
   private rewind(): void {
