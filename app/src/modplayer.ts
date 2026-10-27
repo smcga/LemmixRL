@@ -100,6 +100,8 @@ export class ModPlayer {
   private patternDelay = 0;
   private breakRow = -1;
   private jumpPosition = -1;
+  /** the song has reached its end once (it restarts, or a jump goes back) */
+  private songEnded = false;
 
   constructor(
     private readonly context: AudioContext,
@@ -157,21 +159,7 @@ export class ModPlayer {
 
   play(volume: number): void {
     this.stop();
-    this.position = 0;
-    this.row = 0;
-    this.tick = 0;
-    this.speed = 6;
-    this.tempo = 125;
-    this.patternDelay = 0;
-    this.breakRow = -1;
-    this.jumpPosition = -1;
-    for (const ch of this.channels) {
-      const pan = ch.pan;
-      Object.assign(ch, new Channel());
-      ch.pan = pan;
-    }
-    this.setTickSamples();
-    this.samplesLeft = 0;
+    this.rewind();
     this.gain = this.context.createGain();
     this.gain.gain.value = volume;
     this.gain.connect(this.output);
@@ -194,6 +182,52 @@ export class ModPlayer {
 
   setVolume(volume: number): void {
     if (this.gain) this.gain.gain.value = volume;
+  }
+
+  /**
+   * LemmixRL (the music panel, ?music): renders the song once from its start without playing it (at most maxSeconds)
+   * and returns how loud it is: the RMS and the peak of both channels (1 = full scale), before any volume.
+   */
+  measure(maxSeconds = 300): { rms: number; peak: number; seconds: number } {
+    this.stop();
+    this.rewind();
+    const block = 4096;
+    const left = new Float32Array(block);
+    const right = new Float32Array(block);
+    const maxFrames = maxSeconds * this.rate;
+    let frames = 0;
+    let sum = 0;
+    let peak = 0;
+    while (!this.songEnded && frames < maxFrames) {
+      this.render(left, right);
+      for (let i = 0; i < block; i++) {
+        const l = left[i];
+        const r = right[i];
+        sum += l * l + r * r;
+        peak = Math.max(peak, Math.abs(l), Math.abs(r));
+      }
+      frames += block;
+    }
+    return { rms: Math.sqrt(sum / (2 * frames)), peak, seconds: frames / this.rate };
+  }
+
+  private rewind(): void {
+    this.position = 0;
+    this.row = 0;
+    this.tick = 0;
+    this.speed = 6;
+    this.tempo = 125;
+    this.patternDelay = 0;
+    this.breakRow = -1;
+    this.jumpPosition = -1;
+    this.songEnded = false;
+    for (const ch of this.channels) {
+      const pan = ch.pan;
+      Object.assign(ch, new Channel());
+      ch.pan = pan;
+    }
+    this.setTickSamples();
+    this.samplesLeft = 0;
   }
 
   private setTickSamples(): void {
@@ -264,6 +298,7 @@ export class ModPlayer {
 
   private nextRow(): void {
     if (this.jumpPosition >= 0 || this.breakRow >= 0) {
+      if (this.jumpPosition >= 0 && this.jumpPosition < this.position) this.songEnded = true; // the song loops back
       this.position = this.jumpPosition >= 0 ? this.jumpPosition : this.position + 1;
       this.row = this.breakRow >= 0 ? this.breakRow : 0;
       this.jumpPosition = -1;
@@ -275,7 +310,10 @@ export class ModPlayer {
         this.position++;
       }
     }
-    if (this.position >= this.songLength) this.position = 0; // BASS_MUSIC_LOOP
+    if (this.position >= this.songLength) {
+      this.position = 0; // BASS_MUSIC_LOOP
+      this.songEnded = true;
+    }
   }
 
   private trigger(ch: Channel, note: Note): void {

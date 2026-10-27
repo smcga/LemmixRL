@@ -4,9 +4,17 @@ import type { LemmixApp } from '../app.ts';
 import { ScreenType } from '../screens/base.ts';
 
 let theApp: LemmixApp | null = null;
+const appWaiters: ((app: LemmixApp) => void)[] = [];
 
 export function setApp(app: LemmixApp): void {
   theApp = app;
+  for (const fn of appWaiters.splice(0)) fn(app);
+}
+
+/** calls fn with the application once it is there (the data loaded) */
+export function whenApp(fn: (app: LemmixApp) => void): void {
+  if (theApp) fn(theApp);
+  else appWaiters.push(fn);
 }
 
 export function getApp(): LemmixApp {

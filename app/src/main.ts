@@ -10,11 +10,13 @@ import { CollectionScene } from './scenes/collection.ts';
 import { RunPreviewScene } from './scenes/runpreview.ts';
 import { initDiagnostics } from './diagnostics.ts';
 import { initInstall } from './install.ts';
+import { initMusicPanel } from './musicpanel.ts';
 import { initTouchDetection, pixelRatio, safeAreaInsets } from './touch.ts';
 
 initTouchDetection();
 initInstall();
 initDiagnostics();
+initMusicPanel();
 
 /**
  * The canvas has the resolution of the device (CSS size times devicePixelRatio), so the game is scaled by whole device
