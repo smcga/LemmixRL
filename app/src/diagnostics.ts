@@ -7,21 +7,24 @@ import { getApp } from './scenes/shared.ts';
 import { canFullscreen, deviceStatus, pixelRatio, safeAreaInsets, touch } from './touch.ts';
 import { wakeLockStatus } from './wakelock.ts';
 
-const STORAGE_KEY = 'lemmix.diag';
-
-function wanted(): boolean {
-  const q = new URLSearchParams(location.search).get('diag');
+/**
+ * A debug switch in the address: `?<name>` turns it on (also for the next visits, the browser remembers it), `?<name>=0`
+ * off again.
+ */
+export function urlSwitch(name: string): boolean {
+  const key = 'lemmix.' + name;
+  const q = new URLSearchParams(location.search).get(name);
   try {
-    if (q === '0') localStorage.removeItem(STORAGE_KEY);
-    else if (q !== null) localStorage.setItem(STORAGE_KEY, '1');
-    return q === null ? localStorage.getItem(STORAGE_KEY) === '1' : q !== '0';
+    if (q === '0') localStorage.removeItem(key);
+    else if (q !== null) localStorage.setItem(key, '1');
+    return q === null ? localStorage.getItem(key) === '1' : q !== '0';
   } catch {
     return q !== null && q !== '0';
   }
 }
 
 export function initDiagnostics(): void {
-  if (!wanted()) return;
+  if (!urlSwitch('diag')) return;
   const el = document.createElement('pre');
   el.style.cssText =
     'position:fixed;left:calc(env(safe-area-inset-left) + 4px);top:calc(env(safe-area-inset-top) + 4px);margin:0;' +

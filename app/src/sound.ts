@@ -10,6 +10,9 @@ interface PlayingSound {
   startTime: number;
 }
 
+/** TMusic: the volume of a level's music (Game.Sound: AddMusicFromFileName) */
+const MUSIC_VOLUME = 0.2;
+
 interface Music {
   player: ModPlayer | null;
   volume: number;
@@ -25,6 +28,9 @@ export class WebSoundManager implements GameSoundManager {
   /** LemmixRL: the volumes of the sounds and of the music (the settings), on top of what the game sets */
   private readonly sfxGain: GainNode;
   private readonly musicGain: GainNode;
+  private musicSettingValue = 1;
+  /** LemmixRL (the music panel, ?music): a track played on its own */
+  private preview: ModPlayer | null = null;
 
   private constructor(context: AudioContext) {
     this.context = context;
@@ -40,6 +46,12 @@ export class WebSoundManager implements GameSoundManager {
     // (a curve: the ear hears the square of the slider about evenly)
     this.sfxGain.gain.value = v(sfx) ** 2;
     this.musicGain.gain.value = v(music) ** 2;
+    this.musicSettingValue = v(music);
+  }
+
+  /** LemmixRL: the volume of the music as last set (0 to 1, 0 when the music is off) */
+  get musicSetting(): number {
+    return this.musicSettingValue;
   }
 
   static async create(sounds: Archive): Promise<WebSoundManager> {
@@ -110,13 +122,14 @@ export class WebSoundManager implements GameSoundManager {
         player = null;
       }
     }
-    this.musics.push({ player, volume: 0.2, isPlaying: false });
+    this.musics.push({ player, volume: MUSIC_VOLUME, isPlaying: false });
     return this.musics.length - 1;
   }
 
   playMusic(index: number): void {
     const m = this.musics[index];
     if (!m) return;
+    this.stopPreview(); // the track of the music panel stops when a level starts its music
     m.player?.play(m.volume);
     m.isPlaying = true;
   }
@@ -146,5 +159,29 @@ export class WebSoundManager implements GameSoundManager {
     if (!m) return;
     m.volume = Math.min(1, Math.max(0, volume));
     m.player?.setVolume(m.volume);
+  }
+
+  /**
+   * LemmixRL (the music panel, ?music): plays a music file on its own, like a level plays it (its volume, then the
+   * music setting), until stopPreview. Returns false when the file cannot be played.
+   */
+  previewMusic(data: Uint8Array): boolean {
+    this.stopPreview();
+    try {
+      this.preview = new ModPlayer(this.context, data, this.musicGain);
+    } catch {
+      return false;
+    }
+    this.preview.play(MUSIC_VOLUME);
+    return true;
+  }
+
+  stopPreview(): void {
+    this.preview?.stop();
+    this.preview = null;
+  }
+
+  get previewing(): boolean {
+    return this.preview !== null;
   }
 }

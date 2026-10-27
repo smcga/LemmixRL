@@ -61,6 +61,11 @@ replay (`u`), loading a replay (`l`), fast forward (`f`), sound and music (`s`, 
 In the menu F2 opens the level code screen, F3 the sound setting, F4 selects the style (Original Lemmings, Oh No More
 Lemmings, Holiday Lemmings 94, XMas Lemmings 91 and 92), F5 the options, `l` loads a replay file.
 
+`?music` at the end of the address shows a debug panel with the music of the levels, to compare how loud the tracks
+are: every track of Orig, Oh No and Holiday 94 with the levels that play it and its loudness (the RMS of one pass of
+the song, and the difference with the median track). A click plays a track like a level plays it, looping; *Play all*
+plays every track for some seconds, one after the other. `?music=0` hides the panel again.
+
 ### On a phone or a tablet
 
 The game can be played with a finger (an addition of LemmixRL). It switches to touch controls at the first touch and
