@@ -12,6 +12,7 @@ import { initDiagnostics } from './diagnostics.ts';
 import { initInstall } from './install.ts';
 import { initMusicPanel } from './musicpanel.ts';
 import { initTouchDetection, pixelRatio, safeAreaInsets } from './touch.ts';
+import { whenApp } from './scenes/shared.ts';
 
 initTouchDetection();
 initInstall();
@@ -58,6 +59,15 @@ function fit(): void {
 window.addEventListener('resize', fit);
 window.visualViewport?.addEventListener('resize', fit);
 window.addEventListener('orientationchange', () => setTimeout(fit, 100));
+
+/**
+ * LemmixRL: the music of the menus plays on Lematro's own screens (the title, the screens of a run, the collection, the
+ * screen before a level of a run), never in a level, nor on the screens of the classic game (they have their own).
+ */
+const MENU_SCENES = ['title', 'run', 'collection', 'runpreview'];
+whenApp((app) => {
+  game.events.on('step', () => app.sound.setMenuMusic(!game.scene.isActive('player') && MENU_SCENES.some((k) => game.scene.isActive(k))));
+});
 
 // for debugging and browser tests
 if (import.meta.env.DEV) (globalThis as Record<string, unknown>).phaserGame = game;
