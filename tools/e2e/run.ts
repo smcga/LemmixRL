@@ -242,14 +242,14 @@ try {
   );
   await click(walker.x, walker.y, 400);
   if ((await ev<number>(`${home}.lemmings().filter((l) => l.numberOfBricksLeft > 0).length`)) < 1) fail('a click with the Builder tool did not make a builder');
-  // Pick, and a box dragged around the top left floor: Prefer them all
+  // Pick, and a box dragged around the top left floor: they are picked (no Swap in the shop)
   await clickSpot('tool:pick', 200);
   await page.mouse.move(vx(56 + 10 * 2), vy(96 + 22 * 2));
   await page.mouse.down();
   await page.mouse.move(vx(56 + 152 * 2), vy(96 + 56 * 2), { steps: 8 });
   await page.mouse.up();
   await page.waitForTimeout(300);
-  await clickSpot('prefer', 300);
+  if ((await ev<number>(`${scene}.homeView.marked.size`)) < 1) fail('a box did not pick the lemmings in it');
   // the brush: Dirt dragged through the air of a pen makes ground, Erase dragged over it takes it away
   const drag = async (x0: number, y0: number, x1: number, y1: number) => {
     await page.mouse.move(vx(56 + x0 * 2), vy(96 + y0 * 2));
@@ -280,15 +280,12 @@ try {
   if (!(await ground(victim.fx, victim.fy + 1))) fail('Poof made a hole in the ground');
   await page.waitForTimeout(1200);
   await page.screenshot({ path: `${REPO_ROOT}/tools/e2e/home.png` });
-  const preferred = (await state()).colony.filter((c: { pref?: string }) => c.pref === 'prefer').length;
-  if (preferred < 1) fail('Prefer did not prefer the lemmings in the box');
-  // closed and opened again: the home is as it was left (its ground kept), the preferences too
+  // closed and opened again: the home is as it was left (its ground kept)
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
   if (!(await state()).home?.terrain) fail('the home was not kept');
   await clickSpot('deck', 1500);
   if ((await ev<number>(`${home}.population()`)) !== (await state()).colony.length) fail('the home lost lemmings between visits');
-  if ((await state()).colony.filter((c: { pref?: string }) => c.pref === 'prefer').length !== preferred) fail('the preferences were not kept');
   // Next picks the first lemming (the special ones come first), and shows who it is
   await clickSpot('colonyNext', 300);
   await clickSpot('colonyNext', 300);
@@ -307,6 +304,18 @@ try {
   await clickSpot('nextRound');
   s = await state();
   if (s.phase !== 'blinds' || s.blinds[1].status !== 'current') fail('not at the big blind');
+  // Swap: a lemming of the squad picked in the colony and swapped for another one
+  const squadSize = (await state()).setup.hand.length;
+  await clickSpot('swapSquad', 1500);
+  for (let n = 0; n < 4 && !(await state()).setup.swappedOut?.length; n++) {
+    const i = await ev<number>(`(() => { const s = globalThis.lemmix.run.state; return s.colony.findIndex((c) => c.id === s.setup.hand[${n}]); })()`);
+    await clickSpot(`colony:${i}`, 300);
+    if (await ev<boolean>(`!!${scene}.spots.swap`)) await clickSpot('swap', 300);
+  }
+  s = await state();
+  if (s.setup.swappedOut?.length !== 1 || s.setup.hand.includes(s.setup.swappedOut[0]) || s.setup.hand.length !== squadSize) fail(`the Swap did not swap a lemming: ${JSON.stringify(s.setup.swappedOut)}`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
   await clickSpot('skip'); // the big blind
   s = await state();
   if (s.blinds[1].status !== 'skipped' || s.blinds[2].status !== 'current') fail('the big blind was not skipped');
@@ -331,7 +340,7 @@ try {
   await clickSpot('giveUp');
   if ((await state()).phase !== 'over') fail('Give up did not end the run');
 
-  console.log('e2e ok: a run: from the title, abilities assigned, a level previewed, played (its own screen before it, the keys of a run) and cashed out, shop (a pack opened and a card of it taken, cards dragged to buy, sell and use), skip, continued after a reload, given up in the game');
+  console.log('e2e ok: a run: from the title, abilities assigned, a level previewed, played (its own screen before it, the keys of a run) and cashed out, shop (a pack opened and a card of it taken, cards dragged to buy, sell and use), a Swap, skip, continued after a reload, given up in the game');
 } finally {
   await browser.close();
   await server.close();

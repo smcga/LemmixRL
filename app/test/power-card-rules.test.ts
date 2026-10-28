@@ -3,7 +3,7 @@ import { Bitmap32, createSessionFromInfo, getStyle, StyleDef } from '../../engin
 import { repoDataProvider } from '../../engine/src/node/repoData.ts';
 import { LevelCatalog } from '../src/run/catalog.ts';
 import { hairOf, lemmingPalette, remapColor } from '../src/run/colors.ts';
-import { JOKERS, keywordsOf } from '../src/run/content.ts';
+import { JOKERS, keywordsOf, TAROTS } from '../src/run/content.ts';
 import { jokerSellValue, ROUND_SCALE, RunSession } from '../src/run/session.ts';
 import { SKILLS, type SkillCounts, zeroSkills } from '../src/run/skills.ts';
 import { JOKER_SLOTS, TAROT_SLOTS, type LemmingCard } from '../src/run/state.ts';
@@ -723,3 +723,262 @@ describe('Lematro Phase 1: Boosts and Skip Bonuses', () => {
 function rarityOf(id: string) {
   return JOKERS.find((d) => d.id === id)?.rarity;
 }
+
+/** accepts a perfect result with these skills used (no engine); stays at the cash out */
+function winWith(run: RunSession, used: Partial<SkillCounts>) {
+  const setup = run.startBlind();
+  run.state.outcome = {
+    success: true,
+    rescued: setup.hand.length,
+    required: setup.rescue,
+    hand: setup.hand.length,
+    fates: setup.hand.map(() => 'saved'),
+    skillsUsed: { ...zeroSkills(), ...used },
+    secondsLeft: 60,
+    timeUp: false,
+    nuked: false,
+    done: 100,
+    target: 0,
+    exitOrder: setup.hand.map((_, i) => i),
+  };
+  setup.attempts++;
+  run.state.phase = 'result';
+  return run.accept();
+}
+
+describe('Lematro Phase 2: Power Cards that read the level', () => {
+  const one = (run: RunSession, used: Partial<SkillCounts>) => run.rescueCount([card(run, 'red')], [], { ...zeroSkills(), ...used }).score;
+  const two = { builder: 1, digger: 1 };
+  const three = { builder: 1, digger: 1, climber: 1 };
+  const pairs = { builder: 2, basher: 2 };
+  const terrain = { builder: 1, basher: 1, miner: 1, digger: 1 };
+
+  it("the kinds of skill used: Double Act, Three's Company, Tag Team, Groundworks and their cheaper and X Rescues kin", () => {
+    const cases: [string, Partial<SkillCounts>, number, Partial<SkillCounts>][] = [
+      ['doubleact', two, 5, three],
+      ['threescompany', three, 7, two],
+      ['tagteam', pairs, 6, { builder: 2, basher: 1 }],
+      ['groundworks', terrain, 7, { builder: 1, basher: 1, miner: 1 }],
+      ['twostep', two, 3, three],
+      ['hattrick', three, 4, two],
+      ['doubleshift', pairs, 4, { builder: 3 }],
+      ['earthworks', terrain, 4, three],
+    ];
+    for (const [id, yes, score, no] of cases) {
+      const run = runOn('Orig-1-02', [id, 'lemming']);
+      expect(one(run, yes), id).toBe(score + 4);
+      expect(one(run, no), id).toBe(5);
+    }
+    // X Rescues (after Lemming's +4: 5)
+    const times: [string, Partial<SkillCounts>, number][] = [
+      ['thepair', two, 7],
+      ['threemusketeers', three, 10],
+      ['workaholic', { blocker: 4 }, 10],
+      ['workforce', terrain, 10],
+    ];
+    for (const [id, yes, score] of times) {
+      const run = runOn('Orig-1-02', ['lemming', id]);
+      expect(one(run, yes), id).toBe(score);
+      expect(one(run, { blocker: 3 }), id).toBe(5);
+    }
+  });
+
+  it('Close Enough: 3 terrain skills, 4 hair colours, all but one sharing a hair colour', () => {
+    const run = runOn('Orig-1-02', ['workforce', 'closeenough']);
+    expect(one(run, { builder: 1, basher: 1, miner: 1 })).toBe(2);
+    const paint = runOn('Orig-1-02', ['paintbox']);
+    const four = (['green', 'orange', 'red', 'purple'] as const).map((h) => card(paint, h));
+    expect(paint.rescueCount(four, four, zeroSkills()).score).toBe(4);
+    paint.state.jokers.push({ uid: 990, id: 'closeenough' });
+    expect(paint.rescueCount(four, four, zeroSkills()).score).toBe(12);
+    const birds = runOn('Orig-1-02', ['birds', 'closeenough']);
+    const almost = [card(birds, 'red'), card(birds, 'red'), card(birds, 'blue')];
+    expect(birds.rescueCount(almost, almost, zeroSkills()).score).toBe(6);
+  });
+
+  it('Old Favourite, Same Again, Lord of the Manor and Star Pupils', () => {
+    let run = runOn('Orig-1-02', ['oldfavourite']);
+    run.state.stats.skillUses = { ...zeroSkills(), digger: 12 };
+    // 12 before and 3 now: 15 Digger uses
+    expect(one(run, { digger: 3, builder: 1 })).toBe(4);
+    run = runOn('Orig-1-02', ['sameagain']);
+    run.state.lastSkills = { ante: run.state.ante, skills: ['builder', 'digger'] };
+    expect(one(run, { builder: 3, digger: 1 })).toBe(2);
+    expect(one(run, { builder: 3 })).toBe(1);
+    run.state.lastSkills.ante--;
+    expect(one(run, { builder: 3, digger: 1 })).toBe(1);
+    run = runOn('Orig-1-02', ['lordofthemanor', 'starpupils']);
+    const squad = run.ensureSetup().hand;
+    const out = run.state.colony.filter((c) => !squad.includes(c.id));
+    out[0].edition = out[1].edition = 'champion';
+    out[2].edition = 'mentor';
+    run.card(squad[0])!.edition = 'mentor';
+    // 1 saved, X1.44, then +5
+    expect(run.rescueCount([card(run, 'red')], [], zeroSkills()).score).toBe(Math.floor(1 * 1.44 + 5));
+  });
+
+  it('Road Crew and Fresh Approach after a level; Ice Lolly loses 3 a restart', () => {
+    const run = runOn('Orig-1-02', ['roadcrew', 'freshapproach', 'icelolly']);
+    run.state.stats.skillUses = { ...zeroSkills(), blocker: 5 };
+    const setup = run.ensureSetup();
+    setup.starts = 3;
+    // terrain used, without the Blocker (the most used): +2, X1.2, +30 - 6
+    expect(run.rescueCount([card(run, 'red')], [], { ...zeroSkills(), ...terrain })).toMatchObject({ score: Math.floor((1 + 2) * 1.2 + 24) });
+    winWith(run, terrain);
+    const [road, fresh, lolly] = run.state.jokers;
+    expect([road.counter, fresh.counter, lolly.counter]).toEqual([1, 1, 2]);
+    expect(run.state.stats.skillUses).toMatchObject({ blocker: 5, builder: 1, digger: 1 });
+    expect(run.state.lastSkills).toEqual({ ante: 1, skills: ['builder', 'basher', 'miner', 'digger'] });
+  });
+
+  it('a restart of the level is counted; Ice Lolly melts', () => {
+    const run = runOn('Orig-1-02', ['icelolly']);
+    const setup = run.ensureSetup();
+    for (const id of setup.hand) run.card(id)!.floater = true;
+    const { game } = (() => {
+      const s = run.startBlind();
+      const session = createSessionFromInfo(
+        data,
+        catalog.get(s.levelId).info,
+        { view: { bitmapToControl: (x, y) => ({ x, y }), renderLowResText: (t) => new Bitmap32(t.length * 7, 14) } },
+        (level) => run.applyToLevel(level),
+      );
+      run.attach(session.game);
+      return { game: session.game };
+    })();
+    game.start(false);
+    for (let n = 0; n < 50; n++) game.update();
+    game.start(false);
+    for (let n = 0; n < 30000 && !game.isFinished; n++) game.update();
+    expect(run.restarts()).toBe(1);
+    run.finishAttempt(game);
+    run.state.jokers[0].counter = 9;
+    run.accept();
+    expect(run.state.jokers).toHaveLength(0);
+  });
+
+  it('Second Chance: a lost level with a quarter of the requirement saved counts as won, once', () => {
+    const run = runOn('Orig-1-02', ['secondchance']);
+    run.state.ante = 8;
+    const setup = run.ensureSetup();
+    expect(setup.rescue).toBeGreaterThan(1);
+    // Fun 2: only the Floaters are saved
+    const need = Math.ceil(setup.rescue / 4);
+    for (const id of setup.hand.slice(0, need)) run.card(id)!.floater = true;
+    const { outcome } = playIdle(run);
+    expect(outcome.rescued).toBeLessThan(setup.rescue);
+    expect(outcome).toMatchObject({ success: true, secondChance: true });
+    expect(run.state.jokers).toHaveLength(0);
+    expect(run.state.phase).toBe('result');
+  });
+});
+
+describe('Lematro Phase 2: Swaps and the Power Cards that read them', () => {
+  it('Steady Squad, Clean Sweep and Green Party', () => {
+    const run = runOn('Orig-1-02', ['steadysquad', 'cleansweep', 'greenparty']);
+    run.state.jokers[2].counter = 3;
+    const setup = run.ensureSetup();
+    run.swap([setup.hand[0]]);
+    expect(run.state.jokers[2].counter).toBe(2);
+    // 1 saved, +6 (2 Swaps left), Green Party +2
+    expect(run.rescueCount([card(run, 'red')], [], zeroSkills()).score).toBe(9);
+    run.swap(run.state.setup!.hand.slice(0, 2));
+    expect(run.rescueCount([card(run, 'red')], [], zeroSkills()).score).toBe(1 + 8);
+    run.startBlind();
+    // the level began: Green Party +1
+    expect(run.state.jokers[2].counter).toBe(1);
+  });
+
+  it('Returns Desk pays for swapped-out lemmings of its colour; On-the-Job Training: the first Swap trains', () => {
+    const run = runOn('Orig-1-02', ['returnsdesk', 'onthejob']);
+    run.state.jokers[0].color = 'purple';
+    run.state.stats.skillUses = { ...zeroSkills(), miner: 4 };
+    const setup = run.ensureSetup();
+    run.card(setup.hand[0])!.hair = 'purple';
+    run.card(setup.hand[1])!.hair = 'red';
+    const money = run.state.money;
+    const miner = run.state.capacity.miner;
+    run.swap(setup.hand.slice(0, 2));
+    expect(run.state.money).toBe(money + 3);
+    expect(run.state.capacity.miner).toBe(miner + 1);
+    run.swap([run.state.setup!.hand[0]]);
+    expect(run.state.capacity.miner).toBe(miner + 1);
+    winWith(run, {});
+    expect(run.state.jokers[0].color).not.toBe('purple');
+  });
+
+  it('Spare Change pays for the Swaps left unused this run', () => {
+    const run = runOn('Orig-1-02');
+    run.state.blinds[1].levelId = 'Orig-1-02';
+    run.swap([run.ensureSetup().hand[0]]);
+    winWith(run, {});
+    run.cashOut();
+    run.nextRound();
+    expect(run.state.stats.swapsUnused).toBe(2);
+    run.state.blinds[1].tag = 'sparechange';
+    const money = run.state.money;
+    run.skipBlind();
+    expect(run.state.money).toBe(money + 2);
+  });
+});
+
+describe('Lematro Phase 2: Tribe cards', () => {
+  it('level up a skill (+2), or every squad, the clock and the Respawns; the Gym Membership counts them', () => {
+    const run = runOn('Orig-1-02', ['gym']);
+    const use = (id: string) => {
+      run.state.tarots = [{ uid: 7000, id }];
+      return run.useTarot(7000);
+    };
+    const cap = { ...run.state.capacity };
+    expect(use('egyptian')).toEqual(['Egyptian Tribe: +2 Builder ability.']);
+    expect(run.state.capacity.builder).toBe(cap.builder + 2);
+    use('classic');
+    expect(SKILLS.reduce((n, sk) => n + run.state.capacity[sk], 0)).toBe(SKILLS.reduce((n, sk) => n + cap[sk], 0) + 4);
+    use('beach');
+    expect(run.ensureSetup().hand).toHaveLength(11);
+    use('polar');
+    use('polar');
+    expect(run.state.extraSeconds).toBe(40);
+    use('shadow');
+    expect(run.state.respawns).toBe(1);
+    expect(run.state.jokers[0].counter).toBe(6);
+    expect(run.state.stats).toMatchObject({ tribesUsed: 6 });
+    expect(run.state.stats.boostsUsed ?? 0).toBe(0);
+  });
+
+  it('the Polar Tribe puts seconds on the clock; the Shadow Tribe a Respawn', () => {
+    const run = runOn('Orig-1-02');
+    run.state.extraSeconds = 80;
+    run.state.respawns = 1;
+    const setup = run.ensureSetup();
+    for (const id of setup.hand.slice(0, 5)) run.card(id)!.floater = true;
+    const size = run.state.colony.length;
+    const { game } = playIdle(run);
+    expect(game.extraSeconds).toBe(80);
+    run.accept();
+    // 5 splatted, 1 respawned
+    expect(run.state.colony.length).toBe(size - 4);
+  });
+
+  it('the shop offers Tribe cards in place of training; the Tribe Pack holds Tribe cards; Supply Drop opens one', () => {
+    const run2 = runOn('Orig-1-02');
+    run2.state.money = 1000;
+    run2.state.phase = 'shop';
+    run2.state.shop = { offers: [], packs: [], rerolls: 0 };
+    const types = new Set<string>();
+    for (let i = 0; i < 30; i++) {
+      run2.reroll();
+      for (const o of run2.state.shop!.offers) types.add(o.type === 'tarot' ? `tarot:${TAROTS.find((t) => t.id === o.id)!.kind ?? 'boost'}` : o.type);
+    }
+    expect([...types].sort()).toEqual(['joker', 'tarot:boost', 'tarot:tribe']);
+    run2.state.blinds[0].tag = 'supply';
+    run2.state.phase = 'blinds';
+    run2.state.shop = null;
+    run2.skipBlind();
+    expect(run2.state.pack!.kind).toBe('training');
+    for (const c of run2.state.pack!.choices) expect(c.type === 'allSkills' || (c.type === 'tarot' && TAROTS.find((t) => t.id === c.id)!.kind === 'tribe')).toBe(true);
+    expect(run2.choosePack(0)).not.toBeNull();
+    expect(run2.state.phase).toBe('blinds');
+    expect(run2.state.stats.tribesUsed).toBe(1);
+  });
+});

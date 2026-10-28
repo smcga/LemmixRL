@@ -246,7 +246,12 @@ export class LevelPlay {
   private iteration(): void {
     const game = this.game;
     const it = game.currentIteration;
-    if (it === 1) this.reset();
+    if (it === 1) {
+      this.reset();
+      // (the first start of the level, then its restarts)
+      const setup = this.setup;
+      if (setup) setup.starts = (setup.starts ?? 0) + 1;
+    }
     if (this.pendingDrops > 0 && it >= this.nextDropAt) {
       const p = game.entrancePoint(this.dropsMade);
       if (p) {

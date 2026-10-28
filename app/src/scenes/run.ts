@@ -22,7 +22,7 @@ import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOT
 import { loadMeta, loadRun, markSeen, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
 import { ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
 import { type Art, CARD_H, CARD_W, type CardBehaviour, CardTable, CardView, type DropTarget, inRect, type Rect } from '../run/ui/cards.ts';
-import { EDITION_TINTS, JOKER_ART, PACK_LOOKS, RARITY_COLORS, RARITY_NAMES, TAROT_ART } from '../run/ui/art.ts';
+import { consumableLook, EDITION_TINTS, JOKER_ART, PACK_LOOKS, RARITY_COLORS, RARITY_NAMES, TAROT_ART } from '../run/ui/art.ts';
 import { ColonyHome, HOME_LEVEL } from '../run/home.ts';
 import { HomeView } from '../run/ui/homeview.ts';
 import { plainText } from '../run/rich.ts';
@@ -713,10 +713,10 @@ export class RunScene extends Phaser.Scene {
         this.save();
         this.render();
       };
-      const card = k(new CardView(this, tx[i], cy, { color: COLORS.purple, art }));
+      const card = k(new CardView(this, tx[i], cy, { color: consumableLook(d).color, art }));
       this.spot(`tarot:${i}`, tx[i], cy);
       this.table.add(card, {
-        tip: () => ({ title: d.name, color: COLORS.purple, lines: [t.skill && d.skillText ? d.skillText(SKILL_NAMES[t.skill]) : d.text], badge: { text: 'Boost', color: COLORS.purple } }),
+        tip: () => ({ title: d.name, color: consumableLook(d).color, lines: [t.skill && d.skillText ? d.skillText(SKILL_NAMES[t.skill]) : d.text], badge: { text: consumableLook(d).badge, color: consumableLook(d).color } }),
         buttons: () => [
           { label: 'USE', color: COLORS.red, side: 'below', enabled: canUse, run: use },
           { label: 'SELL', sub: `$${tarotSellPrice(t.id)}`, color: COLORS.green, side: 'right', enabled: run.canSellTarot(), run: sell },
@@ -1111,6 +1111,17 @@ export class RunScene extends Phaser.Scene {
         });
       }
     });
+    if (current && run.swapsLeft() > 0) {
+      const swapTip = (): TipContent => ({
+        title: 'Swaps',
+        color: LEMMING_BADGE_COLORS.squad,
+        lines: [`Before the level begins, swap up to ${run.swapsLeft()} lemmings of the squad for others of the colony.`, 'Pick them in the colony (an orange line under their feet), then Swap.'],
+        x: x - 20,
+        y: y + 250,
+      });
+      const sw = this.btn('swapSquad', x + 8, y + 328, w - 16, 22, `Swap lemmings (${run.swapsLeft()} left)`, LEMMING_BADGE_COLORS.squad, () => this.showColony(null));
+      hoverTip(sw, this.tip, swapTip);
+    }
     const meta = loadMeta().levels[l.id];
     if (meta?.fewest) k(label(this, x + 12, y + 310, `Your best: ${meta.best}%, ${totalSkills(meta.fewest)} skills`, { color: COLORS.teal, maxWidth: w - 24 }));
 
@@ -1525,7 +1536,7 @@ export class RunScene extends Phaser.Scene {
       case 'tarot': {
         const d = tarotDef(c.id);
         const text = c.skill && d.skillText ? d.skillText(SKILL_NAMES[c.skill]) : d.text;
-        return { title: d.name, color: COLORS.purple, lines: [text, '{~}(Used at once){}'], art: c.id === 'manual' && c.skill ? { icon: c.skill } : TAROT_ART[c.id], badge: { text: 'Boost', color: COLORS.purple } };
+        return { title: d.name, color: consumableLook(d).color, lines: [text, '{~}(Used at once){}'], art: c.id === 'manual' && c.skill ? { icon: c.skill } : TAROT_ART[c.id], badge: { text: consumableLook(d).badge, color: consumableLook(d).color } };
       }
       case 'joker': {
         const d = jokerDef(c.id);
@@ -1580,7 +1591,7 @@ export class RunScene extends Phaser.Scene {
       case 'tarot': {
         const d = tarotDef(o.id);
         const text = o.skill && d.skillText ? d.skillText(SKILL_NAMES[o.skill]) : d.text;
-        return { title: d.name, color: COLORS.purple, lines: [text], art: o.id === 'manual' && o.skill ? { icon: o.skill } : TAROT_ART[d.id], badge: { text: 'Boost', color: COLORS.purple } };
+        return { title: d.name, color: consumableLook(d).color, lines: [text], art: o.id === 'manual' && o.skill ? { icon: o.skill } : TAROT_ART[d.id], badge: { text: consumableLook(d).badge, color: consumableLook(d).color } };
       }
       case 'training': {
         const sk = o.skill!;
@@ -1677,8 +1688,9 @@ export class RunScene extends Phaser.Scene {
   /**
    * The colony at home (see home.ts and HomeView): every lemming of it in a little level of its own, played by the game.
    * Pick shows who a lemming is (a drag picks a group); the skills are free at home, to sort the colony with walls,
-   * bridges and blockers, and the home stays as it is left. The lemmings picked can be preferred for squads or avoided.
-   * With a boost, the lemmings picked are the ones it is used on.
+   * bridges and blockers, and the home stays as it is left. Before a level begins, lemmings of its squad (an orange line
+   * under their feet) can be picked and swapped for others (Swaps). With a boost, the lemmings picked are the ones it is
+   * used on.
    */
   private showColony(tarot: TarotUse | null): void {
     const run = this.run;
@@ -1703,10 +1715,8 @@ export class RunScene extends Phaser.Scene {
         return;
       }
       const specials = this.specialCounts(colony());
-      const prefer = colony().filter((c) => c.pref === 'prefer').length;
-      const avoid = colony().filter((c) => c.pref === 'avoid').length;
-      const prefs = prefer || avoid ? ` · {c:green}${prefer} preferred{}, {x}${avoid} avoided{}` : '';
-      sub.setText(plainText((specials ? `Special: ${specials}` : 'All of them plain lemmings.') + prefs));
+      const squad = s.setup && !s.setup.begun ? ` · Squad ${s.setup.hand.length}, Swaps left ${run.swapsLeft()}` : '';
+      sub.setText(plainText((specials ? `Special: ${specials}` : 'All of them plain lemmings.') + squad));
     };
 
     // the home, played by the game (with its sounds, without its music)
@@ -1727,6 +1737,7 @@ export class RunScene extends Phaser.Scene {
         showTip(this.tip, { title: cardTitle(c), color: this.cardColor(c), lines: [], x, y: y - 58, center: true, width: Math.min(260, 40 + 8 * cardTitle(c).length), keywords: [] }, c);
       },
       spot: (name, x, y) => this.spot(name, x, y),
+      inSquad: (c) => !tarot && !!s.setup && !s.setup.begun && inSquad(c),
     });
     view.toolbar(56, 424);
     this.homeView = view;
@@ -1749,12 +1760,10 @@ export class RunScene extends Phaser.Scene {
       } else if (group.length > 1) {
         const names = group.slice(0, 6).map((c) => c.name).join(', ') + (group.length > 6 ? ` and ${group.length - 6} more` : '');
         const specials = this.specialCounts(group);
-        const prefer = group.filter((c) => c.pref === 'prefer').length;
-        const avoid = group.filter((c) => c.pref === 'avoid').length;
         info.show({
           title: `${group.length} lemmings`,
           color: COLORS.gold,
-          lines: [names, ...(specials ? ['', specials] : []), ...(prefer || avoid ? ['', `{c:green}${prefer} preferred{}, {x}${avoid} avoided{}`] : [])],
+          lines: [names, ...(specials ? ['', specials] : [])],
           badges: group.some(inSquad) ? [{ text: `${group.filter(inSquad).length} in squad`, color: LEMMING_BADGE_COLORS.squad }] : [],
           ...at,
         });
@@ -1818,27 +1827,23 @@ export class RunScene extends Phaser.Scene {
       this.sfx(SoundEffect.SkillButtonSelect);
     };
 
-    // Prefer / Normal / Avoid: for the squads (the lemmings picked)
-    const prefButtons: Button[] = [];
-    const setPref = (pref: 'prefer' | 'avoid' | null) => {
-      if (!selection.length) return;
-      run.setPreference(selection, pref);
+    // Swap: the lemmings of the squad picked go, the next ones of the colony come in (before the level begins)
+    let swapButton: Button | null = null;
+    const doSwap = () => {
+      const notes = run.swap(selection);
+      if (!notes) return;
       changed = true;
       this.save();
       this.sfx(SoundEffect.AssignSkill);
+      selection = [];
+      picked = null;
+      mark();
       showInfo();
+      this.toast(notes.join('\n'));
     };
     if (!tarot) {
-      const prefs: [string, 'prefer' | 'avoid' | null, number, string][] = [
-        ['Prefer', 'prefer', COLORS.green, 'prefer'],
-        ['Normal', null, COLORS.gray, 'normal'],
-        ['Avoid', 'avoid', COLORS.red, 'avoid'],
-      ];
-      prefs.forEach(([caption, pref, color, spot], i) => {
-        const bx = 690 + i * 73;
-        this.spot(spot, bx + 34, 410);
-        prefButtons.push(o(new Button(this, bx, 396, 68, 28, caption, color, () => setPref(pref))));
-      });
+      this.spot('swap', 797, 410);
+      swapButton = o(new Button(this, 690, 396, 214, 28, 'Swap', LEMMING_BADGE_COLORS.squad, doSwap));
     }
 
     // Previous and Next: one lemming after the other (also with the arrow keys; Enter selects it for a boost)
@@ -1862,7 +1867,11 @@ export class RunScene extends Phaser.Scene {
     const updateButtons = () => {
       const list = order();
       position.setText(picked && list.includes(picked) ? `${list.indexOf(picked) + 1} / ${list.length}` : `${list.length} lemmings`);
-      for (const b of prefButtons) b.setVisible(selection.length > 0);
+      if (swapButton) {
+        const n = run.swappable(selection).length;
+        swapButton.setVisible(n > 0);
+        swapButton.setCaption(`Swap ${n} (${run.swapsLeft()} left)`);
+      }
       if (selectButton) {
         selectButton.setVisible(!!picked);
         selectButton.setCaption(picked && selection.includes(picked.id) ? 'Put back' : 'Select');
@@ -2129,6 +2138,28 @@ function jokerLines(run: RunSession, j: JokerInstance): string[] {
       break;
     case 'ohno':
       current = `{x}X${1 + (j.counter ?? 0)}{}`;
+      break;
+    case 'roadcrew':
+      current = `{+}+${2 * (j.counter ?? 0)}{}`;
+      break;
+    case 'icelolly':
+      current = `{+}+${Math.max(0, 30 - 3 * (j.counter ?? 0))}{}`;
+      break;
+    case 'freshapproach':
+      current = `{x}X${+(1 + 0.2 * (j.counter ?? 0)).toFixed(1)}{} (${j.counter ?? 0} in a row)`;
+      break;
+    case 'greenparty':
+      current = `{+}+${j.counter ?? 0}{}`;
+      break;
+    case 'lordofthemanor':
+    case 'starpupils': {
+      const squad = new Set(s.setup?.hand ?? []);
+      const n = s.colony.filter((c) => !squad.has(c.id) && c.edition === (j.id === 'starpupils' ? 'mentor' : 'champion')).length;
+      current = j.id === 'starpupils' ? `{+}+${5 * n}{}` : `{x}X${+(1.2 ** n).toFixed(2)}{}`;
+      break;
+    }
+    case 'steadysquad':
+      current = `{+}+${3 * run.swapsLeft()}{}`;
       break;
   }
   if (d.copies) {

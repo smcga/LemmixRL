@@ -1390,7 +1390,7 @@
       "name": "Gym Membership",
       "rarity": "uncommon",
       "price": 6,
-      "description": "Gains {x}X0.1{} Rescues each time you use a {!}Training{}",
+      "description": "Gains {x}X0.1{} Rescues each time you use a {!}Tribe card{}",
       "appearance": {
         "background": "#1e4d3a",
         "border": "#f4f1e6",
@@ -4268,6 +4268,977 @@
               "#00b000": "#d8b8ff",
               "#4040e0": "#71308e"
             },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+1",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "doubleact",
+      "name": "Double Act",
+      "rarity": "common",
+      "price": 3,
+      "description": "{+}+4{} Rescues if exactly {!}2{} kinds of skill were used",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "builder",
+            "scale": 1.5,
+            "x": -8.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "digger",
+            "scale": 1.5,
+            "x": 8.0,
+            "y": 8
+          },
+          {
+            "type": "text",
+            "text": "+4",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "threescompany",
+      "name": "Three's Company",
+      "rarity": "common",
+      "price": 4,
+      "description": "{+}+6{} Rescues if exactly {!}3{} kinds of skill were used",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "blocker",
+            "scale": 1.5,
+            "x": -16.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "builder",
+            "scale": 1.5,
+            "x": 0.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "basher",
+            "scale": 1.5,
+            "x": 16.0,
+            "y": 8
+          },
+          {
+            "type": "text",
+            "text": "+6",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "tagteam",
+      "name": "Tag Team",
+      "rarity": "common",
+      "price": 4,
+      "description": "{+}+5{} Rescues if two skills were each used at least {!}twice{}",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 2,
+            "x": -10,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "walkLeft",
+            "scale": 2,
+            "x": 10,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+5",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "groundworks",
+      "name": "Groundworks",
+      "rarity": "common",
+      "price": 4,
+      "description": "{+}+6{} Rescues if {s}Builder{}, {s}Basher{}, {s}Miner{} and {s}Digger{} were all used",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "builder",
+            "scale": 1.2,
+            "x": -24.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "basher",
+            "scale": 1.2,
+            "x": -8.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "miner",
+            "scale": 1.2,
+            "x": 8.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "digger",
+            "scale": 1.2,
+            "x": 24.0,
+            "y": 8
+          },
+          {
+            "type": "text",
+            "text": "+6",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "twostep",
+      "name": "Two-Step",
+      "rarity": "common",
+      "price": 3,
+      "description": "{+}+2{} Rescues if exactly {!}2{} kinds of skill were used",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "climber",
+            "scale": 1.5,
+            "x": -8.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "floater",
+            "scale": 1.5,
+            "x": 8.0,
+            "y": 8
+          },
+          {
+            "type": "text",
+            "text": "+2",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "hattrick",
+      "name": "Hat-Trick",
+      "rarity": "common",
+      "price": 3,
+      "description": "{+}+3{} Rescues if exactly {!}3{} kinds of skill were used",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "bomber",
+            "scale": 1.5,
+            "x": -16.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "miner",
+            "scale": 1.5,
+            "x": 0.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "climber",
+            "scale": 1.5,
+            "x": 16.0,
+            "y": 8
+          },
+          {
+            "type": "text",
+            "text": "+3",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "doubleshift",
+      "name": "Double Shift",
+      "rarity": "common",
+      "price": 3,
+      "description": "{+}+3{} Rescues if two skills were each used at least {!}twice{}",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "build",
+            "scale": 2,
+            "x": -10,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "buildLeft",
+            "scale": 2,
+            "x": 10,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+3",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "earthworks",
+      "name": "Earthworks",
+      "rarity": "common",
+      "price": 3,
+      "description": "{+}+3{} Rescues if {s}Builder{}, {s}Basher{}, {s}Miner{} and {s}Digger{} were all used",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "builder",
+            "scale": 1.2,
+            "x": -24.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "basher",
+            "scale": 1.2,
+            "x": -8.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "miner",
+            "scale": 1.2,
+            "x": 8.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "digger",
+            "scale": 1.2,
+            "x": 24.0,
+            "y": 8
+          },
+          {
+            "type": "text",
+            "text": "+3",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "closeenough",
+      "name": "Close Enough",
+      "rarity": "uncommon",
+      "price": 7,
+      "description": "Colour and skill-set conditions need {!}one fewer{}: {!}4{} hair colours, {!}3{} terrain skills",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "shrug",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "-1",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "oldfavourite",
+      "name": "Old Favourite",
+      "rarity": "common",
+      "price": 5,
+      "description": "{+}+1{} Rescues for every {!}5{} uses this run of the skill used most this level",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "dig",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+1",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "roadcrew",
+      "name": "Road Crew",
+      "rarity": "common",
+      "price": 5,
+      "description": "Gains {+}+2{} Rescues each level {s}Builder{}, {s}Basher{}, {s}Miner{} and {s}Digger{} are all used",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "build",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#4040e0": "#f08820"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+2",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "icelolly",
+      "name": "Ice Lolly",
+      "rarity": "common",
+      "price": 5,
+      "description": "{+}+30{} Rescues. Loses {!}3{} for each restart",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#00b000": "#ffb0e0"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+30",
+            "color": "#5bd7ff",
+            "scale": 1.2,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "sameagain",
+      "name": "Same Again",
+      "rarity": "uncommon",
+      "price": 6,
+      "description": "{x}X2{} Rescues if you use the same skills as the previous level of the round",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 2,
+            "x": -10,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 2,
+            "x": 10,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "X2",
+            "color": "#fe5f55",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "lordofthemanor",
+      "name": "Lord of the Manor",
+      "rarity": "rare",
+      "price": 8,
+      "description": "Each {!}Champion{} in the colony outside the squad gives {x}X1.2{} Rescues",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "block",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#00b000": "#d090ff",
+              "#4040e0": "#9a5ae0"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "X1.2",
+            "color": "#fe5f55",
+            "scale": 1.2,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "freshapproach",
+      "name": "Fresh Approach",
+      "rarity": "rare",
+      "price": 8,
+      "description": "Gains {x}X0.2{} Rescues for each level in a row without your most used skill. Resets when it is used",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walkLeft",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "X.2",
+            "color": "#fe5f55",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "secondchance",
+      "name": "Second Chance",
+      "rarity": "uncommon",
+      "price": 5,
+      "description": "A lost level with {!}25%{} of the requirement saved counts as won. This card is destroyed",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "ohno",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "25%",
+            "color": "#f3b958",
+            "scale": 1.2,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "thepair",
+      "name": "The Pair",
+      "rarity": "rare",
+      "price": 8,
+      "description": "{x}X1.5{} Rescues if exactly {!}2{} kinds of skill were used",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "basher",
+            "scale": 1.5,
+            "x": -8.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "miner",
+            "scale": 1.5,
+            "x": 8.0,
+            "y": 8
+          },
+          {
+            "type": "text",
+            "text": "X1.5",
+            "color": "#fe5f55",
+            "scale": 1.2,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "threemusketeers",
+      "name": "Three Musketeers",
+      "rarity": "rare",
+      "price": 8,
+      "description": "{x}X2{} Rescues if exactly {!}3{} kinds of skill were used",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "climber",
+            "scale": 1.5,
+            "x": -16.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "builder",
+            "scale": 1.5,
+            "x": 0.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "digger",
+            "scale": 1.5,
+            "x": 16.0,
+            "y": 8
+          },
+          {
+            "type": "text",
+            "text": "X2",
+            "color": "#fe5f55",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "workaholic",
+      "name": "Workaholic",
+      "rarity": "rare",
+      "price": 8,
+      "description": "{x}X2{} Rescues if one skill was used {!}4{} or more times",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "bash",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "X2",
+            "color": "#fe5f55",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "workforce",
+      "name": "The Workforce",
+      "rarity": "rare",
+      "price": 8,
+      "description": "{x}X2{} Rescues if {s}Builder{}, {s}Basher{}, {s}Miner{} and {s}Digger{} were all used",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "icon",
+            "icon": "builder",
+            "scale": 1.2,
+            "x": -24.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "basher",
+            "scale": 1.2,
+            "x": -8.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "miner",
+            "scale": 1.2,
+            "x": 8.0,
+            "y": 8
+          },
+          {
+            "type": "icon",
+            "icon": "digger",
+            "scale": 1.2,
+            "x": 24.0,
+            "y": 8
+          },
+          {
+            "type": "text",
+            "text": "X2",
+            "color": "#fe5f55",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "starpupils",
+      "name": "Star Pupils",
+      "rarity": "common",
+      "price": 5,
+      "description": "{+}+5{} Rescues for each {!}Mentor{} in the colony outside the squad",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "build",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#00b000": "#9fd0ff",
+              "#4040e0": "#3f7fd8"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+5",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "steadysquad",
+      "name": "Steady Squad",
+      "rarity": "common",
+      "price": 5,
+      "description": "{+}+3{} Rescues for each {!}Swap{} left unused",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 2,
+            "x": -14,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 2,
+            "x": 0,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 2,
+            "x": 14,
+            "y": 12,
+            "colors": {},
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+3",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "cleansweep",
+      "name": "Clean Sweep",
+      "rarity": "common",
+      "price": 5,
+      "description": "{+}+8{} Rescues if every {!}Swap{} was used",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walkLeft",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#4040e0": "#e8e8f0"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+8",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "greenparty",
+      "name": "Green Party",
+      "rarity": "common",
+      "price": 4,
+      "description": "Gains {+}+1{} Rescues each level. Loses {!}1{} for each {!}Swap{} used",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#4040e0": "#2fae5f"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+1",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "returnsdesk",
+      "name": "Returns Desk",
+      "rarity": "common",
+      "price": 4,
+      "description": "Earn {$}$3{} for each lemming with #hair# hair swapped out. Colour changes every level",
+      "appearance": {
+        "background": "#003e66",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walkLeft",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#00b000": "#f08820"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "$3",
+            "color": "#f3b958",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
+    },
+    {
+      "id": "onthejob",
+      "name": "On-the-Job Training",
+      "rarity": "rare",
+      "price": 8,
+      "description": "The first {!}Swap{} of each level gives {!}+1{} ability in your most used skill",
+      "appearance": {
+        "background": "#652622",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "build",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {},
             "playback": "animated",
             "frame": 0
           },

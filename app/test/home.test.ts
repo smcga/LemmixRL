@@ -134,29 +134,33 @@ describe('Poof and the trapdoor', () => {
   });
 });
 
-describe('preferred and avoided lemmings', () => {
+describe('Swaps', () => {
   const SPREAD: SkillCounts = { climber: 6, floater: 6, bomber: 6, blocker: 6, builder: 12, basher: 8, miner: 8, digger: 8 };
-  it('the squad is drawn from the preferred lemmings first and the avoided ones last, again while the level has not begun', () => {
-    const run = RunSession.newRun(catalog, 'PREFS');
+  it('swap lemmings of the squad for the next ones of the colony, 3 a level, before it begins', () => {
+    const run = RunSession.newRun(catalog, 'SWAPS');
     for (const sk of SKILLS) run.setAbility(sk, SPREAD[sk]);
     expect(run.finishAssignment()).toBe(true);
     // a level of 10 lemmings out of the colony of 80
     run.state.blinds[0].levelId = 'Orig-1-02';
-    const before = run.ensureSetup().hand;
-    expect(before).toHaveLength(10);
-    const outside = run.state.colony.filter((c) => !before.includes(c.id)).slice(0, 4).map((c) => c.id);
-    run.setPreference(outside, 'prefer');
-    run.setPreference(before.slice(0, 2), 'avoid');
-    const after = run.ensureSetup().hand;
+    const before = [...run.ensureSetup().hand];
+    expect(run.swapsLeft()).toBe(3);
+    // only lemmings of the squad can be swapped
+    const outside = run.state.colony.find((c) => !before.includes(c.id))!.id;
+    expect(run.swap([outside])).toBeNull();
+    expect(run.swap(before.slice(0, 2))).not.toBeNull();
+    const after = run.state.setup!.hand;
     expect(after).toHaveLength(10);
-    for (const id of outside) expect(after).toContain(id);
     for (const id of before.slice(0, 2)) expect(after).not.toContain(id);
-    // neither: back to the draw as it was
-    run.setPreference([...outside, ...before.slice(0, 2)], null);
-    expect(run.ensureSetup().hand).toEqual(before);
-    // once the level has begun, the squad stays
+    expect(run.swapsLeft()).toBe(1);
+    // more than the Swaps left: only as many as are left
+    run.swap(after.slice(0, 3));
+    expect(run.swapsLeft()).toBe(0);
+    expect(run.state.setup!.swappedOut).toHaveLength(3);
+    // the squad stays as it is when it is drawn again, and once the level has begun no Swap is left; the unused are counted
+    const hand = [...run.state.setup!.hand];
+    expect(run.ensureSetup().hand).toEqual(hand);
     run.startBlind();
-    run.setPreference(outside, 'prefer');
-    expect(run.state.setup!.hand).toEqual(before);
+    expect(run.swapsLeft()).toBe(0);
+    expect(run.state.stats.swapsUnused).toBe(0);
   });
 });

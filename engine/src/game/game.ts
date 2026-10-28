@@ -744,6 +744,8 @@ export class LemmingGame {
   lemmingSpeed: ((l: Lemming) => number) | null = null;
   /** LemmixRL, not in the original: extra bricks laid by every Builder. Zero keeps the original 12-brick bridge. */
   extraBuilderBricks = 0;
+  /** LemmixRL: seconds more on the clock (a run's Polar Tribe); 0 in the original game */
+  extraSeconds = 0;
   /** LemmixRL: the lemmings that did not come out of an entrance (spawnLemming) */
   private spawnedCount = 0;
   /** LemmixRL: a free assignment (assignSkillFree) is not recorded in the replay */
@@ -1131,8 +1133,8 @@ export class LemmingGame {
     this.lemmingsReleased = 0;
     this.world.assign(this.targetBitmap);
     this.world.outerColor = 0;
-    this.minutes = this.level.info.timeLimit;
-    this.seconds = 0;
+    this.minutes = this.level.info.timeLimit + Math.floor(this.extraSeconds / 60);
+    this.seconds = this.extraSeconds % 60;
 
     this.gameResultRec = emptyGameResult();
     this.gameResultRec.lemmingCount = this.level.info.lemmingsCount;

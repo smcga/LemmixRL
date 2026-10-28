@@ -10,6 +10,7 @@ import { Bitmap32, type Lemming } from '../../../../engine/src/index.ts';
 import { ColonyHome, HOME_H, HOME_W, homePicture } from '../home.ts';
 import { type Skill, SKILLS } from '../skills.ts';
 import type { LemmingCard } from '../state.ts';
+import { LEMMING_BADGE_COLORS } from '../content.ts';
 import { markerColor } from './art.ts';
 import { ENTRANCE, SKILL_ICONS } from './assets.ts';
 import { COLORS, label, shade } from './widgets.ts';
@@ -32,6 +33,8 @@ export interface HomeViewOptions {
   onHover?: (card: LemmingCard | null, x: number, y: number) => void;
   /** where things are, for the tests: every lemming by its index in the colony, and the tools */
   spot?: (name: string, x: number, y: number) => void;
+  /** the lemmings of the squad of the next level (an orange line under their feet) */
+  inSquad?: (card: LemmingCard) => boolean;
   /** the colony, in its order (the indexes of the spots) */
   colony: () => LemmingCard[];
 }
@@ -294,9 +297,9 @@ export class HomeView {
         pip.setPosition(sx + 1, sy - 13 * SCALE).setFillStyle(color).setVisible(true);
         n++;
       }
-      // preferred: a green line under its feet; avoided: a red one
-      if (c.pref) {
-        g.fillStyle(c.pref === 'prefer' ? 0x40d050 : 0xe84040, 1);
+      // in the squad of the next level: an orange line under its feet
+      if (this.opts.inSquad?.(c)) {
+        g.fillStyle(LEMMING_BADGE_COLORS.squad, 1);
         g.fillRect(sx - 6, sy + 2, 14, 2);
       }
       if (this.marked.has(c.id)) this.corners(g, sx, sy, c.id === this.focus);
