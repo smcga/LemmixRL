@@ -11,7 +11,7 @@ import { ColonyHome, HOME_H, HOME_W, homePicture } from '../home.ts';
 import { type Skill, SKILLS } from '../skills.ts';
 import type { LemmingCard } from '../state.ts';
 import { LEMMING_BADGE_COLORS } from '../content.ts';
-import { markerColor } from './art.ts';
+import { markerColors } from './art.ts';
 import { ENTRANCE, SKILL_ICONS } from './assets.ts';
 import { COLORS, label, shade } from './widgets.ts';
 
@@ -289,14 +289,14 @@ export class HomeView {
       if (!c) continue;
       const sx = this.x + l.xPos * SCALE;
       const sy = this.y + l.yPos * SCALE;
-      // the mark of a special lemming, as in a level
-      const color = markerColor(c);
-      if (color !== null) {
+      // the marks of a special lemming and of its Badge, side by side, as in a level
+      const marks = markerColors(c);
+      marks.forEach((color, k) => {
         let pip = this.pips[n];
         if (!pip) this.pips.push((pip = this.add(this.scene.add.rectangle(0, 0, 3 * SCALE, 3 * SCALE, color).setStrokeStyle(SCALE, 0x000000))));
-        pip.setPosition(sx + 1, sy - 13 * SCALE).setFillStyle(color).setVisible(true);
+        pip.setPosition(sx + 1 + (k - (marks.length - 1) / 2) * 4 * SCALE, sy - 13 * SCALE).setFillStyle(color).setVisible(true);
         n++;
-      }
+      });
       // in the squad of the next level: an orange line under its feet
       if (this.opts.inSquad?.(c)) {
         g.fillStyle(LEMMING_BADGE_COLORS.squad, 1);

@@ -9,7 +9,7 @@ import * as Phaser from 'phaser';
 import { Bitmap32, type HighResolutionMessage, SkillPanelButton, type TColor32 } from '../../../engine/src/index.ts';
 import { BitmapTexture } from '../display.ts';
 import { ScreenType } from '../screens/base.ts';
-import { markerColor } from '../run/ui/art.ts';
+import { markerColors } from '../run/ui/art.ts';
 import { ensureRunAssets, FONT } from '../run/ui/assets.ts';
 import { PlayerScreen } from '../screens/player.ts';
 import { canvasPoint, cssPx, DoubleTap, onTouchChange, pixelRatio, safeAreaInsets, touch } from '../touch.ts';
@@ -488,7 +488,7 @@ export class PlayerScene extends Phaser.Scene {
     this.updateMarkers(pos);
   }
 
-  /** LemmixRL: a small mark above every special lemming of the squad, in the colour of its card */
+  /** LemmixRL: small marks above every special lemming of the squad: the colour of its card, then of its Badge */
   private updateMarkers(pos: number): void {
     const app = getApp();
     const run = app.inRun ? app.run : null;
@@ -499,17 +499,19 @@ export class PlayerScene extends Phaser.Scene {
         const l = list[i];
         if (l.isRemoved) continue;
         const card = run.cardOfLemming(l);
-        const color = card ? markerColor(card) : null;
-        if (color === null) continue;
-        let m = this.markers[n];
-        if (!m) {
-          m = this.add.rectangle(0, 0, 3, 3, color).setStrokeStyle(1, 0x000000).setOrigin(0.5, 0.5);
-          this.textCam.ignore(m);
-          this.uiCam.ignore(m);
-          this.markers.push(m);
-        }
-        m.setPosition(l.xPos - pos + 0.5, l.yPos - 13).setFillStyle(color).setVisible(true);
-        n++;
+        // its kind of Super Lemming, then its Badge, side by side
+        const marks = card ? markerColors(card) : [];
+        marks.forEach((color, k) => {
+          let m = this.markers[n];
+          if (!m) {
+            m = this.add.rectangle(0, 0, 3, 3, color).setStrokeStyle(1, 0x000000).setOrigin(0.5, 0.5);
+            this.textCam.ignore(m);
+            this.uiCam.ignore(m);
+            this.markers.push(m);
+          }
+          m.setPosition(l.xPos - pos + 0.5 + (k - (marks.length - 1) / 2) * 4, l.yPos - 13).setFillStyle(color).setVisible(true);
+          n++;
+        });
       }
     }
     for (let i = n; i < this.markers.length; i++) this.markers[i].setVisible(false);

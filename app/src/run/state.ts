@@ -1,7 +1,7 @@
 import type { HomeState } from './home.ts';
 /** The saved state of a roguelike run. Everything the run needs to continue is in here (it is stored as JSON). */
 import type { LemmingColor } from './colors.ts';
-import type { Edition, Fate, PackKind, PowerEdition } from './content.ts';
+import type { Badge, Edition, Fate, PackKind, PowerEdition } from './content.ts';
 import type { Skill, SkillCounts } from './skills.ts';
 
 export const RUN_VERSION = 1;
@@ -54,6 +54,10 @@ export interface LemmingCard {
   insured: boolean;
   /** how often it reached the exit */
   saves: number;
+  /** its Badge: Red, Gold, Blue or Purple */
+  badge?: Badge;
+  /** +Rescues it gives when saved, for good (the Rambler) */
+  bonus?: number;
   /** its colours (lemmings of runs saved before they had colours get theirs from their id: see colors.ts) */
   hair?: LemmingColor;
   clothes?: LemmingColor;
