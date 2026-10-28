@@ -49,7 +49,7 @@ export class TitleScene extends Phaser.Scene {
     ensureRunAssets(this, this.app);
     // (a run is played in the original style; the title is not a part of it)
     this.app.leaveRunMode();
-    Button.clickSound = () => this.app.sound.playSound(SoundEffect.SkillButtonSelect);
+    Button.clickSound = () => this.app.sound.playMenuSound(SoundEffect.SkillButtonSelect);
     this.swirl = new Swirl(this, SWIRLS.title);
 
     // the logo, with a card at each side and lemmings about

@@ -259,7 +259,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private sfx(e: SoundEffect): void {
-    this.app.sound.playSound(e);
+    this.app.sound.playMenuSound(e);
   }
 
   /**
