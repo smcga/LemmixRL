@@ -25,6 +25,7 @@ export const SWIRLS = {
   training: [0x2bb3a8, 0xd8a02b, 0x102a28],
   boost: [0x9b59d0, 0x3f4fb0, 0x1c1030],
   gadget: [0xe8892b, 0xd8443c, 0x2a1408],
+  mayhem: [0xd8303c, 0x2a2a3a, 0x1a0810],
 } as const satisfies Record<string, SwirlColors>;
 
 const PX_W = 192;

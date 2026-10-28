@@ -1,7 +1,7 @@
 import type { HomeState } from './home.ts';
 /** The saved state of a roguelike run. Everything the run needs to continue is in here (it is stored as JSON). */
 import type { LemmingColor } from './colors.ts';
-import type { Edition, Fate, PackKind } from './content.ts';
+import type { Edition, Fate, PackKind, PowerEdition } from './content.ts';
 import type { Skill, SkillCounts } from './skills.ts';
 
 export const RUN_VERSION = 1;
@@ -84,6 +84,8 @@ export interface JokerInstance {
   color?: LemmingColor;
   /** its lemming (Teacher's Pet), by id */
   target?: number;
+  /** its edition: Shiny, Glowing, Rainbow or Ghost */
+  edition?: PowerEdition;
 }
 
 export interface TarotInstance {
@@ -103,6 +105,8 @@ export interface ShopOffer {
   skill?: Skill;
   /** training: capacity; drive: lemmings (and capacity) */
   amount?: number;
+  /** the edition of a Power Card on offer */
+  edition?: PowerEdition;
   price: number;
   sold: boolean;
 }
@@ -132,8 +136,8 @@ export type PackChoice =
   | { type: 'allSkills'; amount: number }
   /** a boost, used at once */
   | { type: 'tarot'; id: string; skill?: Skill }
-  /** a gadget */
-  | { type: 'joker'; id: string };
+  /** a gadget (with its edition) */
+  | { type: 'joker'; id: string; edition?: PowerEdition };
 
 export type SpecialTrait = 'floater' | 'climber' | 'athlete' | 'gold' | 'lucky' | 'mentor' | 'champion' | 'insured' | 'wise';
 

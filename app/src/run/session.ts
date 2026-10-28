@@ -40,6 +40,13 @@ import {
   mostUsedSkill,
   freshApproach,
   TERRAIN_SKILLS,
+  MAYHEM,
+  POWER_EDITION_CHANCES,
+  POWER_EDITION_NAMES,
+  POWER_EDITION_PRICES,
+  POWER_EDITION_RESCUES,
+  POWER_EDITIONS,
+  type PowerEdition,
 } from './content.ts';
 import { Rng, RunRandom } from './rng.ts';
 import { SKILL_ACTIONS, SKILL_NAMES, SKILLS, type Skill, type SkillCounts, setSkills, totalSkills, zeroSkills } from './skills.ts';
@@ -92,6 +99,13 @@ export const ANTE_BANDS: readonly (readonly [number, number])[] = [
 ];
 
 const KINDS: readonly BlindKind[] = ['small', 'big', 'boss'];
+/** the Skip Bonuses that give the next Power Card an edition */
+const EDITION_TAGS: readonly [string, PowerEdition][] = [
+  ['ghostbonus', 'ghost'],
+  ['shinybonus', 'shiny'],
+  ['glowingbonus', 'glowing'],
+  ['rainbowbonus', 'rainbow'],
+];
 
 /**
  * The rescue requirement of a level, against the original's, round by round: as in Balatro the score to beat grows,
@@ -114,6 +128,8 @@ export const ROUND_SCALE: readonly number[] = [1, 1, 1.1, 1.25, 1.4, 1.6, 1.8, 2
 const SHOP_RARITIES = ['common', 'uncommon', 'rare'] as const satisfies readonly Rarity[];
 /** The chance that one choice in a Boost Pack is replaced by a Legendary Power Card. */
 export const LEGENDARY_POWER_CARD_CHANCE = 0.003;
+/** The chance that a choice in a Boost Pack is a Mayhem boost. */
+export const MAYHEM_IN_BOOST_PACK = 0.04;
 
 /**
  * The levels of a band a blind is drawn from: the easier half for Level 1, the middle half for Level 2, the harder half
@@ -255,6 +271,11 @@ export class RunSession {
   copyOf(uid: number): JokerInstance | null {
     const a = this.activeJokers().find((x) => x.slot.uid === uid);
     return a && a.j !== a.slot ? a.j : null;
+  }
+
+  /** the Power Card slots: 5, and one more for each Ghost Power Card */
+  jokerSlots(): number {
+    return JOKER_SLOTS + this.state.jokers.filter((j) => j.edition === 'ghost').length;
   }
 
   /** the abilities of the colony plus those of the jokers */
@@ -658,7 +679,7 @@ export class RunSession {
       }
       if (d.atLevelStart === 'greenParty') j.counter = (j.counter ?? 0) + 1;
       if (d.atLevelStart === 'rabble')
-        for (let n = 0; n < 2 && s.jokers.length < JOKER_SLOTS; n++) {
+        for (let n = 0; n < 2 && s.jokers.length < this.jokerSlots(); n++) {
           const id = this.randomJoker(rng, 'common');
           if (id) s.jokers.push(this.newJoker(id));
         }
@@ -767,25 +788,32 @@ export class RunSession {
       swapsLeft: Math.max(0, SWAPS - (setup?.swappedOut?.length ?? 0)),
       closeEnough: this.anyJoker((d) => d.closeEnough),
       blockersUsed: skillsUsed.blocker,
-      emptySlots: JOKER_SLOTS - s.jokers.length,
+      emptySlots: this.jokerSlots() - s.jokers.length,
       powerCards: s.jokers.length,
       money: s.money,
       uncommonPowerCards: s.jokers.filter((j) => jokerDef(j.id).rarity === 'uncommon').length,
       wise: s.colony.filter((c) => c.edition === 'wise').length,
       ginger,
     };
-    for (const a of this.activeJokers()) {
-      const d = a.d;
-      if (!d.rescues) continue;
-      // (the Glitch: the same number in every attempt of the level, a different one in every level)
-      const roll = new Rng(`${s.seed}/glitch/${s.ante}/${setup?.blind ?? 0}/${setup?.levelId ?? ''}/${a.slot.uid}`).next();
-      const r = d.rescues({ ...base, counter: a.j.counter ?? 0, color: a.j.color, target: a.j.target, otherSellValue: sellValues - jokerSellValue(a.slot), roll });
-      if (!r) continue;
-      const plus = r.plus ?? 0;
-      const times = r.times ?? 1;
-      if (plus === 0 && times === 1) continue;
+    const add = (label: string, plus: number, times: number) => {
+      if (plus === 0 && times === 1) return;
       score = (score + plus) * times;
-      lines.push({ label: a.label, ...(plus ? { plus } : {}), ...(times !== 1 ? { times: Math.round(times * 100) / 100 } : {}), total: Math.floor(score + 1e-9) });
+      lines.push({ label, ...(plus ? { plus } : {}), ...(times !== 1 ? { times: Math.round(times * 100) / 100 } : {}), total: Math.floor(score + 1e-9) });
+    };
+    // every Power Card from left to right: its ability (or the one it copies), then its edition
+    const active = new Map(this.activeJokers().map((a) => [a.slot.uid, a]));
+    for (const slot of s.jokers) {
+      const a = active.get(slot.uid);
+      if (a?.d.rescues) {
+        // (the Glitch: the same number in every attempt of the level, a different one in every level)
+        const roll = new Rng(`${s.seed}/glitch/${s.ante}/${setup?.blind ?? 0}/${setup?.levelId ?? ''}/${a.slot.uid}`).next();
+        const r = a.d.rescues({ ...base, counter: a.j.counter ?? 0, color: a.j.color, target: a.j.target, otherSellValue: sellValues - jokerSellValue(a.slot), roll });
+        if (r) add(a.label, r.plus ?? 0, r.times ?? 1);
+      }
+      if (slot.edition) {
+        const e = POWER_EDITION_RESCUES[slot.edition];
+        add(`${jokerDef(slot.id).name} (${POWER_EDITION_NAMES[slot.edition]})`, e.plus ?? 0, e.times ?? 1);
+      }
     }
     return { score: Math.floor(score + 1e-9), lines };
   }
@@ -1484,7 +1512,7 @@ export class RunSession {
     }
     const rerollBase = this.takePendingTag('reroll') ? 0 : undefined;
     // two packs, as in Balatro: a Lemmings Pack (the colony has to grow somewhere), and one of the others
-    const other = rng.pickWeighted(['training', 'boost', 'gadget'] as PackKind[], [40, 35, 25]);
+    const other = rng.pickWeighted(['training', 'boost', 'gadget', 'mayhem'] as PackKind[], [38, 32, 22, 8]);
     const packs = (['lemmings', other] as PackKind[]).map((kind): ShopOffer => ({ uid: this.uid(), type: 'pack', id: kind, price: PACKS[kind].price, sold: false }));
     s.shop = { offers, packs, rerolls: 0, freeRerollsUsed: 0, ...(rerollBase !== undefined ? { rerollBase } : {}) };
     s.phase = 'shop';
@@ -1528,7 +1556,10 @@ export class RunSession {
     const type = rng.pickWeighted(['joker', 'tarot', 'training'] as const, [40, 30, 30]);
     if (type === 'joker') {
       const id = this.randomJoker(rng, null, others.filter((o) => o.type === 'joker').map((o) => o.id));
-      if (id) return { uid: this.uid(), type: 'joker', id, price: jokerDef(id).price, sold: false };
+      if (id) {
+        const edition = this.rollEdition();
+        return { uid: this.uid(), type: 'joker', id, price: jokerDef(id).price + (edition ? POWER_EDITION_PRICES[edition] : 0), sold: false, ...(edition ? { edition } : {}) };
+      }
     }
     if (type === 'tarot') {
       const t = this.newTarot(rng);
@@ -1556,6 +1587,14 @@ export class RunSession {
     return pool.length ? rng.pick(pool).id : null;
   }
 
+  /** the edition of a Power Card of a shop or a pack, now and then (its own stream: the offers stay as they were) */
+  private rollEdition(): PowerEdition | undefined {
+    const r = this.random.stream('edition').next();
+    let p = 0;
+    for (const e of [...POWER_EDITIONS].reverse()) if (r < (p += POWER_EDITION_CHANCES[e])) return e;
+    return undefined;
+  }
+
   /** a Tribe card on offer (in the place of the Skill Trainings and Recruitment Drives of old) */
   private newTraining(rng: Rng): ShopOffer {
     const d = rng.pick(TRIBES);
@@ -1570,7 +1609,8 @@ export class RunSession {
   canBuy(offer: ShopOffer): boolean {
     const s = this.state;
     if (offer.sold || !this.canAfford(offer.price)) return false;
-    if (offer.type === 'joker') return s.jokers.length < JOKER_SLOTS;
+    // (a Ghost Power Card brings its own slot)
+    if (offer.type === 'joker') return s.jokers.length < this.jokerSlots() || offer.edition === 'ghost';
     if (offer.type === 'tarot') return s.tarots.length < TAROT_SLOTS;
     return true;
   }
@@ -1594,7 +1634,7 @@ export class RunSession {
         s.phase = 'pack';
         break;
       case 'joker':
-        s.jokers.push(this.newJoker(offer.id));
+        s.jokers.push(this.newJoker(offer.id, offer.edition));
         break;
       case 'tarot':
         s.tarots.push({ uid: this.uid(), id: offer.id, skill: offer.skill });
@@ -1659,13 +1699,18 @@ export class RunSession {
       case 'boost': {
         const legendary = this.offerable(others.flatMap((o) => (o.type === 'joker' ? [o.id] : []))).filter((j) => j.rarity === 'legendary');
         if (legendary.length && this.random.stream('legendary').chance(LEGENDARY_POWER_CARD_CHANCE)) return { type: 'joker', id: rng.pick(legendary).id };
+        // now and then a Mayhem boost
+        if (rng.chance(MAYHEM_IN_BOOST_PACK)) return { type: 'tarot', id: rng.pick(MAYHEM).id };
         const t = this.newTarot(rng);
         return { type: 'tarot', id: t.id, skill: t.skill };
       }
       case 'gadget': {
         const id = this.randomJoker(rng, null, others.flatMap((o) => (o.type === 'joker' ? [o.id] : [])));
-        return id ? { type: 'joker', id } : null;
+        const edition = this.rollEdition();
+        return id ? { type: 'joker', id, ...(edition ? { edition } : {}) } : null;
       }
+      case 'mayhem':
+        return { type: 'tarot', id: rng.pick(MAYHEM).id };
     }
   }
 
@@ -1674,7 +1719,7 @@ export class RunSession {
     const s = this.state;
     const c = s.pack?.choices[index];
     if (!c || s.phase !== 'pack') return false;
-    if (c.type === 'joker') return s.jokers.length < JOKER_SLOTS;
+    if (c.type === 'joker') return s.jokers.length < this.jokerSlots() || c.edition === 'ghost';
     return true;
   }
 
@@ -1734,8 +1779,8 @@ export class RunSession {
         if (s.setup) this.refreshSetup(s.setup);
         return [`+${c.amount} ability in every skill.`];
       case 'joker':
-        if (s.jokers.length >= JOKER_SLOTS) return null;
-        s.jokers.push(this.newJoker(c.id));
+        if (s.jokers.length >= this.jokerSlots() && c.edition !== 'ghost') return null;
+        s.jokers.push(this.newJoker(c.id, c.edition));
         return [`${jokerDef(c.id).name} joined your Power Cards.`];
       case 'tarot': {
         const tarot: TarotInstance = { uid: this.uid(), id: c.id, skill: c.skill };
@@ -1959,9 +2004,103 @@ export class RunSession {
         break;
       }
       case 'audition': {
-        const id = s.jokers.length < JOKER_SLOTS ? this.randomJoker(rng, null) : null;
+        const id = s.jokers.length < this.jokerSlots() ? this.randomJoker(rng, null) : null;
         if (id) s.jokers.push(this.newJoker(id));
         notes.push(id ? `${jokerDef(id).name} joined your Power Cards.` : `${d.name}: no room for a Power Card.`);
+        break;
+      }
+      case 'lottery': {
+        const plain = s.jokers.filter((j) => !j.edition);
+        if (!plain.length) return null;
+        if (this.chance(rng, 1 / 4)) {
+          const j = rng.pick(plain);
+          j.edition = rng.pickWeighted(['shiny', 'glowing', 'rainbow'] as const, [50, 35, 15]);
+          notes.push(`${jokerDef(j.id).name} became ${POWER_EDITION_NAMES[j.edition]}!`);
+        } else notes.push(`${d.name}: nothing this time.`);
+        break;
+      }
+      // the Mayhem boosts
+      case 'reaper':
+      case 'summoning': {
+        const pool = s.colony.filter((c) => !squad.has(c.id));
+        if (!pool.length) return null;
+        const gone = rng.pick(pool);
+        this.leave(new Set([gone.id]));
+        const names2 = this.random.stream('names');
+        const joined: LemmingCard[] = [];
+        for (let k = 0; k < (t.id === 'reaper' ? 2 : 4); k++) {
+          const c = this.newCard(names2);
+          if (t.id === 'reaper') c.edition = 'champion';
+          else randomSpecial(c, rng);
+          joined.push(c);
+        }
+        this.join(...joined);
+        notes.push(`${gone.name} left; ${joined.map(cardTitle).join(', ')} joined.`);
+        break;
+      }
+      case 'makeover': {
+        const c = cards[0];
+        if (c.edition !== 'plain') return null;
+        c.edition = rng.pick(['gold', 'lucky', 'mentor', 'champion', 'wise'] as const);
+        notes.push(`${c.name}: ${EDITION_NAMES[c.edition]}.`);
+        break;
+      }
+      case 'biggamble': {
+        const id = s.jokers.length < this.jokerSlots() ? this.randomJoker(rng, 'rare') : null;
+        if (!id) return null;
+        s.jokers.push(this.newJoker(id));
+        s.money = Math.min(s.money, 0);
+        notes.push(`${jokerDef(id).name} joined your Power Cards; your money is gone.`);
+        break;
+      }
+      case 'dyevat': {
+        const color = rng.pick(LEMMING_COLORS);
+        for (const c of s.colony) c.hair = color;
+        notes.push(`Every lemming has ${COLOR_NAMES[color]} hair now.`);
+        break;
+      }
+      case 'uniform': {
+        const color = rng.pick(LEMMING_COLORS);
+        for (const c of s.colony) c.clothes = color;
+        s.squadBonus = (s.squadBonus ?? 0) - 1;
+        notes.push(`Every lemming wears ${COLOR_NAMES[color]} now; one lemming fewer in every squad.`);
+        break;
+      }
+      case 'phantom': {
+        const plain = s.jokers.filter((j) => !j.edition);
+        if (!plain.length) return null;
+        const j = rng.pick(plain);
+        j.edition = 'ghost';
+        s.squadBonus = (s.squadBonus ?? 0) - 1;
+        notes.push(`${jokerDef(j.id).name} became Ghost; one lemming fewer in every squad.`);
+        break;
+      }
+      case 'bonfire': {
+        const gone = rng.shuffle(s.colony.filter((c) => !squad.has(c.id))).slice(0, 5);
+        this.leave(new Set(gone.map((c) => c.id)));
+        s.money += 20;
+        notes.push(`${gone.length} lemming${gone.length === 1 ? '' : 's'} left the colony: +$20.`);
+        break;
+      }
+      case 'solesurvivor': {
+        if (!s.jokers.length) return null;
+        const keep = rng.pick(s.jokers);
+        // (the copy is not Ghost: it would bring a slot of its own)
+        const copy: JokerInstance = { ...structuredClone(keep), uid: this.uid() };
+        if (copy.edition === 'ghost') delete copy.edition;
+        const lost = s.jokers.length - 1;
+        s.jokers = [keep, copy];
+        notes.push(`${jokerDef(keep.id).name} was copied${lost ? `; ${lost} other Power Card${lost === 1 ? ' was' : 's were'} destroyed` : ''}.`);
+        break;
+      }
+      case 'prism': {
+        const plain = s.jokers.filter((j) => !j.edition);
+        if (!plain.length) return null;
+        const j = rng.pick(plain);
+        j.edition = 'rainbow';
+        const lost = s.jokers.length - 1;
+        s.jokers = [j];
+        notes.push(`${jokerDef(j.id).name} became Rainbow${lost ? `; ${lost} other Power Card${lost === 1 ? ' was' : 's were'} destroyed` : ''}.`);
         break;
       }
     }
@@ -2028,7 +2167,7 @@ export class RunSession {
       }
       case 'reinforcements': {
         const made: string[] = [];
-        for (let k = 0; k < 2 && s.jokers.length < JOKER_SLOTS; k++) {
+        for (let k = 0; k < 2 && s.jokers.length < this.jokerSlots(); k++) {
           const id = this.randomJoker(rng, 'common');
           if (!id) break;
           s.jokers.push(this.newJoker(id));
@@ -2036,6 +2175,10 @@ export class RunSession {
         }
         return [made.length ? `${d.name}: ${made.join(' and ')} joined your Power Cards.` : `${d.name}: no room for a Power Card.`];
       }
+      case 'mayhembonus':
+        s.pack = { kind: 'mayhem', choices: this.packChoices('mayhem'), back: 'blinds' };
+        s.phase = 'pack';
+        return [`${d.name}: a free ${PACKS.mayhem.name}.`];
       case 'boostpack':
       case 'powerpack': {
         // a free pack, opened at once; then back to the levels
@@ -2063,8 +2206,14 @@ export class RunSession {
   }
 
   /** a Power Card as it is bought (the Checklist starts with Red clothes on its list) */
-  private newJoker(id: string): JokerInstance {
+  /** a Power Card as it is got: its edition, or the one of a Skip Bonus waiting for the next Power Card */
+  private newJoker(id: string, edition?: PowerEdition): JokerInstance {
     const j: JokerInstance = { uid: this.uid(), id };
+    const tag = EDITION_TAGS.find(([t]) => this.state.pendingTags.includes(t));
+    if (tag) {
+      this.takePendingTag(tag[0]);
+      j.edition = tag[1];
+    } else if (edition) j.edition = edition;
     const d = jokerDef(id);
     if (d.afterLevel === 'checklist') j.color = 'red';
     const rng = this.random.stream('colors');
@@ -2185,7 +2334,7 @@ export function sellPrice(jokerId: string): number {
 
 /** what a Power Card sells for, with the sell value it has gained (the Nest Egg) */
 export function jokerSellValue(j: JokerInstance): number {
-  return sellPrice(j.id) + (j.sellBonus ?? 0);
+  return sellPrice(j.id) + (j.sellBonus ?? 0) + (j.edition ? Math.floor(POWER_EDITION_PRICES[j.edition] / 2) : 0);
 }
 
 export function tarotSellPrice(tarotId: string): number {

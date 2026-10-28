@@ -32,6 +32,7 @@ export const PACK_LOOKS: Record<PackKind, { color: number; art: Art; band: strin
   training: { color: COLORS.teal, art: { anim: 'walk', tint: 0x7dd0ff }, band: 'TRIBE' },
   boost: { color: COLORS.purple, art: { anim: 'float' }, band: 'BOOST' },
   gadget: { color: COLORS.orange, art: { anim: 'build' }, band: 'POWER' },
+  mayhem: { color: 0xb02a3a, art: { anim: 'explode' }, band: 'MAYHEM' },
 };
 
 export const JOKER_ART: Record<string, Art> = Object.fromEntries(POWER_CARD_LIBRARY.cards.map((design) => [design.id, { design }]));
@@ -76,6 +77,18 @@ export const TAROT_ART: Record<string, Art> = {
   tailor: boostArt('tailor', [lemmingLayer('walk', 2, -12, 10), lemmingLayer('walkLeft', 2, 12, 10, { '#4040e0': '#e07020' }), textLayer('<', '#f3b958', 1.6, 0, -18)]),
   foreman: boostArt('foreman', [lemmingLayer('build', 3, 0, 8), textLayer('+2', '#f3b958', 1.4, 0, -26)]),
   audition: boostArt('audition', [lemmingLayer('exit', 3, 0, 8, { '#00b000': '#f3b958' }), textLayer('+1', '#f3b958', 1.4, 0, -26)]),
+  lottery: boostArt('lottery', [lemmingLayer('shrug', 3, 0, 8), textLayer('1:4', '#2fae5f', 1.3, 0, -26)]),
+  // the Mayhem boosts: dark red, lemmings in trouble
+  reaper: mayhemArt('reaper', [lemmingLayer('ohno', 3, 0, 8, { '#00b000': '#f0f0f0', '#4040e0': '#202020' })]),
+  summoning: mayhemArt('summoning', [lemmingLayer('float', 3, 0, 8, { '#00b000': '#f3b958' }), textLayer('+4', '#f3b958', 1.4, 0, -26)]),
+  makeover: mayhemArt('makeover', [lemmingLayer('walk', 3, 0, 8, { '#00b000': '#d090ff', '#4040e0': '#9a5ae0' })]),
+  biggamble: mayhemArt('biggamble', [lemmingLayer('jump', 3, 0, 8), textLayer('$0', '#f3b958', 1.4, 0, -26)]),
+  dyevat: mayhemArt('dyevat', [lemmingLayer('walk', 2, -10, 12, { '#00b000': '#3070f0' }), lemmingLayer('walkLeft', 2, 10, 12, { '#00b000': '#3070f0' })]),
+  uniform: mayhemArt('uniform', [lemmingLayer('walk', 2, -10, 12, { '#4040e0': '#e03030' }), lemmingLayer('walkLeft', 2, 10, 12, { '#4040e0': '#e03030' })]),
+  phantom: mayhemArt('phantom', [lemmingLayer('float', 3, 0, 8, { '#00b000': '#8c8ca8', '#4040e0': '#6a5a8a' })]),
+  bonfire: mayhemArt('bonfire', [lemmingLayer('fry', 3, 0, 8), textLayer('$20', '#f3b958', 1.2, 0, -26)]),
+  solesurvivor: mayhemArt('solesurvivor', [lemmingLayer('walk', 3, 0, 8), textLayer('x2', '#f3b958', 1.4, 0, -26)]),
+  prism: mayhemArt('prism', [lemmingLayer('walk', 3, 0, 8, { '#00b000': '#e060c0', '#4040e0': '#30b0e0' })]),
   // the Tribe cards: a lemming of the tribe, in its colours (as in Lemmings 2), and what it levels up
   classic: tribeArt('classic', 'walk', '#00b000', '#4040e0', '+2'),
   highland: tribeArt('highland', 'climb', '#f08820', '#2f8f3f', '+2'),
@@ -90,6 +103,11 @@ export const TAROT_ART: Record<string, Art> = {
   polar: tribeArt('polar', 'walk', '#f0f0f0', '#80c0f0', ':20'),
   shadow: tribeArt('shadow', 'walk', '#404040', '#202020', '+1'),
 };
+
+/** the picture of a Mayhem boost */
+function mayhemArt(id: string, layers: Layer[]): Art {
+  return { design: { id, name: id, rarity: 'common', price: 0, description: '', appearance: { background: '#5a1820', border: '#f4f1e6', layers } } };
+}
 
 /** the picture of a Tribe card: a lemming in the colours of its tribe */
 function tribeArt(id: string, anim: LemmingAnim, hair: string, clothes: string, text: string): Art {
@@ -107,7 +125,8 @@ function tribeArt(id: string, anim: LemmingAnim, hair: string, clothes: string, 
 
 /** a Boost or a Tribe card: its colour and its badge */
 export function consumableLook(d: TarotDef): { color: number; badge: string } {
-  return d.kind === 'tribe' ? { color: COLORS.teal, badge: 'Tribe card' } : { color: COLORS.purple, badge: 'Boost' };
+  if (d.kind === 'tribe') return { color: COLORS.teal, badge: 'Tribe card' };
+  return d.rare ? { color: COLORS.red, badge: 'Mayhem' } : { color: COLORS.purple, badge: 'Boost' };
 }
 
 export const EDITION_TINTS: Record<string, number> = { plain: 0xffffff, gold: COLORS.gold, lucky: 0x7dff7d, mentor: 0x9fd0ff, champion: 0xd090ff, wise: 0xe8e8f0 };
@@ -133,6 +152,11 @@ export const TAG_ART: Record<string, Art> = {
   reinforcements: { anim: 'walkLeft', tint: COLORS.blue },
   fasttrack: { text: '$5', color: COLORS.gold },
   sparechange: { text: '$1', color: COLORS.gold },
+  ghostbonus: { anim: 'float', tint: 0x8c8ca8 },
+  shinybonus: { anim: 'walk', tint: 0xd8e0f0 },
+  glowingbonus: { anim: 'walk', tint: COLORS.teal },
+  rainbowbonus: { anim: 'walk', tint: 0xe060c0 },
+  mayhembonus: { anim: 'explode' },
 };
 
 /** the kinds of special lemmings: their name, what they do, and their picture */
