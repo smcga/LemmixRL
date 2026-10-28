@@ -8,8 +8,8 @@ export const RUN_VERSION = 1;
 export const ANTES = 8;
 export const JOKER_SLOTS = 5;
 export const TAROT_SLOTS = 2;
-/** squad lemmings that can be swapped for others before a level begins (Balatro's discards) */
-export const SWAPS = 3;
+/** Redraws before a level begins: the plain lemmings of the squad go back for the next ones of the colony, the Super Lemmings stay (Balatro's discards) */
+export const REDRAWS = 2;
 /** attempts per blind that pay $1 each when they are not used */
 export const ATTEMPTS = 3;
 export const START_MONEY = 4;
@@ -183,7 +183,11 @@ export interface BlindSetup {
   selfCopy?: number | null;
   /** the Crowd Bonus: 3 more lemmings in the squad */
   crowd?: boolean;
-  /** the lemmings swapped out of the squad before the level began (card ids; one Swap each) */
+  /** the Redraws used before the level began */
+  redraws?: number;
+  /** the lemmings the Redraws sent back (card ids): not drawn again for this level */
+  redrawnOut?: number[];
+  /** (saves from before Redraws: the lemmings swapped out, not drawn again) */
   swappedOut?: number[];
   /** how often the level was started (the first start, then the restarts) */
   starts?: number;
@@ -271,7 +275,9 @@ export interface RunStats {
   boostsUsed?: number;
   /** the Tribe cards used */
   tribesUsed?: number;
-  /** the Swaps left unused in the levels played */
+  /** the Redraws left unused in the levels played */
+  redrawsUnused?: number;
+  /** (saves from before Redraws: the Swaps left unused) */
   swapsUnused?: number;
   /** the skills used in the levels won, this run */
   skillUses?: SkillCounts;

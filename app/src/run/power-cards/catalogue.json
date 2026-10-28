@@ -1357,7 +1357,7 @@
       "name": "Changeling",
       "rarity": "uncommon",
       "price": 6,
-      "description": "If the first lemming saved has {c:purple}Purple{} clothes, it is swapped for a {!}Super Lemming{}",
+      "description": "If the first lemming saved has {c:purple}Purple{} clothes, it is traded for a {!}Super Lemming{}",
       "appearance": {
         "background": "#1e4d3a",
         "border": "#f4f1e6",
@@ -5077,7 +5077,7 @@
       "name": "Steady Squad",
       "rarity": "common",
       "price": 5,
-      "description": "{+}+3{} Rescues for each {!}Swap{} left unused",
+      "description": "{+}+5{} Rescues for each {!}Redraw{} left unused",
       "appearance": {
         "background": "#003e66",
         "border": "#f4f1e6",
@@ -5128,7 +5128,7 @@
       "name": "Clean Sweep",
       "rarity": "common",
       "price": 5,
-      "description": "{+}+8{} Rescues if every {!}Swap{} was used",
+      "description": "{+}+8{} Rescues if every {!}Redraw{} was used",
       "appearance": {
         "background": "#003e66",
         "border": "#f4f1e6",
@@ -5161,7 +5161,7 @@
       "name": "Green Party",
       "rarity": "common",
       "price": 4,
-      "description": "Gains {+}+1{} Rescues each level. Loses {!}1{} for each {!}Swap{} used",
+      "description": "Gains {+}+1{} Rescues each level. Loses {!}1{} for each {!}Redraw{} used",
       "appearance": {
         "background": "#003e66",
         "border": "#f4f1e6",
@@ -5194,7 +5194,7 @@
       "name": "Returns Desk",
       "rarity": "common",
       "price": 4,
-      "description": "Earn {$}$3{} for each lemming with #hair# hair swapped out. Colour changes every level",
+      "description": "Each {!}Redraw{} earns {$}$1{} for each lemming with #hair# hair it sends back (up to {$}$5{}). Colour changes every level",
       "appearance": {
         "background": "#003e66",
         "border": "#f4f1e6",
@@ -5227,7 +5227,7 @@
       "name": "On-the-Job Training",
       "rarity": "rare",
       "price": 8,
-      "description": "The first {!}Swap{} of each level gives {!}+1{} ability in your most used skill",
+      "description": "The first {!}Redraw{} of each level gives {!}+1{} ability in your most used skill",
       "appearance": {
         "background": "#652622",
         "border": "#f4f1e6",

@@ -304,18 +304,13 @@ try {
   await clickSpot('nextRound');
   s = await state();
   if (s.phase !== 'blinds' || s.blinds[1].status !== 'current') fail('not at the big blind');
-  // Swap: a lemming of the squad picked in the colony and swapped for another one
+  // Redraw: the plain lemmings of the squad go back for the next ones of the colony
   const squadSize = (await state()).setup.hand.length;
-  await clickSpot('swapSquad', 1500);
-  for (let n = 0; n < 4 && !(await state()).setup.swappedOut?.length; n++) {
-    const i = await ev<number>(`(() => { const s = globalThis.lemmix.run.state; return s.colony.findIndex((c) => c.id === s.setup.hand[${n}]); })()`);
-    await clickSpot(`colony:${i}`, 300);
-    if (await ev<boolean>(`!!${scene}.spots.swap`)) await clickSpot('swap', 300);
-  }
+  await clickSpot('redraw', 600);
   s = await state();
-  if (s.setup.swappedOut?.length !== 1 || s.setup.hand.includes(s.setup.swappedOut[0]) || s.setup.hand.length !== squadSize) fail(`the Swap did not swap a lemming: ${JSON.stringify(s.setup.swappedOut)}`);
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(300);
+  const out: number[] = s.setup.redrawnOut ?? [];
+  if (s.setup.redraws !== 1 || !out.length || out.some((id: number) => s.setup.hand.includes(id)) || s.setup.hand.length !== squadSize)
+    fail(`the Redraw did not redraw the squad: ${JSON.stringify(s.setup.redrawnOut)}`);
   await clickSpot('skip'); // the big blind
   s = await state();
   if (s.blinds[1].status !== 'skipped' || s.blinds[2].status !== 'current') fail('the big blind was not skipped');
@@ -340,7 +335,7 @@ try {
   await clickSpot('giveUp');
   if ((await state()).phase !== 'over') fail('Give up did not end the run');
 
-  console.log('e2e ok: a run: from the title, abilities assigned, a level previewed, played (its own screen before it, the keys of a run) and cashed out, shop (a pack opened and a card of it taken, cards dragged to buy, sell and use), a Swap, skip, continued after a reload, given up in the game');
+  console.log('e2e ok: a run: from the title, abilities assigned, a level previewed, played (its own screen before it, the keys of a run) and cashed out, shop (a pack opened and a card of it taken, cards dragged to buy, sell and use), a Redraw, skip, continued after a reload, given up in the game');
 } finally {
   await browser.close();
   await server.close();

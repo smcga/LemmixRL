@@ -873,48 +873,55 @@ describe('Lematro Phase 2: Power Cards that read the level', () => {
   });
 });
 
-describe('Lematro Phase 2: Swaps and the Power Cards that read them', () => {
+describe('Lematro Phase 2: Redraws and the Power Cards that read them', () => {
+  /** makes a lemming plain, with this hair */
+  const plain = (run: RunSession, id: number, hair: LemmingCard['hair']) => Object.assign(run.card(id)!, { edition: 'plain', climber: false, floater: false, insured: false, hair });
+
   it('Steady Squad, Clean Sweep and Green Party', () => {
     const run = runOn('Orig-1-02', ['steadysquad', 'cleansweep', 'greenparty']);
     run.state.jokers[2].counter = 3;
-    const setup = run.ensureSetup();
-    run.swap([setup.hand[0]]);
+    run.ensureSetup();
+    run.redraw();
     expect(run.state.jokers[2].counter).toBe(2);
-    // 1 saved, +6 (2 Swaps left), Green Party +2
-    expect(run.rescueCount([card(run, 'red')], [], zeroSkills()).score).toBe(9);
-    run.swap(run.state.setup!.hand.slice(0, 2));
-    expect(run.rescueCount([card(run, 'red')], [], zeroSkills()).score).toBe(1 + 8);
+    // 1 saved, +5 (1 Redraw left), Green Party +2
+    expect(run.rescueCount([card(run, 'red')], [], zeroSkills()).score).toBe(8);
+    run.redraw();
+    // 1 saved, Clean Sweep +8, Green Party +1
+    expect(run.rescueCount([card(run, 'red')], [], zeroSkills()).score).toBe(1 + 8 + 1);
     run.startBlind();
     // the level began: Green Party +1
-    expect(run.state.jokers[2].counter).toBe(1);
+    expect(run.state.jokers[2].counter).toBe(2);
   });
 
-  it('Returns Desk pays for swapped-out lemmings of its colour; On-the-Job Training: the first Swap trains', () => {
+  it('Returns Desk pays for the lemmings of its colour a Redraw sends back (up to $5); On-the-Job Training: the first Redraw trains', () => {
     const run = runOn('Orig-1-02', ['returnsdesk', 'onthejob']);
     run.state.jokers[0].color = 'purple';
     run.state.stats.skillUses = { ...zeroSkills(), miner: 4 };
     const setup = run.ensureSetup();
-    run.card(setup.hand[0])!.hair = 'purple';
-    run.card(setup.hand[1])!.hair = 'red';
+    setup.hand.forEach((id, i) => plain(run, id, i < 2 ? 'purple' : 'red'));
     const money = run.state.money;
     const miner = run.state.capacity.miner;
-    run.swap(setup.hand.slice(0, 2));
-    expect(run.state.money).toBe(money + 3);
+    run.redraw();
+    expect(run.state.money).toBe(money + 2);
     expect(run.state.capacity.miner).toBe(miner + 1);
-    run.swap([run.state.setup!.hand[0]]);
+    // every lemming of the squad purple: still $5 at most
+    for (const id of run.state.setup!.hand) plain(run, id, 'purple');
+    run.redraw();
+    expect(run.state.money).toBe(money + 2 + 5);
     expect(run.state.capacity.miner).toBe(miner + 1);
     winWith(run, {});
     expect(run.state.jokers[0].color).not.toBe('purple');
   });
 
-  it('Spare Change pays for the Swaps left unused this run', () => {
+  it('Spare Change pays $2 for each Redraw left unused this run', () => {
     const run = runOn('Orig-1-02');
     run.state.blinds[1].levelId = 'Orig-1-02';
-    run.swap([run.ensureSetup().hand[0]]);
+    run.ensureSetup();
+    run.redraw();
     winWith(run, {});
     run.cashOut();
     run.nextRound();
-    expect(run.state.stats.swapsUnused).toBe(2);
+    expect(run.state.stats.redrawsUnused).toBe(1);
     run.state.blinds[1].tag = 'sparechange';
     const money = run.state.money;
     run.skipBlind();

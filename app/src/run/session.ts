@@ -55,7 +55,7 @@ import { SKILL_ACTIONS, SKILL_NAMES, SKILLS, type Skill, type SkillCounts, setSk
 import {
   ABILITY_CAP,
   ANTES,
-  SWAPS,
+  REDRAWS,
   type AssignState,
   type AttemptOutcome,
   BOSS_REASSIGN_POINTS,
@@ -189,7 +189,7 @@ export class RunSession {
       notes.push(`${cut?.name ?? j.id} is no longer in the game: sold for $${value}.`);
     }
     s.jokers = s.jokers.filter((j) => known.has(j.id));
-    // (prefer and avoid are gone: Swaps took their place)
+    // (prefer and avoid are gone: Redraws took their place)
     for (const c of s.colony) delete (c as { pref?: unknown }).pref;
     if (s.shop) s.shop.offers = s.shop.offers.filter((o) => o.type !== 'joker' || known.has(o.id));
     if (s.pack) s.pack.choices = s.pack.choices.filter((c) => c.type !== 'joker' || known.has(c.id));
@@ -572,55 +572,69 @@ export class RunSession {
     const order = (setup.order ?? setup.hand).filter((id) => colony.has(id));
     for (const c of s.colony) if (!order.includes(c.id)) order.push(c.id);
     setup.order = order;
-    // (the lemmings swapped out are not drawn again)
-    const out = new Set(setup.swappedOut ?? []);
+    // (the lemmings sent back by a Redraw are not drawn again)
+    const out = new Set([...(setup.redrawnOut ?? []), ...(setup.swappedOut ?? [])]);
     setup.hand = this.drawSquad(
       order.filter((id) => !out.has(id)),
       this.squadSize(this.level(setup.levelId), setup),
     );
   }
 
-  /* -------------------------------------------------------------------------------------------- swaps */
+  /* -------------------------------------------------------------------------------------------- redraws */
 
-  /** the Swaps left in the level (before it begins; Balatro's discards) */
-  swapsLeft(): number {
+  /** the Redraws left in the level (before it begins; Balatro's discards) */
+  redrawsLeft(): number {
     const setup = this.state.setup;
     if (!setup || setup.begun || this.state.phase !== 'blinds' || setup.blind !== this.currentBlindIndex) return 0;
-    return Math.max(0, SWAPS - (setup.swappedOut?.length ?? 0));
+    return Math.max(0, REDRAWS - (setup.redraws ?? 0));
   }
 
-  /** the lemmings of the squad that can be swapped out now (as many as there are Swaps left and lemmings to come in) */
-  swappable(ids: number[]): number[] {
-    const setup = this.state.setup;
-    if (!setup) return [];
+  /** the lemmings of the colony that could come into the squad (not in it, not sent back already) */
+  private spareLemmings(setup: BlindSetup): number {
     const squad = new Set(setup.hand);
-    const out = new Set(setup.swappedOut ?? []);
-    const spare = this.state.colony.filter((c) => !squad.has(c.id) && !out.has(c.id)).length;
-    return [...new Set(ids)].filter((id) => squad.has(id)).slice(0, Math.min(this.swapsLeft(), spare));
+    const out = new Set([...(setup.redrawnOut ?? []), ...(setup.swappedOut ?? [])]);
+    return this.state.colony.filter((c) => !squad.has(c.id) && !out.has(c.id)).length;
+  }
+
+  /** the lemmings a Redraw would send back now: the plain ones of the squad, without a Badge (as many as can be replaced) */
+  redrawable(): number[] {
+    const setup = this.state.setup;
+    if (!setup || this.redrawsLeft() === 0) return [];
+    // (the ones with a mark over their heads stay: Super Lemmings, and lemmings with a Badge)
+    const plain = setup.hand.filter((id) => {
+      const c = this.card(id);
+      return !!c && !isSuperLemming(c) && !c.badge;
+    });
+    return plain.slice(0, this.spareLemmings(setup));
   }
 
   /**
-   * Swaps lemmings of the squad for the next ones of the colony (one Swap each), before the level begins. Returns what
-   * happened, or null when none could be swapped.
+   * A Redraw, before the level begins: the plain lemmings of the squad go back to the colony and the next ones come in;
+   * the Super Lemmings and the lemmings with a Badge stay. Returns what happened (and the lemmings that came in), or null when nothing could go.
    */
-  swap(ids: number[]): string[] | null {
+  redraw(): { notes: string[]; came: number[] } | null {
     const s = this.state;
     const setup = s.setup;
-    const gone = this.swappable(ids);
+    const gone = this.redrawable();
     if (!setup || !gone.length) return null;
-    const first = !setup.swappedOut?.length;
+    const first = !setup.redraws;
     const before = new Set(setup.hand);
-    setup.swappedOut = [...(setup.swappedOut ?? []), ...gone];
+    setup.redraws = (setup.redraws ?? 0) + 1;
+    setup.redrawnOut = [...(setup.redrawnOut ?? []), ...gone];
     this.redrawSquad(setup);
     const came = setup.hand.filter((id) => !before.has(id));
-    const name = (id: number) => this.card(id)?.name ?? '?';
-    const notes = [`Swapped ${gone.map(name).join(', ')} for ${came.map(name).join(', ')}.`];
-    const rng = this.random.stream('swap');
+    const supers = came.map((id) => this.card(id)).filter((c): c is LemmingCard => !!c && isSuperLemming(c));
+    const notes = [
+      supers.length
+        ? `Redraw: ${supers.length} Super Lemming${supers.length === 1 ? '' : 's'} came in (${supers.map((c) => cardTitle(c)).join(', ')}).`
+        : `Redraw: ${came.length} new lemmings, no Super Lemmings this time.`,
+    ];
+    const rng = this.random.stream('redraw');
     for (const a of this.activeJokers()) {
       const own = a.slot === a.j;
-      switch (a.d.onSwap) {
+      switch (a.d.onRedraw) {
         case 'greenParty':
-          if (own) a.j.counter = Math.max(0, (a.j.counter ?? 0) - gone.length);
+          if (own) a.j.counter = Math.max(0, (a.j.counter ?? 0) - 1);
           break;
         case 'returnsDesk': {
           const color = a.j.color ?? 'orange';
@@ -628,9 +642,10 @@ export class RunSession {
             const c = this.card(id);
             return !!c && hasHair(c, color, this.anyJoker((d) => d.ginger));
           }).length;
-          if (n) {
-            s.money += 3 * n;
-            notes.push(`${a.label}: +$${3 * n}.`);
+          const gain = Math.min(5, n);
+          if (gain) {
+            s.money += gain;
+            notes.push(`${a.label}: +$${gain}.`);
           }
           break;
         }
@@ -644,7 +659,7 @@ export class RunSession {
       }
     }
     this.refreshSetup(setup);
-    return notes;
+    return { notes, came };
   }
 
   /** Play the current blind. */
@@ -653,7 +668,7 @@ export class RunSession {
     if (!setup.begun) {
       if (this.takePendingTag('crowd')) setup.crowd = true;
       const s = this.state;
-      s.stats.swapsUnused = (s.stats.swapsUnused ?? 0) + this.swapsLeft();
+      s.stats.redrawsUnused = (s.stats.redrawsUnused ?? 0) + this.redrawsLeft();
       // (the squad is drawn for the last time when the level begins: a Power Card made or destroyed then counts)
       this.levelBegins();
       setup.begun = true;
@@ -795,8 +810,8 @@ export class RunSession {
       runSkillUses: s.stats.skillUses ?? zeroSkills(),
       prevSkills: s.lastSkills?.ante === s.ante ? s.lastSkills.skills : null,
       outside: s.colony.filter((c) => !(setup?.hand ?? []).includes(c.id)),
-      swapsUsed: setup?.swappedOut?.length ?? 0,
-      swapsLeft: Math.max(0, SWAPS - (setup?.swappedOut?.length ?? 0)),
+      redrawsUsed: setup?.redraws ?? 0,
+      redrawsLeft: Math.max(0, REDRAWS - (setup?.redraws ?? 0)),
       closeEnough: this.anyJoker((d) => d.closeEnough),
       blockersUsed: skillsUsed.blocker,
       emptySlots: this.jokerSlots() - s.jokers.length,
@@ -2198,7 +2213,7 @@ export class RunSession {
         return [`${d.name}: a free ${PACKS.training.name}.`];
       }
       case 'sparechange': {
-        const gain = s.stats.swapsUnused ?? 0;
+        const gain = 2 * (s.stats.redrawsUnused ?? 0) + (s.stats.swapsUnused ?? 0);
         s.money += gain;
         return [`${d.name}: +$${gain}.`];
       }
