@@ -35,12 +35,18 @@ import {
   type RescueContext,
   CUT_POWER_CARDS,
   isSuperLemming,
+  BOOSTS,
+  TRIBES,
+  mostUsedSkill,
+  freshApproach,
+  TERRAIN_SKILLS,
 } from './content.ts';
 import { Rng, RunRandom } from './rng.ts';
 import { SKILL_ACTIONS, SKILL_NAMES, SKILLS, type Skill, type SkillCounts, setSkills, totalSkills, zeroSkills } from './skills.ts';
 import {
   ABILITY_CAP,
   ANTES,
+  SWAPS,
   type AssignState,
   type AttemptOutcome,
   BOSS_REASSIGN_POINTS,
@@ -165,6 +171,8 @@ export class RunSession {
       notes.push(`${cut?.name ?? j.id} is no longer in the game: sold for $${value}.`);
     }
     s.jokers = s.jokers.filter((j) => known.has(j.id));
+    // (prefer and avoid are gone: Swaps took their place)
+    for (const c of s.colony) delete (c as { pref?: unknown }).pref;
     if (s.shop) s.shop.offers = s.shop.offers.filter((o) => o.type !== 'joker' || known.has(o.id));
     if (s.pack) s.pack.choices = s.pack.choices.filter((c) => c.type !== 'joker' || known.has(c.id));
     return notes;
@@ -314,7 +322,7 @@ export class RunSession {
   /** the lemmings of the squad of a level: as many as the level has, more or fewer with the Power Cards (and the Crowd Bonus) */
   squadSize(level: RunLevel, setup?: BlindSetup | null): number {
     const crowd = setup ? setup.crowd || (!setup.begun && this.state.pendingTags.includes('crowd')) : this.state.pendingTags.includes('crowd');
-    const n = level.lemmings + this.jokerSum((d) => d.squad) + (crowd ? 3 : 0);
+    const n = level.lemmings + this.jokerSum((d) => d.squad) + (this.state.squadBonus ?? 0) + (crowd ? 3 : 0);
     return Math.max(1, Math.min(this.state.colony.length, n));
   }
 
@@ -529,35 +537,9 @@ export class RunSession {
     return this.refreshSetup(s.setup);
   }
 
-  /**
-   * The squad of a level: as many lemmings as the level has (or the colony), in the shuffled order of the colony, the
-   * preferred ones first and the avoided ones last.
-   */
-  private drawSquad(order: number[], levelLemmings: number): number[] {
-    const rank = (id: number) => {
-      const p = this.card(id)?.pref;
-      return p === 'prefer' ? 0 : p === 'avoid' ? 2 : 1;
-    };
-    // (a stable sort: within a preference, the shuffled order)
-    const chosen = new Set([...order].sort((a, b) => rank(a) - rank(b)).slice(0, Math.min(order.length, levelLemmings)));
-    return order.filter((id) => chosen.has(id));
-  }
-
-  /**
-   * Prefer or avoid lemmings for squads (null: neither). The squad of a level that has not begun is drawn again, in
-   * the same order (nothing is drawn at random again).
-   */
-  setPreference(ids: number[], pref: 'prefer' | 'avoid' | null): void {
-    const s = this.state;
-    for (const id of ids) {
-      const c = this.card(id);
-      if (!c) continue;
-      if (pref) c.pref = pref;
-      else delete c.pref;
-    }
-    const setup = s.setup;
-    if (!setup || setup.begun || setup.blind !== this.currentBlindIndex) return;
-    this.redrawSquad(setup);
+  /** The squad of a level: as many lemmings as it takes, the first of the shuffled order of the colony. */
+  private drawSquad(order: number[], size: number): number[] {
+    return order.slice(0, size);
   }
 
   /** The squad of a level that has not begun, drawn again from the same order (the colony or its size changed). */
@@ -567,7 +549,79 @@ export class RunSession {
     const order = (setup.order ?? setup.hand).filter((id) => colony.has(id));
     for (const c of s.colony) if (!order.includes(c.id)) order.push(c.id);
     setup.order = order;
-    setup.hand = this.drawSquad(order, this.squadSize(this.level(setup.levelId), setup));
+    // (the lemmings swapped out are not drawn again)
+    const out = new Set(setup.swappedOut ?? []);
+    setup.hand = this.drawSquad(
+      order.filter((id) => !out.has(id)),
+      this.squadSize(this.level(setup.levelId), setup),
+    );
+  }
+
+  /* -------------------------------------------------------------------------------------------- swaps */
+
+  /** the Swaps left in the level (before it begins; Balatro's discards) */
+  swapsLeft(): number {
+    const setup = this.state.setup;
+    if (!setup || setup.begun || this.state.phase !== 'blinds' || setup.blind !== this.currentBlindIndex) return 0;
+    return Math.max(0, SWAPS - (setup.swappedOut?.length ?? 0));
+  }
+
+  /** the lemmings of the squad that can be swapped out now (as many as there are Swaps left and lemmings to come in) */
+  swappable(ids: number[]): number[] {
+    const setup = this.state.setup;
+    if (!setup) return [];
+    const squad = new Set(setup.hand);
+    const out = new Set(setup.swappedOut ?? []);
+    const spare = this.state.colony.filter((c) => !squad.has(c.id) && !out.has(c.id)).length;
+    return [...new Set(ids)].filter((id) => squad.has(id)).slice(0, Math.min(this.swapsLeft(), spare));
+  }
+
+  /**
+   * Swaps lemmings of the squad for the next ones of the colony (one Swap each), before the level begins. Returns what
+   * happened, or null when none could be swapped.
+   */
+  swap(ids: number[]): string[] | null {
+    const s = this.state;
+    const setup = s.setup;
+    const gone = this.swappable(ids);
+    if (!setup || !gone.length) return null;
+    const first = !setup.swappedOut?.length;
+    const before = new Set(setup.hand);
+    setup.swappedOut = [...(setup.swappedOut ?? []), ...gone];
+    this.redrawSquad(setup);
+    const came = setup.hand.filter((id) => !before.has(id));
+    const name = (id: number) => this.card(id)?.name ?? '?';
+    const notes = [`Swapped ${gone.map(name).join(', ')} for ${came.map(name).join(', ')}.`];
+    const rng = this.random.stream('swap');
+    for (const a of this.activeJokers()) {
+      const own = a.slot === a.j;
+      switch (a.d.onSwap) {
+        case 'greenParty':
+          if (own) a.j.counter = Math.max(0, (a.j.counter ?? 0) - gone.length);
+          break;
+        case 'returnsDesk': {
+          const color = a.j.color ?? 'orange';
+          const n = gone.filter((id) => {
+            const c = this.card(id);
+            return !!c && hasHair(c, color, this.anyJoker((d) => d.ginger));
+          }).length;
+          if (n) {
+            s.money += 3 * n;
+            notes.push(`${a.label}: +$${3 * n}.`);
+          }
+          break;
+        }
+        case 'onTheJob':
+          if (first) {
+            const sk = mostUsedSkill(s.stats.skillUses ?? zeroSkills()) ?? rng.pick(SKILLS);
+            s.capacity[sk]++;
+            notes.push(`${a.label}: +1 ${SKILL_NAMES[sk]} ability.`);
+          }
+          break;
+      }
+    }
+    this.refreshSetup(setup);
+    return notes;
   }
 
   /** Play the current blind. */
@@ -575,6 +629,8 @@ export class RunSession {
     const setup = this.ensureSetup();
     if (!setup.begun) {
       if (this.takePendingTag('crowd')) setup.crowd = true;
+      const s = this.state;
+      s.stats.swapsUnused = (s.stats.swapsUnused ?? 0) + this.swapsLeft();
       // (the squad is drawn for the last time when the level begins: a Power Card made or destroyed then counts)
       this.levelBegins();
       setup.begun = true;
@@ -600,6 +656,7 @@ export class RunSession {
           s.jokers = s.jokers.filter((x) => x !== gone);
         }
       }
+      if (d.atLevelStart === 'greenParty') j.counter = (j.counter ?? 0) + 1;
       if (d.atLevelStart === 'rabble')
         for (let n = 0; n < 2 && s.jokers.length < JOKER_SLOTS; n++) {
           const id = this.randomJoker(rng, 'common');
@@ -642,6 +699,7 @@ export class RunSession {
   /** Sets the hooks of a game of the current level: the Power Cards of the run act in it (see level-rules.ts). */
   attach(game: LemmingGame): LevelPlay {
     game.extraBuilderBricks = this.jokerSum((d) => d.extraBuilderBricks);
+    game.extraSeconds = this.state.extraSeconds ?? 0;
     this.play = new LevelPlay(this, game);
     this.play.attach();
     return this.play;
@@ -662,7 +720,12 @@ export class RunSession {
    * The rescue count of a level, as Balatro counts a hand: the lemmings saved, then every Power Card from left to right
    * adds its +Rescues and multiplies by its X Rescues.
    */
-  rescueCount(order: (LemmingCard | null)[], released: (LemmingCard | null)[], skillsUsed: SkillCounts): { score: number; lines: RescueLine[] } {
+  rescueCount(
+    order: (LemmingCard | null)[],
+    released: (LemmingCard | null)[],
+    skillsUsed: SkillCounts,
+    level: { fates?: Fate[]; secondsLeft?: number } = {},
+  ): { score: number; lines: RescueLine[] } {
     const s = this.state;
     const lines: RescueLine[] = [{ label: 'Lemmings saved', total: order.length }];
     const isSuper = (c: LemmingCard) => this.isSuper(c);
@@ -692,6 +755,17 @@ export class RunSession {
       boostsUsed: s.stats.boostsUsed ?? 0,
       skipped: s.stats.skipped,
       boss: !!setup && s.blinds[setup.blind]?.kind === 'boss',
+      skillsUsed,
+      fates: level.fates ?? [],
+      secondsLeft: level.secondsLeft ?? 0,
+      restarts: this.restarts(),
+      squadSize: setup?.hand.length ?? 0,
+      runSkillUses: s.stats.skillUses ?? zeroSkills(),
+      prevSkills: s.lastSkills?.ante === s.ante ? s.lastSkills.skills : null,
+      outside: s.colony.filter((c) => !(setup?.hand ?? []).includes(c.id)),
+      swapsUsed: setup?.swappedOut?.length ?? 0,
+      swapsLeft: Math.max(0, SWAPS - (setup?.swappedOut?.length ?? 0)),
+      closeEnough: this.anyJoker((d) => d.closeEnough),
       blockersUsed: skillsUsed.blocker,
       emptySlots: JOKER_SLOTS - s.jokers.length,
       powerCards: s.jokers.length,
@@ -714,6 +788,11 @@ export class RunSession {
       lines.push({ label: a.label, ...(plus ? { plus } : {}), ...(times !== 1 ? { times: Math.round(times * 100) / 100 } : {}), total: Math.floor(score + 1e-9) });
     }
     return { score: Math.floor(score + 1e-9), lines };
+  }
+
+  /** the restarts of the level being played (its starts after the first) */
+  restarts(): number {
+    return Math.max(0, (this.state.setup?.starts ?? 1) - 1);
   }
 
   /* -------------------------------------------------------------------------------------------- attempts */
@@ -761,7 +840,7 @@ export class RunSession {
       const i = squadIndex.get(l);
       return i === undefined ? null : cardOfIndex(i);
     });
-    const { score, lines } = this.rescueCount(exitOrder.map(cardOfIndex), released, used);
+    const { score, lines } = this.rescueCount(exitOrder.map(cardOfIndex), released, used, { fates, secondsLeft: game.minutes * 60 + game.seconds });
     // Final Lap: the Gold lemmings saved in the last 30 seconds
     const lapGold = (play?.exits ?? []).filter((e) => e.secondsLeft <= FINAL_LAP_SECONDS && fateOf(e.l, false, false) === 'saved' && this.squadCardOf(e.l, squadIndex, squad)?.edition === 'gold').length;
     // what happened in the level, for the notes of the cash out
@@ -773,6 +852,7 @@ export class RunSession {
     setup.selfCopy = play?.selfCopy ?? null;
     const outcome: AttemptOutcome = {
       success: score >= setup.rescue && !g.cheated,
+      secondChance: false,
       score,
       scoring: lines,
       extra,
@@ -792,6 +872,14 @@ export class RunSession {
       done: g.done,
       target: g.target,
     };
+    // Second Chance: a lost level with a quarter of the requirement saved counts as won (and it is gone)
+    const chance = s.jokers.find((j) => jokerDef(j.id).secondChance);
+    if (!outcome.success && chance && !g.cheated && score >= setup.rescue / 4) {
+      outcome.success = true;
+      outcome.secondChance = true;
+      s.jokers = s.jokers.filter((j) => j !== chance);
+      events.push(`${jokerDef(chance.id).name} saved the level, and was used up.`);
+    }
     setup.attempts++;
     s.stats.attempts++;
     s.outcome = outcome;
@@ -850,7 +938,7 @@ export class RunSession {
     for (const { d } of this.activeJokers()) for (const f of d.returns ?? []) returns.add(f);
     const deadIdx = out.fates.map((f, i) => (isDeath(f) ? i : -1)).filter((i) => i >= 0);
     let hardHats = this.activeJokers().filter((a) => a.d.id === 'hardhat').length;
-    let respawns = this.jokerSum((d) => d.respawns);
+    let respawns = this.jokerSum((d) => d.respawns) + (s.respawns ?? 0);
     const lostRespawn = new Set(this.activeJokers().map((a) => a.d.lostRespawnClothes).filter((c): c is LemmingColor => !!c));
     // Fragile: the Super Lemmings that died (whether they came back or not)
     this.count('superDied', deadIdx.map((i) => this.squadCard(out, i)).filter((c) => !!c && this.isSuper(c)).length);
@@ -937,6 +1025,9 @@ export class RunSession {
       skillsAvailable: totalSkills(setup.usable),
       colonySize: s.colony.length,
       goldSaved: gold,
+      skillsUsedBySkill: out.skillsUsed,
+      restarts: this.restarts(),
+      squadSize: out.hand,
     };
     for (const a of this.activeJokers()) {
       const n = a.d.payout ? a.d.payout({ ...ctx, counter: a.j.counter ?? 0 }) : 0;
@@ -946,6 +1037,11 @@ export class RunSession {
     // what happened in the level, then the Power Cards that act after a level
     notes.push(...(out.events ?? []));
     this.afterLevel(out, setup, lines, notes, rng, lost.size, mentorSkill);
+    // the skills used this run (after the Power Cards that compare a level with the ones before)
+    const uses = { ...(s.stats.skillUses ?? zeroSkills()) };
+    for (const sk of SKILLS) uses[sk] += out.skillsUsed[sk];
+    s.stats.skillUses = uses;
+    s.lastSkills = { ante: s.ante, skills: SKILLS.filter((sk) => out.skillsUsed[sk] > 0) };
 
     // boss tags
     if (blind.kind === 'boss') {
@@ -1128,6 +1224,24 @@ export class RunSession {
         case 'littleHelper':
           if (own) j.counter = (j.counter ?? 0) + (out.exitOrder?.length ?? out.rescued);
           break;
+        case 'roadCrew':
+          if (own && TERRAIN_SKILLS.filter((sk) => out.skillsUsed[sk] > 0).length >= (this.anyJoker((x) => x.closeEnough) ? 3 : 4)) j.counter = (j.counter ?? 0) + 1;
+          break;
+        case 'iceLolly':
+          if (own) {
+            j.counter = (j.counter ?? 0) + this.restarts();
+            if (30 - 3 * j.counter <= 0) {
+              gone(j);
+              notes.push(`${d.name} melted.`);
+            }
+          }
+          break;
+        case 'freshApproach':
+          if (own) j.counter = freshApproach(s.stats.skillUses ?? zeroSkills(), out.skillsUsed) ? (j.counter ?? 0) + 1 : 0;
+          break;
+        case 'returnsDesk':
+          if (own) j.color = colors.pick(LEMMING_COLORS.filter((c) => c !== j.color));
+          break;
       }
       if (d.selfReplication && setup.selfCopy != null) {
         const original = this.card(setup.selfCopy);
@@ -1144,9 +1258,11 @@ export class RunSession {
     }
   }
 
-  /** The Trainings used count on the Gym Membership. */
-  private noteTraining(): void {
-    for (const j of this.state.jokers) if (jokerDef(j.id).countsTraining) j.counter = (j.counter ?? 0) + 1;
+  /** The Tribe cards used count on the Gym Membership. */
+  private noteTribe(): void {
+    const s = this.state;
+    s.stats.tribesUsed = (s.stats.tribesUsed ?? 0) + 1;
+    for (const j of s.jokers) if (jokerDef(j.id).countsTraining) j.counter = (j.counter ?? 0) + 1;
   }
 
   /** Take the money; on to the shop (or the end of the run). */
@@ -1440,14 +1556,14 @@ export class RunSession {
     return pool.length ? rng.pick(pool).id : null;
   }
 
+  /** a Tribe card on offer (in the place of the Skill Trainings and Recruitment Drives of old) */
   private newTraining(rng: Rng): ShopOffer {
-    const skill = rng.pick(SKILLS);
-    if (rng.chance(0.25)) return { uid: this.uid(), type: 'drive', id: 'drive', skill, amount: 5, price: 7, sold: false };
-    return { uid: this.uid(), type: 'training', id: 'training', skill, amount: 3, price: 4, sold: false };
+    const d = rng.pick(TRIBES);
+    return { uid: this.uid(), type: 'tarot', id: d.id, price: d.price, sold: false };
   }
 
   private newTarot(rng: Rng): { uid: number; id: string; skill?: Skill } {
-    const d = rng.pick(TAROTS);
+    const d = rng.pick(BOOSTS);
     return { uid: this.uid(), id: d.id, skill: d.id === 'manual' ? rng.pick(SKILLS) : undefined };
   }
 
@@ -1484,8 +1600,8 @@ export class RunSession {
         s.tarots.push({ uid: this.uid(), id: offer.id, skill: offer.skill });
         break;
       case 'training':
+        // (offers of old: Tribe cards took their place)
         s.capacity[offer.skill!] += offer.amount!;
-        this.noteTraining();
         break;
       case 'drive':
         this.recruit(offer.amount!);
@@ -1536,14 +1652,9 @@ export class RunSession {
         );
       }
       case 'training': {
-        const skill = rng.pick(SKILLS);
-        const kindOf = rng.pickWeighted(['plus', 'trade', 'all'] as const, [55, 33, 12]);
-        if (kindOf === 'all' && !others.some((o) => o.type === 'allSkills')) return { type: 'allSkills', amount: 1 };
-        if (kindOf === 'trade') {
-          const minus = rng.pick(SKILLS.filter((sk) => sk !== skill));
-          return { type: 'ability', skill, amount: 5, minus, minusAmount: 3 };
-        }
-        return { type: 'ability', skill, amount: 3 };
+        // the Tribe Pack: Tribe cards, and rarely +1 in every skill (Balatro's Black Hole)
+        if (rng.chance(0.12) && !others.some((o) => o.type === 'allSkills')) return { type: 'allSkills', amount: 1 };
+        return { type: 'tarot', id: rng.pick(TRIBES).id };
       }
       case 'boost': {
         const legendary = this.offerable(others.flatMap((o) => (o.type === 'joker' ? [o.id] : []))).filter((j) => j.rarity === 'legendary');
@@ -1611,14 +1722,14 @@ export class RunSession {
         return [`${joined.map(cardTitle).join(', ')} joined the colony.`];
       }
       case 'ability': {
-        this.noteTraining();
+        // (a Training Pack of old)
         s.capacity[c.skill] += c.amount;
         if (c.minus) s.capacity[c.minus] = Math.max(0, s.capacity[c.minus] - (c.minusAmount ?? 0));
         if (s.setup) this.refreshSetup(s.setup);
         return [`+${c.amount} ${SKILL_NAMES[c.skill]} ability${c.minus ? `, -${c.minusAmount} ${SKILL_NAMES[c.minus]}` : ''}.`];
       }
       case 'allSkills':
-        this.noteTraining();
+        this.noteTribe();
         for (const sk of SKILLS) s.capacity[sk] += c.amount;
         if (s.setup) this.refreshSetup(s.setup);
         return [`+${c.amount} ability in every skill.`];
@@ -1810,6 +1921,32 @@ export class RunSession {
         this.beginAssignment('tarot', 0, 10, s.phase, [`${d.name}: move up to 10 points`]);
         notes.push('Move up to 10 ability points to other skills.');
         break;
+      case 'classic':
+      case 'highland':
+      case 'circus':
+      case 'egyptian':
+      case 'medieval':
+      case 'space':
+      case 'cavelem':
+      case 'sports':
+      case 'outdoor': {
+        const sk = d.tribeSkill ?? rng.pick(SKILLS);
+        s.capacity[sk] += 2;
+        notes.push(`${d.name}: +2 ${SKILL_NAMES[sk]} ability.`);
+        break;
+      }
+      case 'beach':
+        s.squadBonus = (s.squadBonus ?? 0) + 1;
+        notes.push(`${d.name}: +1 lemming in every squad.`);
+        break;
+      case 'polar':
+        s.extraSeconds = (s.extraSeconds ?? 0) + 20;
+        notes.push(`${d.name}: +20 seconds on every level.`);
+        break;
+      case 'shadow':
+        s.respawns = (s.respawns ?? 0) + 1;
+        notes.push(`${d.name}: +1 Respawn in every level.`);
+        break;
       case 'foreman': {
         // (this Boost's own slot is free once it is used)
         const made: string[] = [];
@@ -1829,7 +1966,8 @@ export class RunSession {
       }
     }
     s.tarots.splice(i, 1);
-    s.stats.boostsUsed = (s.stats.boostsUsed ?? 0) + 1;
+    if (d.kind === 'tribe') this.noteTribe();
+    else s.stats.boostsUsed = (s.stats.boostsUsed ?? 0) + 1;
     // a changed squad card keeps its place; a removed one is gone from the colony (the setup refers to ids)
     if (s.setup) this.refreshSetup(s.setup);
     return notes;
@@ -1869,6 +2007,17 @@ export class RunSession {
       }
       case 'economy': {
         const gain = Math.floor(s.colony.length / 10);
+        s.money += gain;
+        return [`${d.name}: +$${gain}.`];
+      }
+      case 'supply': {
+        // a free Tribe Pack, opened at once; then back to the levels
+        s.pack = { kind: 'training', choices: this.packChoices('training'), back: 'blinds' };
+        s.phase = 'pack';
+        return [`${d.name}: a free ${PACKS.training.name}.`];
+      }
+      case 'sparechange': {
+        const gain = s.stats.swapsUnused ?? 0;
         s.money += gain;
         return [`${d.name}: +$${gain}.`];
       }
@@ -1921,6 +2070,7 @@ export class RunSession {
     const rng = this.random.stream('colors');
     if (d.afterLevel === 'trendsetter') j.color = rng.pick(TREND_COLORS);
     if (d.afterLevel === 'teacherspet') j.target = this.pickPet(rng);
+    if (d.afterLevel === 'returnsDesk') j.color = rng.pick(LEMMING_COLORS);
     return j;
   }
 

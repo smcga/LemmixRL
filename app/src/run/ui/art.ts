@@ -7,7 +7,7 @@ import { POWER_CARD_LIBRARY } from '../power-cards/catalogue.ts';
 import type { LemmingAnim } from '../power-cards/animations.ts';
 import type { PowerCardDesign } from '../power-cards/schema.ts';
 import { COLORS } from './widgets.ts';
-import { EDITION_TEXTS, type PackKind, type Rarity, TRAIT_TEXTS } from '../content.ts';
+import { EDITION_TEXTS, type PackKind, type Rarity, type TarotDef, TRAIT_TEXTS } from '../content.ts';
 import type { LemmingCard, SpecialTrait } from '../state.ts';
 
 /** the colour of the small mark above a special lemming (in a level and in the colony), or none */
@@ -29,7 +29,7 @@ export const RARITY_NAMES: Record<Rarity, string> = { common: 'Common', uncommon
 /** the packs of the shop: their colour, picture and the name on their band */
 export const PACK_LOOKS: Record<PackKind, { color: number; art: Art; band: string }> = {
   lemmings: { color: 0x3fae4f, art: { anim: 'walk' }, band: 'LEMMINGS' },
-  training: { color: COLORS.teal, art: { icon: 'builder' }, band: 'TRAINING' },
+  training: { color: COLORS.teal, art: { anim: 'walk', tint: 0x7dd0ff }, band: 'TRIBE' },
   boost: { color: COLORS.purple, art: { anim: 'float' }, band: 'BOOST' },
   gadget: { color: COLORS.orange, art: { anim: 'build' }, band: 'POWER' },
 };
@@ -76,7 +76,39 @@ export const TAROT_ART: Record<string, Art> = {
   tailor: boostArt('tailor', [lemmingLayer('walk', 2, -12, 10), lemmingLayer('walkLeft', 2, 12, 10, { '#4040e0': '#e07020' }), textLayer('<', '#f3b958', 1.6, 0, -18)]),
   foreman: boostArt('foreman', [lemmingLayer('build', 3, 0, 8), textLayer('+2', '#f3b958', 1.4, 0, -26)]),
   audition: boostArt('audition', [lemmingLayer('exit', 3, 0, 8, { '#00b000': '#f3b958' }), textLayer('+1', '#f3b958', 1.4, 0, -26)]),
+  // the Tribe cards: a lemming of the tribe, in its colours (as in Lemmings 2), and what it levels up
+  classic: tribeArt('classic', 'walk', '#00b000', '#4040e0', '+2'),
+  highland: tribeArt('highland', 'climb', '#f08820', '#2f8f3f', '+2'),
+  circus: tribeArt('circus', 'float', '#e03030', '#f0e040', '+2'),
+  egyptian: tribeArt('egyptian', 'build', '#202020', '#f3d080', '+2'),
+  medieval: tribeArt('medieval', 'block', '#a0a0a8', '#8a3030', '+2'),
+  space: tribeArt('space', 'ohno', '#f0f0f0', '#5060a0', '+2'),
+  cavelem: tribeArt('cavelem', 'dig', '#7a4a20', '#b08050', '+2'),
+  sports: tribeArt('sports', 'bash', '#f0f0f0', '#e03030', '+2'),
+  outdoor: tribeArt('outdoor', 'mine', '#6a8a30', '#806040', '+2'),
+  beach: tribeArt('beach', 'walk', '#f0e040', '#30b0e0', '+1'),
+  polar: tribeArt('polar', 'walk', '#f0f0f0', '#80c0f0', ':20'),
+  shadow: tribeArt('shadow', 'walk', '#404040', '#202020', '+1'),
 };
+
+/** the picture of a Tribe card: a lemming in the colours of its tribe */
+function tribeArt(id: string, anim: LemmingAnim, hair: string, clothes: string, text: string): Art {
+  return {
+    design: {
+      id,
+      name: id,
+      rarity: 'common',
+      price: 0,
+      description: '',
+      appearance: { background: '#1d5a5a', border: '#f4f1e6', layers: [lemmingLayer(anim, 3, 0, 8, { '#00b000': hair, '#4040e0': clothes }), textLayer(text, '#f3b958', 1.4, 0, -26)] },
+    },
+  };
+}
+
+/** a Boost or a Tribe card: its colour and its badge */
+export function consumableLook(d: TarotDef): { color: number; badge: string } {
+  return d.kind === 'tribe' ? { color: COLORS.teal, badge: 'Tribe card' } : { color: COLORS.purple, badge: 'Boost' };
+}
 
 export const EDITION_TINTS: Record<string, number> = { plain: 0xffffff, gold: COLORS.gold, lucky: 0x7dff7d, mentor: 0x9fd0ff, champion: 0xd090ff, wise: 0xe8e8f0 };
 
@@ -100,6 +132,7 @@ export const TAG_ART: Record<string, Art> = {
   reroll: { text: '$0', color: COLORS.gold },
   reinforcements: { anim: 'walkLeft', tint: COLORS.blue },
   fasttrack: { text: '$5', color: COLORS.gold },
+  sparechange: { text: '$1', color: COLORS.gold },
 };
 
 /** the kinds of special lemmings: their name, what they do, and their picture */

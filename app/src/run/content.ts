@@ -4,7 +4,7 @@
  * skill above the level's maximum, time on the clock, or start lemmings with an ability.
  */
 import { clothesOf, COLOR_NAMES, hairOf, hasHair, isFully, LEMMING_COLORS, type LemmingColor } from './colors.ts';
-import type { SkillCounts } from './skills.ts';
+import { type Skill, type SkillCounts, SKILLS } from './skills.ts';
 import { type LemmingCard, START_COLONY } from './state.ts';
 import { POWER_CARD_LIBRARY } from './power-cards/catalogue.ts';
 import type { Rarity } from './power-cards/schema.ts';
@@ -215,12 +215,56 @@ export interface RescueContext {
   otherSellValue: number;
   /** a random number from 0 to 1 for this Power Card in this level, from the seed of the run (the Glitch) */
   roll: number;
+  /** the level as it went: the skills used, what happened to every lemming of the squad, the time left, the restarts */
+  skillsUsed: SkillCounts;
+  fates: Fate[];
+  secondsLeft: number;
+  restarts: number;
+  squadSize: number;
+  /** the skills used in the levels won before this one, this run */
+  runSkillUses: SkillCounts;
+  /** the skills used in the previous level of the round (null: none won yet this round) */
+  prevSkills: Skill[] | null;
+  /** the lemmings of the colony that are not in the squad */
+  outside: LemmingCard[];
+  /** the Swaps of the level: used and left */
+  swapsUsed: number;
+  swapsLeft: number;
+  /** Close Enough: the colour and skill-set conditions need one fewer */
+  closeEnough: boolean;
 }
 
 const savedWithHair = (c: RescueContext, color: LemmingColor) => c.savedCards.filter((x) => hasHair(x, color, c.ginger)).length;
 const firstSaved = (n: number) => (c: RescueContext) => ({ plus: Math.min(n, c.saved) });
 /** every saved lemming of the colony shares a hair colour (at least `min` of them) */
-const sameHair = (c: RescueContext, min = 1) => c.savedCards.length >= min && LEMMING_COLORS.some((col) => c.savedCards.every((x) => hasHair(x, col, c.ginger)));
+const sameHair = (c: RescueContext, min = 1) =>
+  c.savedCards.length >= min && LEMMING_COLORS.some((col) => c.savedCards.filter((x) => hasHair(x, col, c.ginger)).length >= c.savedCards.length - (c.closeEnough ? 1 : 0));
+/** the terrain skills: Builder, Basher, Miner and Digger */
+export const TERRAIN_SKILLS: readonly Skill[] = ['builder', 'basher', 'miner', 'digger'];
+/** the kinds of skill used */
+const kinds = (c: { skillsUsed: SkillCounts }) => SKILLS.filter((sk) => c.skillsUsed[sk] > 0).length;
+/** Builder, Basher, Miner and Digger were all used (Close Enough: 3 of them) */
+const allTerrain = (c: RescueContext) => TERRAIN_SKILLS.filter((sk) => c.skillsUsed[sk] > 0).length >= (c.closeEnough ? 3 : 4);
+/** two skills were each used at least twice */
+const twoPairs = (c: RescueContext) => SKILLS.filter((sk) => c.skillsUsed[sk] >= 2).length >= 2;
+const ifThen = (cond: boolean, r: { plus?: number; times?: number }) => (cond ? r : null);
+
+/** the skill used most (ties: the one used most before, then the first of the panel); null: none used */
+export function mostUsedSkill(used: SkillCounts, before: SkillCounts = zeroCounts()): Skill | null {
+  let best: Skill | null = null;
+  for (const sk of SKILLS) if (used[sk] > 0 && (!best || used[sk] > used[best] || (used[sk] === used[best] && before[sk] > before[best]))) best = sk;
+  return best;
+}
+
+/** Fresh Approach: the level did without the skill used most in the run before it */
+export function freshApproach(runSkillUses: SkillCounts, used: SkillCounts): boolean {
+  const most = mostUsedSkill(runSkillUses);
+  return !!most && used[most] === 0;
+}
+
+function zeroCounts(): SkillCounts {
+  return Object.fromEntries(SKILLS.map((sk) => [sk, 0])) as SkillCounts;
+}
 /** the Spiral Staircase: the places in the order of the saves that are Fibonacci numbers */
 const FIBONACCI = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144];
 
@@ -242,6 +286,10 @@ export interface PayoutContext {
   goldSaved: number;
   /** what this Power Card has counted */
   counter: number;
+  /** the level as it went: the skills used, the restarts, the squad */
+  skillsUsedBySkill: SkillCounts;
+  restarts: number;
+  squadSize: number;
 }
 
 export interface JokerDef {
@@ -305,7 +353,7 @@ export interface JokerDef {
   sellValueAfterLevel?: number;
   /** Boosts created when a level begins, if there is room */
   boostsAtLevelStart?: number;
-  /** counts the Trainings used */
+  /** counts the Tribe cards used */
   countsTraining?: boolean;
   /** what it does after a level (see RunSession.accept) */
   afterLevel?:
@@ -327,13 +375,23 @@ export interface JokerDef {
     | 'jetpack'
     | 'goldLeaf'
     | 'campOut'
-    | 'littleHelper';
+    | 'littleHelper'
+    | 'roadCrew'
+    | 'iceLolly'
+    | 'freshApproach'
+    | 'returnsDesk';
   /** destroyed after this many levels (its counter counts them) */
   lasts?: number;
   /** what its counter counts, one for each time it happens (the cards it has, not the ones that copy it) */
   counts?: 'packSkipped' | 'joined' | 'sold' | 'luckyPaid' | 'superDied' | 'superLeft';
   /** what it does when a level begins (see RunSession.levelBegins) */
-  atLevelStart?: 'stampede' | 'rabble';
+  atLevelStart?: 'stampede' | 'rabble' | 'greenParty';
+  /** what it does on a Swap (see RunSession.swap) */
+  onSwap?: 'greenParty' | 'returnsDesk' | 'onTheJob';
+  /** Close Enough: the colour and skill-set conditions need one fewer */
+  closeEnough?: boolean;
+  /** a lost level with 25% of the requirement saved counts as won, and it is destroyed */
+  secondChance?: boolean;
   /** more (or fewer) lemmings in the squad */
   squad?: number;
   /** every lemming counts as a Super Lemming for the Power Cards */
@@ -458,7 +516,7 @@ export const POWER_CARD_EFFECTS: Record<string, Omit<JokerDef, 'id' | 'name' | '
       return { plus: n };
     },
   },
-  paintbox: { rescues: (c) => (LEMMING_COLORS.every((col) => c.savedCards.some((x) => hairOf(x) === col)) ? { times: 3 } : null) },
+  paintbox: { rescues: (c) => ifThen(LEMMING_COLORS.filter((col) => c.savedCards.some((x) => hairOf(x) === col)).length >= (c.closeEnough ? 4 : 5), { times: 3 }) },
   trendsetter: { afterLevel: 'trendsetter', rescues: (c) => ({ times: 1.1 ** c.savedCards.filter((x) => !!c.color && hasHair(x, c.color, c.ginger)).length }) },
   teacherspet: { afterLevel: 'teacherspet', rescues: (c) => (c.target !== undefined && c.savedCards.some((x) => x.id === c.target) ? { times: 2 } : null) },
   jumpsuit: { rescues: (c) => ({ plus: 3 * c.savedCards.filter((x) => clothesOf(x) === 'orange').length }) },
@@ -527,7 +585,45 @@ export const POWER_CARD_EFFECTS: Record<string, Omit<JokerDef, 'id' | 'name' | '
   supersquad: { rescues: (c) => (c.colonySupers >= 16 ? { times: 3 } : null) },
   ohno: { counts: 'superLeft', rescues: (c) => ({ times: 1 + c.counter }) },
   yippee: { boostOnShopExit: true },
+  // Lematro Phase 2: the level as it went (the skills used, the restarts) and the Swaps
+  doubleact: { rescues: (c) => ifThen(kinds(c) === 2, { plus: 4 }) },
+  threescompany: { rescues: (c) => ifThen(kinds(c) === 3, { plus: 6 }) },
+  tagteam: { rescues: (c) => ifThen(twoPairs(c), { plus: 5 }) },
+  groundworks: { rescues: (c) => ifThen(allTerrain(c), { plus: 6 }) },
+  twostep: { rescues: (c) => ifThen(kinds(c) === 2, { plus: 2 }) },
+  hattrick: { rescues: (c) => ifThen(kinds(c) === 3, { plus: 3 }) },
+  doubleshift: { rescues: (c) => ifThen(twoPairs(c), { plus: 3 }) },
+  earthworks: { rescues: (c) => ifThen(allTerrain(c), { plus: 3 }) },
+  closeenough: { closeEnough: true },
+  oldfavourite: {
+    rescues: (c) => {
+      const sk = mostUsedSkill(c.skillsUsed, c.runSkillUses);
+      return sk ? { plus: Math.floor((c.runSkillUses[sk] + c.skillsUsed[sk]) / 5) } : null;
+    },
+  },
+  roadcrew: { afterLevel: 'roadCrew', rescues: (c) => ({ plus: 2 * (c.counter + (allTerrain(c) ? 1 : 0)) }) },
+  icelolly: { afterLevel: 'iceLolly', rescues: (c) => ({ plus: Math.max(0, 30 - 3 * (c.counter + c.restarts)) }) },
+  sameagain: { rescues: (c) => ifThen(!!c.prevSkills && sameSkills(c.prevSkills, c.skillsUsed), { times: 2 }) },
+  lordofthemanor: { rescues: (c) => ({ times: 1.2 ** c.outside.filter((x) => x.edition === 'champion').length }) },
+  freshapproach: { afterLevel: 'freshApproach', rescues: (c) => ifThen(freshApproach(c.runSkillUses, c.skillsUsed), { times: 1 + 0.2 * (c.counter + 1) }) },
+  secondchance: { secondChance: true, noCopy: true },
+  thepair: { rescues: (c) => ifThen(kinds(c) === 2, { times: 1.5 }) },
+  threemusketeers: { rescues: (c) => ifThen(kinds(c) === 3, { times: 2 }) },
+  workaholic: { rescues: (c) => ifThen(SKILLS.some((sk) => c.skillsUsed[sk] >= 4), { times: 2 }) },
+  workforce: { rescues: (c) => ifThen(allTerrain(c), { times: 2 }) },
+  starpupils: { rescues: (c) => ({ plus: 5 * c.outside.filter((x) => x.edition === 'mentor').length }) },
+  steadysquad: { rescues: (c) => ({ plus: 3 * c.swapsLeft }) },
+  cleansweep: { rescues: (c) => ifThen(c.swapsLeft === 0 && c.swapsUsed > 0, { plus: 8 }) },
+  greenparty: { atLevelStart: 'greenParty', onSwap: 'greenParty', rescues: (c) => ({ plus: c.counter }) },
+  returnsdesk: { afterLevel: 'returnsDesk', onSwap: 'returnsDesk' },
+  onthejob: { onSwap: 'onTheJob' },
 };
+
+/** the same kinds of skill used (and at least one) */
+function sameSkills(prev: readonly Skill[], used: SkillCounts): boolean {
+  const now = SKILLS.filter((sk) => used[sk] > 0);
+  return now.length > 0 && now.length === prev.length && now.every((sk) => prev.includes(sk));
+}
 
 /** The Power Cards that were cut from the game: a saved run that has one sells it when it is loaded. */
 export const CUT_POWER_CARDS: Record<string, { name: string; price: number }> = {
@@ -597,6 +693,10 @@ export interface TarotDef {
   hair?: LemmingColor;
   /** it takes exactly two lemmings: the first becomes like the second (Balatro's Death) */
   pair?: boolean;
+  /** a Boost (Balatro's tarots), or a Tribe card (Balatro's planets: each levels up a skill) */
+  kind?: 'boost' | 'tribe';
+  /** the skill a Tribe card levels up (+2 ability) */
+  tribeSkill?: Skill;
 }
 
 export const TAROTS: readonly TarotDef[] = [
@@ -632,7 +732,37 @@ export const TAROTS: readonly TarotDef[] = [
   // Lematro Phase 1
   { id: 'foreman', name: 'The Foreman', price: 3, text: 'Creates up to {!}2{} random {!}Boosts{}, if there is room', select: 0 },
   { id: 'audition', name: 'The Audition', price: 3, text: 'Creates a random {!}Power Card{}, if there is room', select: 0 },
+  // the Tribe cards (Balatro's planets): the tribes of Lemmings 2, each levels up a skill
+  ...(
+    [
+      ['classic', 'Classic Tribe', null],
+      ['highland', 'Highland Tribe', 'climber'],
+      ['circus', 'Circus Tribe', 'floater'],
+      ['egyptian', 'Egyptian Tribe', 'builder'],
+      ['medieval', 'Medieval Tribe', 'blocker'],
+      ['space', 'Space Tribe', 'bomber'],
+      ['cavelem', 'Cavelem Tribe', 'digger'],
+      ['sports', 'Sports Tribe', 'basher'],
+      ['outdoor', 'Outdoor Tribe', 'miner'],
+    ] as const
+  ).map(
+    ([id, name, skill]): TarotDef => ({
+      id,
+      name,
+      price: 3,
+      kind: 'tribe',
+      select: 0,
+      ...(skill ? { tribeSkill: skill, text: `{!}+2{} {s}${skill[0].toUpperCase() + skill.slice(1)}{} ability` } : { text: '{!}+2{} ability in a random skill' }),
+    }),
+  ),
+  { id: 'beach', name: 'Beach Tribe', price: 3, kind: 'tribe', select: 0, text: '{!}+1{} lemming in every squad' },
+  { id: 'polar', name: 'Polar Tribe', price: 3, kind: 'tribe', select: 0, text: '{!}+20{} seconds on the clock in every level' },
+  { id: 'shadow', name: 'Shadow Tribe', price: 3, kind: 'tribe', select: 0, text: '{!}+1{} Respawn in every level' },
 ];
+
+/** the Boosts (Balatro's tarots) and the Tribe cards (its planets) */
+export const BOOSTS: readonly TarotDef[] = TAROTS.filter((t) => t.kind !== 'tribe');
+export const TRIBES: readonly TarotDef[] = TAROTS.filter((t) => t.kind === 'tribe');
 
 export function tarotDef(id: string): TarotDef {
   const t = TAROTS.find((d) => d.id === id);
@@ -655,7 +785,8 @@ export interface PackDef {
 
 export const PACKS: Record<PackKind, PackDef> = {
   lemmings: { kind: 'lemmings', name: 'Lemmings Pack', price: 4, size: 3, text: 'Choose {!}1{} of {!}3{} groups of lemmings to join your colony' },
-  training: { kind: 'training', name: 'Training Pack', price: 4, size: 3, text: 'Choose {!}1{} of {!}3{} ways to train your abilities' },
+  // (its id of old: the Tribe Pack was the Training Pack)
+  training: { kind: 'training', name: 'Tribe Pack', price: 4, size: 3, text: 'Choose {!}1{} of {!}3{} {!}Tribe cards{} to use at once' },
   boost: { kind: 'boost', name: 'Boost Pack', price: 4, size: 3, text: 'Choose {!}1{} of {!}3{} {!}Boosts{} to use at once. A {!}Legendary{} Power Card can rarely appear' },
   gadget: { kind: 'gadget', name: 'Power Pack', price: 6, size: 2, text: 'Choose {!}1{} of {!}2{} {!}Power Cards{}' },
 };
@@ -672,7 +803,7 @@ export const TAGS: readonly TagDef[] = [
   { id: 'recruits', name: 'Recruitment Drive', text: '{!}8{} plain lemmings join the colony' },
   { id: 'umbrellas', name: 'Umbrella Bonus', text: '{!}5{} random lemmings become {s}Floaters{}' },
   { id: 'golden', name: 'Golden Exit', text: 'Doubles the payout of the next {!}Level 3{}' },
-  { id: 'supply', name: 'Supply Drop', text: 'The next shop has {!}2{} more training offers' },
+  { id: 'supply', name: 'Supply Drop', text: 'Opens a free {!}Tribe Pack{} at once' },
   { id: 'clone', name: 'Clone Bonus', text: 'Creates a copy of a random {!}Super Lemming{} (or a plain one)' },
   { id: 'investment', name: 'Retirement Fund', text: 'Earn {$}$10{} after the next {!}Level 3{}' },
   { id: 'coupon', name: 'Free Lunch', text: 'The offers in the next shop are {$}free{}' },
@@ -688,6 +819,8 @@ export const TAGS: readonly TagDef[] = [
   { id: 'reroll', name: 'Reroll Bonus', text: 'Rerolls in the next shop start at {$}$0{}' },
   { id: 'reinforcements', name: 'Reinforcements', text: 'Up to {!}2{} Common Power Cards, if there is room' },
   { id: 'fasttrack', name: 'Fast Track', text: 'Earn {$}$5{} for each level skipped this run' },
+  // Lematro Phase 2
+  { id: 'sparechange', name: 'Spare Change', text: 'Earn {$}$1{} for each {!}Swap{} left unused this run' },
 ];
 
 export function tagDef(id: string): TagDef {

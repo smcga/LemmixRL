@@ -8,6 +8,8 @@ export const RUN_VERSION = 1;
 export const ANTES = 8;
 export const JOKER_SLOTS = 5;
 export const TAROT_SLOTS = 2;
+/** squad lemmings that can be swapped for others before a level begins (Balatro's discards) */
+export const SWAPS = 3;
 /** attempts per blind that pay $1 each when they are not used */
 export const ATTEMPTS = 3;
 export const START_MONEY = 4;
@@ -44,8 +46,6 @@ export interface AssignState {
 
 /** A lemming of the colony: a card of the deck. */
 export interface LemmingCard {
-  /** chosen for squads first (prefer) or last (avoid) */
-  pref?: 'prefer' | 'avoid';
   id: number;
   name: string;
   climber: boolean;
@@ -175,6 +175,10 @@ export interface BlindSetup {
   selfCopy?: number | null;
   /** the Crowd Bonus: 3 more lemmings in the squad */
   crowd?: boolean;
+  /** the lemmings swapped out of the squad before the level began (card ids; one Swap each) */
+  swappedOut?: number[];
+  /** how often the level was started (the first start, then the restarts) */
+  starts?: number;
 }
 
 /** a line of the rescue count: the lemmings saved, then the Power Cards that add (+) or multiply (X) */
@@ -212,6 +216,8 @@ export interface AttemptOutcome {
   squad?: number[];
   /** Final Lap: Gold lemmings saved in the last 30 seconds */
   lapGold?: number;
+  /** Second Chance: a lost level that counts as won */
+  secondChance?: boolean;
   /** what the Power Cards did in the level (for the cash out) */
   events?: string[];
 }
@@ -255,6 +261,12 @@ export interface RunStats {
   earned: number;
   /** the Boosts used (runs saved before it was counted do not have it) */
   boostsUsed?: number;
+  /** the Tribe cards used */
+  tribesUsed?: number;
+  /** the Swaps left unused in the levels played */
+  swapsUnused?: number;
+  /** the skills used in the levels won, this run */
+  skillUses?: SkillCounts;
 }
 
 export interface RunState {
@@ -291,5 +303,11 @@ export interface RunState {
   pack?: PackState | null;
   /** the Power Cards destroyed by their own chance (Big Mike: Little Mike can be offered) */
   extinct?: string[];
+  /** the Tribe cards: lemmings more in every squad (Beach), seconds more on every level (Polar), Respawns (Shadow) */
+  squadBonus?: number;
+  extraSeconds?: number;
+  respawns?: number;
+  /** the skills used in the last level won, and its round (Same Again) */
+  lastSkills?: { ante: number; skills: Skill[] };
   stats: RunStats;
 }

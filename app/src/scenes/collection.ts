@@ -8,7 +8,7 @@
 import * as Phaser from 'phaser';
 import { SoundEffect } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
-import { JOKERS, PACKS, type PackKind, TAGS, TAROTS } from '../run/content.ts';
+import { BOOSTS, JOKERS, PACKS, type PackKind, TAGS, TRIBES } from '../run/content.ts';
 import type { SpecialTrait } from '../run/state.ts';
 import { markSeen, seenSet } from '../run/storage.ts';
 import { JOKER_ART, PACK_LOOKS, RARITY_COLORS, RARITY_NAMES, TAG_ART, TAROT_ART, TRAIT_LOOKS } from '../run/ui/art.ts';
@@ -48,7 +48,12 @@ const TABS: { name: string; color: number; entries: () => Entry[] }[] = [
   {
     name: 'Boosts',
     color: COLORS.purple,
-    entries: () => TAROTS.map((d) => ({ key: `tarot:${d.id}`, title: d.name, lines: [d.text], color: COLORS.purple, art: TAROT_ART[d.id], badge: 'Boost' })),
+    entries: () => BOOSTS.map((d) => ({ key: `tarot:${d.id}`, title: d.name, lines: [d.text], color: COLORS.purple, art: TAROT_ART[d.id], badge: 'Boost' })),
+  },
+  {
+    name: 'Tribes',
+    color: COLORS.teal,
+    entries: () => TRIBES.map((d) => ({ key: `tarot:${d.id}`, title: d.name, lines: [d.text], color: COLORS.teal, art: TAROT_ART[d.id], badge: 'Tribe card' })),
   },
   {
     name: 'Packs',
@@ -153,7 +158,7 @@ export class CollectionScene extends Phaser.Scene {
     k(label(this, W / 2, 86, `${found} of ${all.flat().length} discovered`, { color: COLORS.gold, originX: 0.5, originY: 0.5 }));
 
     // the tabs, with how much of each has been found
-    const tw = 156;
+    const tw = Math.min(156, Math.floor((W - 24) / TABS.length) - 8);
     const tx = W / 2 - (TABS.length * (tw + 8) - 8) / 2;
     TABS.forEach((t, i) => {
       const n = all[i].filter((e) => seen.has(e.key)).length;
