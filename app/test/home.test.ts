@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getStyle, LemmingAction, StyleDef } from '../../engine/src/index.ts';
 import { repoDataProvider } from '../../engine/src/node/repoData.ts';
 import { LevelCatalog } from '../src/run/catalog.ts';
+import { isSuperLemming } from '../src/run/content.ts';
 import { ColonyHome, HOME_BOTTOM, HOME_PENS, HOME_W } from '../src/run/home.ts';
 import { RunSession } from '../src/run/session.ts';
 import { SKILLS, type SkillCounts } from '../src/run/skills.ts';
@@ -134,33 +135,36 @@ describe('Poof and the trapdoor', () => {
   });
 });
 
-describe('Swaps', () => {
+describe('Redraws', () => {
   const SPREAD: SkillCounts = { climber: 6, floater: 6, bomber: 6, blocker: 6, builder: 12, basher: 8, miner: 8, digger: 8 };
-  it('swap lemmings of the squad for the next ones of the colony, 3 a level, before it begins', () => {
-    const run = RunSession.newRun(catalog, 'SWAPS');
+  it('send the plain lemmings of the squad back for the next ones and keep the Super Lemmings, 2 a level, before it begins', () => {
+    const run = RunSession.newRun(catalog, 'REDRAWS');
     for (const sk of SKILLS) run.setAbility(sk, SPREAD[sk]);
     expect(run.finishAssignment()).toBe(true);
     // a level of 10 lemmings out of the colony of 80
     run.state.blinds[0].levelId = 'Orig-1-02';
-    const before = [...run.ensureSetup().hand];
-    expect(run.swapsLeft()).toBe(3);
-    // only lemmings of the squad can be swapped
-    const outside = run.state.colony.find((c) => !before.includes(c.id))!.id;
-    expect(run.swap([outside])).toBeNull();
-    expect(run.swap(before.slice(0, 2))).not.toBeNull();
+    const setup = run.ensureSetup();
+    const gold = run.card(setup.hand[0])!;
+    gold.edition = 'gold';
+    const before = [...setup.hand];
+    const plain = before.filter((id) => !isSuperLemming(run.card(id)!));
+    expect(run.redrawsLeft()).toBe(2);
+    expect(run.redrawable()).toEqual(plain);
+    const r = run.redraw()!;
     const after = run.state.setup!.hand;
     expect(after).toHaveLength(10);
-    for (const id of before.slice(0, 2)) expect(after).not.toContain(id);
-    expect(run.swapsLeft()).toBe(1);
-    // more than the Swaps left: only as many as are left
-    run.swap(after.slice(0, 3));
-    expect(run.swapsLeft()).toBe(0);
-    expect(run.state.setup!.swappedOut).toHaveLength(3);
-    // the squad stays as it is when it is drawn again, and once the level has begun no Swap is left; the unused are counted
+    expect(after).toContain(gold.id);
+    for (const id of plain) expect(after).not.toContain(id);
+    expect(r.came).toHaveLength(plain.length);
+    expect(run.redrawsLeft()).toBe(1);
+    run.redraw();
+    expect(run.redrawsLeft()).toBe(0);
+    expect(run.redraw()).toBeNull();
+    // the squad stays as it is when it is drawn again, and once the level has begun no Redraw is left; the unused are counted
     const hand = [...run.state.setup!.hand];
     expect(run.ensureSetup().hand).toEqual(hand);
     run.startBlind();
-    expect(run.swapsLeft()).toBe(0);
-    expect(run.state.stats.swapsUnused).toBe(0);
+    expect(run.redrawsLeft()).toBe(0);
+    expect(run.state.stats.redrawsUnused).toBe(0);
   });
 });

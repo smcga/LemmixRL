@@ -37,8 +37,6 @@ export interface HomeViewOptions {
   inSquad?: (card: LemmingCard) => boolean;
   /** the colony, in its order (the indexes of the spots) */
   colony: () => LemmingCard[];
-  /** lemmings a click goes to first, when one of them is near enough (to swap: the squad) */
-  prefer?: (card: LemmingCard) => boolean;
 }
 
 /** frames of the game in a second */
@@ -52,12 +50,10 @@ export class HomeView {
   readonly marked = new Set<number>();
   /** the lemming picked last (its corners bob) */
   focus: number | null = null;
-  /** the lemmings in the tray of a Boost or a Swap, in order: a numbered tag over each head, as in the tray */
+  /** the lemmings in the tray of a Boost, in order: a numbered tag over each head, as in the tray */
   numbered: number[] = [];
   /** the colour of those tags (and of their corners) */
   numberColor: number = COLORS.gold;
-  /** the squad stands out (to be swapped): a thick orange line under the feet, and an arrow over the head */
-  strongSquad = false;
   private readonly tags: Phaser.GameObjects.BitmapText[] = [];
   private readonly key: string;
   private readonly texture: Phaser.Textures.CanvasTexture;
@@ -168,26 +164,17 @@ export class HomeView {
   lemmingAt(x: number, y: number): Lemming | null {
     let best: Lemming | null = null;
     let bestD = Infinity;
-    // (a lemming the click goes to first, a little further away too: they keep walking)
-    let preferred: Lemming | null = null;
-    let preferredD = Infinity;
     for (const l of this.home.lemmings()) {
       const dx = Math.abs(l.xPos - x);
       const dy = l.yPos - 5 - y;
-      if (dx > 9 || dy < -8 || dy > 9) continue;
-      const d = dx * dx + dy * dy;
-      const card = this.opts.prefer && this.home.card(l);
-      if (card && this.opts.prefer!(card) && d < preferredD) {
-        preferredD = d;
-        preferred = l;
-      }
       if (dx > 6 || dy < -7 || dy > 8) continue;
+      const d = dx * dx + dy * dy;
       if (d < bestD) {
         bestD = d;
         best = l;
       }
     }
-    return preferred ?? best;
+    return best;
   }
 
   private down(p: Phaser.Input.Pointer): void {
@@ -320,11 +307,7 @@ export class HomeView {
       const order = this.numbered.indexOf(c.id);
       if (this.opts.inSquad?.(c)) {
         g.fillStyle(LEMMING_BADGE_COLORS.squad, 1);
-        if (this.strongSquad) {
-          g.fillRect(sx - 8, sy + 2, 18, 4);
-          // (and a little arrow over its head, unless it has a number there)
-          if (order < 0) g.fillTriangle(sx - 3, sy - 38, sx + 5, sy - 38, sx + 1, sy - 33);
-        } else g.fillRect(sx - 6, sy + 2, 14, 2);
+        g.fillRect(sx - 6, sy + 2, 14, 2);
       }
       if (order >= 0) {
         this.corners(g, sx, sy, c.id === this.focus, this.numberColor);

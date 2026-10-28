@@ -77,6 +77,7 @@ export const KEYWORDS: { match: RegExp; title: string; text: string }[] = [
   { match: /\bGlowing\b/, title: 'Glowing', text: 'A Power Card edition: +10 Rescues.' },
   { match: /\bRainbow\b/, title: 'Rainbow', text: 'A Power Card edition: X1.5 Rescues.' },
   { match: /Badge/, title: 'Badge', text: 'A mark on a lemming: Red counts twice when saved, Gold earns $3 when saved, Blue makes a Tribe card when saved last, Purple a Boost when lost.' },
+  { match: /Redraw/, title: 'Redraw', text: 'Before a level begins: the plain lemmings of the squad go back to the colony and the next ones come in. Super Lemmings and lemmings with a Badge stay.' },
   { match: /Super Lemming/, title: 'Super Lemming', text: 'A special lemming: Gold, Lucky, Mentor, Champion or Wise, a Climber, a Floater or Insured.' },
 ];
 
@@ -267,9 +268,9 @@ export interface RescueContext {
   prevSkills: Skill[] | null;
   /** the lemmings of the colony that are not in the squad */
   outside: LemmingCard[];
-  /** the Swaps of the level: used and left */
-  swapsUsed: number;
-  swapsLeft: number;
+  /** the Redraws of the level: used and left */
+  redrawsUsed: number;
+  redrawsLeft: number;
   /** Close Enough: the colour and skill-set conditions need one fewer */
   closeEnough: boolean;
 }
@@ -427,8 +428,8 @@ export interface JokerDef {
   counts?: 'packSkipped' | 'joined' | 'sold' | 'luckyPaid' | 'superDied' | 'superLeft';
   /** what it does when a level begins (see RunSession.levelBegins) */
   atLevelStart?: 'stampede' | 'rabble' | 'greenParty';
-  /** what it does on a Swap (see RunSession.swap) */
-  onSwap?: 'greenParty' | 'returnsDesk' | 'onTheJob';
+  /** what it does on a Redraw (see RunSession.redraw) */
+  onRedraw?: 'greenParty' | 'returnsDesk' | 'onTheJob';
   /** Close Enough: the colour and skill-set conditions need one fewer */
   closeEnough?: boolean;
   /** a lost level with 25% of the requirement saved counts as won, and it is destroyed */
@@ -626,7 +627,7 @@ export const POWER_CARD_EFFECTS: Record<string, Omit<JokerDef, 'id' | 'name' | '
   supersquad: { rescues: (c) => (c.colonySupers >= 16 ? { times: 3 } : null) },
   ohno: { counts: 'superLeft', rescues: (c) => ({ times: 1 + c.counter }) },
   yippee: { boostOnShopExit: true },
-  // Lematro Phase 2: the level as it went (the skills used, the restarts) and the Swaps
+  // Lematro Phase 2: the level as it went (the skills used, the restarts) and the Redraws
   doubleact: { rescues: (c) => ifThen(kinds(c) === 2, { plus: 4 }) },
   threescompany: { rescues: (c) => ifThen(kinds(c) === 3, { plus: 6 }) },
   tagteam: { rescues: (c) => ifThen(twoPairs(c), { plus: 5 }) },
@@ -653,11 +654,11 @@ export const POWER_CARD_EFFECTS: Record<string, Omit<JokerDef, 'id' | 'name' | '
   workaholic: { rescues: (c) => ifThen(SKILLS.some((sk) => c.skillsUsed[sk] >= 4), { times: 2 }) },
   workforce: { rescues: (c) => ifThen(allTerrain(c), { times: 2 }) },
   starpupils: { rescues: (c) => ({ plus: 5 * c.outside.filter((x) => x.edition === 'mentor').length }) },
-  steadysquad: { rescues: (c) => ({ plus: 3 * c.swapsLeft }) },
-  cleansweep: { rescues: (c) => ifThen(c.swapsLeft === 0 && c.swapsUsed > 0, { plus: 8 }) },
-  greenparty: { atLevelStart: 'greenParty', onSwap: 'greenParty', rescues: (c) => ({ plus: c.counter }) },
-  returnsdesk: { afterLevel: 'returnsDesk', onSwap: 'returnsDesk' },
-  onthejob: { onSwap: 'onTheJob' },
+  steadysquad: { rescues: (c) => ({ plus: 5 * c.redrawsLeft }) },
+  cleansweep: { rescues: (c) => ifThen(c.redrawsLeft === 0 && c.redrawsUsed > 0, { plus: 8 }) },
+  greenparty: { atLevelStart: 'greenParty', onRedraw: 'greenParty', rescues: (c) => ({ plus: c.counter }) },
+  returnsdesk: { afterLevel: 'returnsDesk', onRedraw: 'returnsDesk' },
+  onthejob: { onRedraw: 'onTheJob' },
   // Lematro Phase 4
   rambler: { afterLevel: 'rambler' },
 };
@@ -883,7 +884,7 @@ export const TAGS: readonly TagDef[] = [
   { id: 'reinforcements', name: 'Reinforcements', text: 'Up to {!}2{} Common Power Cards, if there is room' },
   { id: 'fasttrack', name: 'Fast Track', text: 'Earn {$}$5{} for each level skipped this run' },
   // Lematro Phase 2
-  { id: 'sparechange', name: 'Spare Change', text: 'Earn {$}$1{} for each {!}Swap{} left unused this run' },
+  { id: 'sparechange', name: 'Spare Change', text: 'Earn {$}$2{} for each {!}Redraw{} left unused this run' },
   // Lematro Phase 3
   { id: 'ghostbonus', name: 'Ghost Bonus', text: 'The next Power Card you get is {!}Ghost{}' },
   { id: 'shinybonus', name: 'Shiny Bonus', text: 'The next Power Card you get is {!}Shiny{}' },

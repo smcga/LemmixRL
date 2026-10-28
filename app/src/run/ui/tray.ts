@@ -1,5 +1,5 @@
 /**
- * The tray of the lemmings selected in the colony (for a Boost, or to be swapped out of the squad): a numbered slot
+ * The tray of the lemmings selected in the colony for a Boost: a numbered slot
  * for each lemming it takes, with the lemming in its own colours, its name and a button to put it back, and a button
  * to put them all back. The numbers are the ones over the heads of the lemmings in the colony.
  */
@@ -9,7 +9,7 @@ import { lemmingSprite } from './assets.ts';
 import { Button, COLORS, label, shade } from './widgets.ts';
 
 export interface TrayOptions {
-  /** how many lemmings it takes (it can change: Swaps get used) */
+  /** how many lemmings it takes */
   slots: () => number;
   /** the colour of the tray, its numbers and the tags over the heads */
   color: number;
