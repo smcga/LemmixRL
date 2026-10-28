@@ -200,7 +200,7 @@ export class CollectionScene extends Phaser.Scene {
 
   /** Back: from a category to the menu, from the menu to the screen it was opened from. */
   private back(): void {
-    this.app.sound.playSound(SoundEffect.SkillButtonSelect);
+    this.app.sound.playMenuSound(SoundEffect.SkillButtonSelect);
     if (this.category) {
       this.category = null;
       this.redraw();

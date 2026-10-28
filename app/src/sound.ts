@@ -20,6 +20,9 @@ const MUSIC_VOLUME = 0.2;
  */
 const SFX_LEVEL = 0.5;
 
+/** LemmixRL: the sounds of the menus (buttons, cards) play 6 dB quieter than the sounds of a level */
+const MENU_SFX_LEVEL = 0.5;
+
 /** LemmixRL: the music of the screens around the levels (the title, the run, the collection), looped */
 const MENU_MUSIC_URL = new URL('./music/lematro_menu.mp3', import.meta.url).href;
 /** its loudness (LUFS, measured with LoudnessMeter over the whole file): it is played as loud as the music of the levels */
@@ -193,6 +196,12 @@ export class WebSoundManager implements GameSoundManager {
    * SoundLibrary.PlaySound: the sound has one main channel, which restarts when it is played again, unless it has
    * been playing for at least 0.1 seconds: then a temporary second instance overlaps it.
    */
+  /** LemmixRL: a sound of the menus (quieter than the sounds of a level) */
+  playMenuSound(id: number): void {
+    const buffer = this.buffers.get(id);
+    if (buffer) this.start(buffer, MENU_SFX_LEVEL);
+  }
+
   playSound(id: number): void {
     const buffer = this.buffers.get(id);
     if (!buffer) return;
@@ -212,10 +221,16 @@ export class WebSoundManager implements GameSoundManager {
     this.playing.set(id, { source: this.start(buffer), startTime: now });
   }
 
-  private start(buffer: AudioBuffer): AudioBufferSourceNode {
+  private start(buffer: AudioBuffer, volume = 1): AudioBufferSourceNode {
     const source = this.context.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.sfxGain);
+    if (volume === 1) source.connect(this.sfxGain);
+    else {
+      const gain = this.context.createGain();
+      gain.gain.value = volume;
+      source.connect(gain).connect(this.sfxGain);
+      source.onended = () => gain.disconnect();
+    }
     source.start();
     return source;
   }
