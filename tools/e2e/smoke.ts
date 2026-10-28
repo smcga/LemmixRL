@@ -31,6 +31,10 @@ try {
   // runs f(lemmix) in the page (f must not use variables from outside)
   const game = <T>(f: (g: G['lemmix']) => T) => page.evaluate(`(${f.toString()})(globalThis.lemmix)`) as Promise<T>;
 
+  // the first screen asks for a key (or a tap, or a click): the sound can start after it
+  await page.waitForFunction(() => (globalThis as any).phaserGame?.scene.isActive('start'), null, { timeout: 30000 });
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => (globalThis as any).phaserGame.scene.isActive('title'), null, { timeout: 5000 });
   await page.waitForTimeout(500);
   await page.keyboard.press('c'); // the title of Lematro -> Classic Lemmings (the menu of Lemmix)
   await page.waitForTimeout(500);

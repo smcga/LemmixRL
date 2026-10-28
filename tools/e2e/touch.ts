@@ -78,8 +78,11 @@ try {
     );
     return { x: (t.left + (t.sx - t.x) * t.zoom) / DPR, y: (t.top + (t.sy - t.y) * t.zoom) / DPR };
   };
-  await page.waitForTimeout(500);
-  if ((await sceneKeys()) !== 'title') fail('the program does not start with the title of Lematro');
+  // the first screen of Lematro: a tap anywhere starts (the sound can start after it)
+  await page.waitForFunction(() => (globalThis as any).phaserGame?.scene.isActive('start'), null, { timeout: 30000 });
+  if ((await sceneKeys()) !== 'start') fail('the program does not start with the Tap to start screen');
+  await tap(W / 2, H * 0.7, 800);
+  if ((await sceneKeys()) !== 'title') fail('a tap on the first screen did not go on to the title of Lematro');
   let tp = await titleSpot('classic');
   await tap(tp.x, tp.y, 800);
   if ((await sceneKeys()) !== 'dos') fail('Classic Lemmings did not open the menu of Lemmix');

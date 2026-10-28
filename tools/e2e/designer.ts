@@ -209,6 +209,8 @@ try {
   // All existing cards, plus an exported draft, use the shared renderer in an actual running Phaser scene.
   await page.setViewportSize({ width: 1440, height: 1050 });
   await page.goto(url);
+  await page.waitForFunction(() => (globalThis as any).phaserGame?.scene.isActive('start'));
+  await page.keyboard.press('Enter');
   await page.waitForFunction(() => (globalThis as any).phaserGame?.scene.isActive('title'));
   const checked = await page.evaluate(async (design) => {
     const path = '/src/run/ui/cards.ts',
