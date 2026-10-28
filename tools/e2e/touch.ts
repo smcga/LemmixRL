@@ -224,11 +224,11 @@ try {
   if ((await run<string>('state.phase')) !== 'shop') fail('a pack dropped next to Open was opened');
   await dragSpot('pack:0', 500, 60);
   if ((await run<string>('state.phase')) !== 'pack' || (await run<number>('state.money')) !== 6) fail('a pack dragged to Open was not opened');
-  // its cards: one is tapped, then its Take button
-  await page.waitForTimeout(900);
+  // its cards (once the pack has burst and they are out): one is tapped, then its Take button
+  await page.waitForFunction(() => !(globalThis as any).phaserGame.scene.getScene('run').packOpening, null, { timeout: 10000 });
   await tapSpot('choice:0');
   if ((await run<string>('state.phase')) !== 'pack') fail('a tap on a card of a pack took it');
-  await tapSpot('card:TAKE', 600);
+  await tapSpot('card:TAKE', 900);
   if ((await run<string>('state.phase')) !== 'shop' || (await run<number>('state.colony.length')) <= colony) fail('the Take button of a card of a pack did not take it');
   // a tarot: its Use button opens the colony walking about, where a tap on a lemming lifts it into the sky (selected)
   await ev(

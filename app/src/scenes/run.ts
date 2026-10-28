@@ -29,8 +29,9 @@ import { SelectionTray } from '../run/ui/tray.ts';
 import { plainText } from '../run/rich.ts';
 import { lematroLogo } from '../run/ui/logo.ts';
 import { soundSliders } from '../run/ui/settings.ts';
+import { flash, sparks, sparkStream } from '../run/ui/fx.ts';
 import { Swirl, type SwirlColors, SWIRLS } from '../run/ui/swirl.ts';
-import { Button, type ButtonOptions, COLORS, hoverTip, label, panel, showTip, type TipContent, Tooltip } from '../run/ui/widgets.ts';
+import { Button, type ButtonOptions, COLORS, hoverTip, label, panel, shade, showTip, type TipContent, Tooltip } from '../run/ui/widgets.ts';
 import { cssPx, onTouchChange, safeAreaInsets, touch } from '../touch.ts';
 import { ScreenType } from '../screens/base.ts';
 import { getApp, gotoScreen, listen } from './shared.ts';
@@ -61,6 +62,10 @@ const ASSIGN_SEG = 8;
 /** the first row of the assignment screen (from the top of the panel), and the height of a row */
 const ASSIGN_ROW_Y = 58;
 const ASSIGN_ROW_H = 36;
+
+/** a pack: a little bigger than a card, as in Balatro */
+const PACK_W = Math.round(CARD_W * 1.1);
+const PACK_H = Math.round(CARD_H * 1.1);
 
 const BLIND_COLORS: Record<BlindKind, number> = { small: COLORS.blue, big: COLORS.orange, boss: COLORS.red };
 
@@ -129,6 +134,18 @@ export class RunScene extends Phaser.Scene {
   private overlayKey: ((key: string) => void) | null = null;
   /** the colony at home, while it is open (for the tests) */
   homeView: HomeView | null = null;
+  /** where the pack that is being opened was (it flies from there to the middle) */
+  private packFrom: { x: number; y: number } | null = null;
+  /** the open pack shown last (its opening is played once) */
+  private packShown = '';
+  private packViews: CardView[] = [];
+  private packNames: Phaser.GameObjects.BitmapText[] = [];
+  /** the cards of a pack are going (taken, or skipped) */
+  private packLeaving = false;
+  /** a pack is opening: its cards are not there yet (for the tests) */
+  packOpening = false;
+  /** the opening that is going on: an older one stops (its screen was drawn again) */
+  private introToken = 0;
   /** the lemmings the last Redraw brought in (they drop into the squad strip once) */
   private redrawnIn: Set<number> | null = null;
   /** where things are on the screen, by name: the middle of the buttons and cards (for the tests) */
@@ -656,8 +673,8 @@ export class RunScene extends Phaser.Scene {
   /* -------------------------------------------------------------------------------------------- jokers, tarots, the deck */
 
   /** where the cards of a row lie: next to each other in the middle of the area, closer together when it is full */
-  private slots(area: Rect, n: number): number[] {
-    const pitch = n > 1 ? Math.min(CARD_W + 8, (area.w - 16 - CARD_W) / (n - 1)) : 0;
+  private slots(area: Rect, n: number, cardW: number = CARD_W, gap = 8): number[] {
+    const pitch = n > 1 ? Math.min(cardW + gap, (area.w - 16 - cardW) / (n - 1)) : 0;
     const x0 = area.x + area.w / 2 - (pitch * (n - 1)) / 2;
     return Array.from({ length: n }, (_, i) => Math.round(x0 + i * pitch));
   }
@@ -1377,8 +1394,8 @@ export class RunScene extends Phaser.Scene {
     this.well(packs.x, packs.y, packs.w, packs.h);
     const packOffers = (shop.packs ?? []).filter((o) => !o.sold);
     const extras = shop.offers.slice(3).filter((o) => !o.sold);
-    const px = this.slots(packs, packOffers.length + extras.length);
-    const py = packs.y + 36 + CARD_H / 2;
+    const px = this.slots(packs, packOffers.length + extras.length, PACK_W, 16);
+    const py = packs.y + 28 + PACK_H / 2;
     packOffers.forEach((o, i) => this.packCard(run, o, px[i], py, `pack:${i}`));
     extras.forEach((o, i) => this.offerCard(run, o, px[packOffers.length + i], py, `extra:${i}`));
     if (!packOffers.length && !extras.length) k(label(this, packs.x + packs.w / 2, packs.y + packs.h / 2, 'Sold out', { color: COLORS.dim, originX: 0.5, originY: 0.5 }));
@@ -1386,13 +1403,13 @@ export class RunScene extends Phaser.Scene {
     k(label(this, x + w / 2, y + 296, touch.active ? 'Drag a card up to buy it, or tap it for what it is' : 'Drag a card up to buy it, or click it for its Buy button', { color: COLORS.dim, originX: 0.5 }));
   }
 
-  /** a pack of the shop: opened when it is bought (by a drag to the gadgets, or with its Open button) */
+  /** a pack of the shop (a little bigger than a card, as in Balatro): opened when it is bought (by a drag to the gadgets, or with its Open button) */
   private packCard(run: RunSession, o: ShopOffer, cx: number, cy: number, spot: string): void {
     const kind = o.id as PackKind;
     const d = PACKS[kind];
     const look = PACK_LOOKS[kind];
     const price = `$${o.price}`;
-    const card = this.k(new CardView(this, cx, cy, { color: look.color, art: look.art, price, pack: look.band }));
+    const card = this.k(new CardView(this, cx, cy, { color: look.color, art: look.art, price, pack: look.band }, PACK_W, PACK_H));
     this.spot(spot, cx, cy);
     const open = () => this.openPack(run, o, card);
     this.table.add(card, {
@@ -1402,7 +1419,7 @@ export class RunScene extends Phaser.Scene {
     });
   }
 
-  /** a pack is bought: it bursts open (and the shop makes way for its cards) */
+  /** a pack is bought: it jumps (its juice), and the screen of the open pack takes it from where it is */
   private openPack(run: RunSession, o: ShopOffer, card: CardView): void {
     if (!run.canBuy(o)) {
       this.toast('Not enough money.');
@@ -1412,48 +1429,52 @@ export class RunScene extends Phaser.Scene {
     this.tip.hide();
     card.disableInteractive();
     card.setDepth(900);
+    card.juice();
     this.sfx(SoundEffect.AssignSkill);
-    this.tweens.add({
-      targets: card,
-      scale: 1.6,
-      alpha: 0,
-      angle: 12,
-      duration: 260,
-      ease: 'Cubic.easeIn',
-      onComplete: () => {
-        if (!run.buy(o.uid)) return;
-        this.save();
-        this.render();
-      },
-    });
+    if (!run.buy(o.uid)) return;
+    this.packFrom = { x: card.x, y: card.y };
+    this.save();
+    this.time.delayedCall(160, () => this.render());
   }
 
   /* -------------------------------------------------------------------------------------------- an open pack */
 
-  /** The cards of an open pack, dealt one after the other: take one (tap it, or drag it up), or skip the pack. */
+  /**
+   * The cards of an open pack: take one (tap it, or drag it up), or skip the pack. The first time a pack is shown it
+   * opens as one of Balatro does: it goes to the middle, shakes harder and harder throwing off sparks ("Oh no!"), bursts
+   * in a flash, and its cards come out of the white, each flying to its place.
+   */
   private renderPack(run: RunSession): void {
     const k = this.k.bind(this);
     const pack = run.state.pack!;
     const d = PACKS[pack.kind];
     const cx = (MAIN_X + MAIN_R) / 2;
-    k(label(this, cx, MAIN_Y + 30, d.name, { size: 48, originX: 0.5, originY: 0.5 }));
-    k(label(this, cx, MAIN_Y + 72, `Choose 1 of ${pack.choices.length}`, { size: 24, color: COLORS.gold, originX: 0.5, originY: 0.5 }));
+    const key = `${pack.kind}:${JSON.stringify(pack.choices)}`;
+    const intro = key !== this.packShown;
+    this.packShown = key;
+    const from = this.packFrom;
+    this.packFrom = null;
+    const heading = [
+      k(label(this, cx, MAIN_Y + 30, d.name, { size: 48, originX: 0.5, originY: 0.5 })),
+      k(label(this, cx, MAIN_Y + 72, `Choose 1 of ${pack.choices.length}`, { size: 24, color: COLORS.gold, originX: 0.5, originY: 0.5 })),
+    ];
     const area: Rect = { x: MAIN_X + 40, y: MAIN_Y + 96, w: MAIN_R - MAIN_X - 80, h: 200 };
     this.well(area.x, area.y, area.w, area.h, 0x000000, 0.35, 12);
     const cw = 92;
     const ch = 123;
     const pitch = Math.min(cw + 30, (area.w - 40) / Math.max(1, pack.choices.length));
     const x0 = cx - (pitch * (pack.choices.length - 1)) / 2;
+    const y = area.y + area.h / 2 - 8;
+    const views: CardView[] = [];
+    const names: Phaser.GameObjects.BitmapText[] = [];
     pack.choices.forEach((c, i) => {
       const info = this.choiceInfo(run, c);
       const x = x0 + i * pitch;
-      const y = area.y + area.h / 2 - 8;
       const card = k(new CardView(this, x, y, { color: info.color, art: info.art, edition: info.edition }, cw, ch));
+      views.push(card);
       this.spot(`choice:${i}`, x, y);
       // its name below it (the popup says the rest)
-      const name = k(label(this, x, area.y + area.h - 12, info.title, { color: COLORS.text, originX: 0.5, originY: 0.5, maxWidth: pitch - 6, align: 1 }));
-      name.setAlpha(0);
-      this.tweens.add({ targets: name, alpha: 1, duration: 200, delay: 480 + i * 150 });
+      names.push(k(label(this, x, area.y + area.h - 12, info.title, { color: COLORS.text, originX: 0.5, originY: 0.5, maxWidth: pitch - 6, align: 1 })));
       const verb = c.type === 'tarot' ? 'USE' : 'TAKE';
       const can = run.canChoose(i);
       const take = () => this.choose(run, i);
@@ -1462,16 +1483,151 @@ export class RunScene extends Phaser.Scene {
         buttons: () => [{ label: verb, color: c.type === 'tarot' ? COLORS.red : COLORS.green, side: 'below', enabled: can, run: take }],
         targets: () => [{ rect: BUY_ZONE, color: COLORS.green, lines: [verb], active: can, release: take }],
       });
-      // dealt from the pack: turned over one after the other
-      card.scaleX = 0;
-      this.tweens.add({ targets: card, scaleX: 1, duration: 160, delay: 380 + i * 150, ease: 'Back.easeOut', onStart: () => this.sfx(SoundEffect.AssignSkill) });
     });
-    this.btn('skipPack', cx - 70, area.y + area.h + 18, 140, 34, 'Skip', COLORS.gray, () => {
+    this.packViews = views;
+    this.packNames = names;
+    const skip = this.btn('skipPack', cx - 70, area.y + area.h + 18, 140, 34, 'Skip', COLORS.gray, () => this.leavePack(null, () => {
       run.skipPack();
       this.save();
       this.render();
-    }, { big: true });
-    k(label(this, cx, area.y + area.h + 72, touch.active ? 'Tap a card for what it is, or drag it up to take it' : 'Click a card for what it is, or drag it up to take it', { color: COLORS.dim, originX: 0.5 }));
+    }), { big: true });
+    const hint = k(label(this, cx, area.y + area.h + 72, touch.active ? 'Tap a card for what it is, or drag it up to take it' : 'Click a card for what it is, or drag it up to take it', { color: COLORS.dim, originX: 0.5 }));
+    if (intro) this.packIntro(pack.kind, from, { x: cx, y }, area, views, [...heading, ...names, skip, hint], heading);
+  }
+
+  /** the opening of a pack (see renderPack): the things of its screen come in once its cards are out */
+  private packIntro(kind: PackKind, from: { x: number; y: number } | null, centre: { x: number; y: number }, area: Rect, views: CardView[], rest: Phaser.GameObjects.GameObject[], heading: Phaser.GameObjects.GameObject[]): void {
+    const look = PACK_LOOKS[kind];
+    const token = ++this.introToken;
+    const live = () => token === this.introToken;
+    this.packOpening = true;
+    for (const v of views) v.setVisible(false).disableInteractive();
+    for (const o of rest) (o as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(0);
+    const start = from ?? { x: centre.x, y: H + 80 };
+    const pack = this.k(new CardView(this, start.x, start.y, { color: look.color, art: look.art, pack: look.band }, Math.round(PACK_W * 1.3), Math.round(PACK_H * 1.3)));
+    pack.disableInteractive();
+    pack.setDepth(850);
+    const colors = [0xffffff, look.color, shade(look.color, 1.4)];
+    // a glow behind it that builds up as it shakes
+    const glow = this.k(this.add.graphics().setDepth(845).setPosition(centre.x, centre.y));
+    // to the middle
+    this.tweens.add({ targets: pack, x: centre.x, y: centre.y, duration: 380, ease: 'Cubic.easeOut' });
+    // it shakes, harder and harder, throwing off sparks
+    const shake = { v: 0 };
+    let stream: ReturnType<typeof sparkStream> | null = null;
+    this.time.delayedCall(380, () => {
+      if (!live()) return;
+      this.sfx(SoundEffect.Ohno);
+      stream = sparkStream(this, centre.x, centre.y, { colors: [0xffffff, 0xffffff, look.color], every: 30, speed: [60, 210], life: 520, scale: 1.5, spread: { w: pack.cw * 0.8, h: pack.ch * 0.8 }, depth: 860 });
+      this.k(stream.emitter);
+    });
+    this.tweens.add({
+      targets: shake,
+      v: 1,
+      delay: 380,
+      duration: 1150,
+      ease: 'Quad.easeIn',
+      onUpdate: () => {
+        if (!live() || !pack.active) return;
+        pack.shake(shake.v);
+        // (more sparks the harder it shakes; the frequency stays, setting it again would start its count again)
+        const n = 1 + Math.floor(shake.v * 6);
+        if (stream && stream.emitter.quantity !== n) stream.emitter.setQuantity(n);
+        glow.clear();
+        // (rings, each a little brighter inside: a soft light in pixels)
+        for (let r = 1; r >= 0.3; r -= 0.14) {
+          glow.fillStyle(0xffffff, 0.07 * shake.v);
+          glow.fillCircle(0, 0, r * (60 + 50 * shake.v));
+        }
+      },
+      onComplete: () => {
+        if (!live()) return;
+        // it bursts: a flash, sparks everywhere, and its cards come out of the white to their places
+        stream?.stop();
+        glow.destroy();
+        this.sfx(SoundEffect.Explosion);
+        this.k(flash(this, area.x, area.y, area.w, area.h, 870, 260, 0.35));
+        // a shockwave: a white ring that grows from the pack and fades
+        const ring = this.k(this.add.graphics().setDepth(875).setPosition(centre.x, centre.y));
+        const wave = { r: 24, a: 1 };
+        this.tweens.add({
+          targets: wave,
+          r: 190,
+          a: 0,
+          duration: 420,
+          ease: 'Quad.easeOut',
+          onUpdate: () => {
+            ring.clear();
+            ring.lineStyle(6 * wave.a + 1, 0xffffff, wave.a);
+            ring.strokeCircle(0, 0, wave.r);
+          },
+          onComplete: () => ring.destroy(),
+        });
+        this.k(sparks(this, centre.x, centre.y, { colors, count: 70, speed: [120, 420], life: 700, scale: 1.5, gravity: 260, depth: 880 }));
+        pack.destroy();
+        views.forEach((v, i) => {
+          const to = { x: v.homeX, y: v.homeY };
+          v.setPosition(centre.x, centre.y).setVisible(true).setDepth(860);
+          v.materialize(i * 90);
+          this.tweens.add({
+            targets: v,
+            x: to.x,
+            y: to.y,
+            duration: 460,
+            delay: i * 90,
+            ease: 'Back.easeOut',
+            onComplete: () => {
+              if (!live()) return;
+              v.setDepth(0);
+              this.sfx(SoundEffect.AssignSkill);
+              this.k(sparks(this, to.x, to.y, { colors: [0xffffff, ...colors], count: 14, speed: [40, 140], life: 380, spread: { w: v.cw, h: v.ch }, depth: 880 }));
+            },
+          });
+        });
+        const landed = (views.length - 1) * 90 + 460;
+        this.time.delayedCall(landed, () => {
+          if (!live()) return;
+          for (const v of views) if (v.active) v.setInteractive();
+          this.tweens.add({ targets: rest, alpha: 1, duration: 220 });
+          // the name of the pack pops in
+          for (const h of heading) {
+            const t = h as Phaser.GameObjects.BitmapText;
+            const s0 = t.scale;
+            t.setScale(s0 * 0.6);
+            this.tweens.add({ targets: t, scale: s0, duration: 320, ease: 'Back.easeOut' });
+          }
+          this.packOpening = false;
+        });
+      },
+    });
+  }
+
+  /**
+   * The cards of the pack go: the one taken flies up with a jump, the others dissolve (all of them, for Skip). Then
+   * the rest happens.
+   */
+  private leavePack(taken: number | null, then: () => void): void {
+    if (this.packLeaving) return;
+    this.packLeaving = true;
+    this.table.select(null);
+    this.tip.hide();
+    const views = this.packViews.filter((v) => v.active);
+    this.tweens.add({ targets: this.packNames.filter((n) => n.active), alpha: 0, duration: 200 });
+    views.forEach((v, i) => {
+      if (this.packViews.indexOf(v) === taken) {
+        v.disableInteractive();
+        v.setDepth(900);
+        v.juice();
+        this.tweens.add({ targets: v, y: v.y - 150, alpha: 0, duration: 380, ease: 'Back.easeIn' });
+      } else {
+        v.dissolve(320, i * 40);
+        this.k(sparks(this, v.x, v.y, { colors: [0xffffff, COLORS.dim], count: 16, speed: [30, 120], life: 400, spread: { w: v.cw, h: v.ch }, depth: 880 }));
+      }
+    });
+    this.time.delayedCall(400, () => {
+      this.packLeaving = false;
+      then();
+    });
   }
 
   private choose(run: RunSession, index: number): void {
@@ -1484,12 +1640,18 @@ export class RunScene extends Phaser.Scene {
         return;
       }
     }
-    const notes = run.choosePack(index);
-    if (!notes) return;
-    this.sfx(SoundEffect.AssignSkill);
-    this.save();
-    this.render();
-    this.toast(notes.join('\n'));
+    if (!run.canChoose(index)) return;
+    this.leavePack(index, () => {
+      const notes = run.choosePack(index);
+      if (!notes) {
+        this.render();
+        return;
+      }
+      this.sfx(SoundEffect.AssignSkill);
+      this.save();
+      this.render();
+      this.toast(notes.join('\n'));
+    });
   }
 
   /** what a card of a pack is */

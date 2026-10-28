@@ -183,10 +183,10 @@ try {
   await page.waitForTimeout(400);
   s = await state();
   if (s.phase !== 'pack' || s.pack.kind !== 'lemmings' || s.money !== 10) fail(`the Lemmings Pack was not opened: ${s.phase} $${s.money}`);
-  // its cards are dealt; one is taken (a click shows it with its Take button)
-  await page.waitForTimeout(900);
+  // the pack opens (it shakes, bursts, and its cards fly out); one is taken (a click shows it with its Take button)
+  await page.waitForFunction(() => !(globalThis as any).phaserGame.scene.getScene('run').packOpening, null, { timeout: 10000 });
   await clickSpot('choice:0');
-  await clickSpot('card:TAKE');
+  await clickSpot('card:TAKE', 900);
   s = await state();
   if (s.phase !== 'shop' || s.colony.length <= colony0) fail(`a card of the pack was not taken: ${s.phase}, ${s.colony.length} lemmings`);
   // a joker and a tarot on offer: a click selects a card and shows its Buy button
