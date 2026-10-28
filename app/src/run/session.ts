@@ -2282,13 +2282,20 @@ export class RunSession {
   visibleKeys(): string[] {
     const s = this.state;
     const keys: string[] = [];
-    for (const j of s.jokers) keys.push(`joker:${j.id}`);
+    for (const j of s.jokers) {
+      keys.push(`joker:${j.id}`);
+      if (j.edition) keys.push(`edition:${j.edition}`);
+    }
     for (const t of s.tarots) keys.push(`tarot:${t.id}`);
-    for (const o of s.shop?.offers ?? []) if (o.type === 'joker' || o.type === 'tarot') keys.push(`${o.type}:${o.id}`);
+    for (const o of s.shop?.offers ?? []) {
+      if (o.type === 'joker' || o.type === 'tarot') keys.push(`${o.type}:${o.id}`);
+      if (o.type === 'joker' && o.edition) keys.push(`edition:${o.edition}`);
+    }
     for (const o of s.shop?.packs ?? []) keys.push(`pack:${o.id}`);
     for (const c of s.pack?.choices ?? []) {
       if (c.type === 'joker' || c.type === 'tarot') keys.push(`${c.type}:${c.id}`);
       else if (c.type === 'specials') keys.push(`lemming:${c.trait}`);
+      if (c.type === 'joker' && c.edition) keys.push(`edition:${c.edition}`);
     }
     if (s.phase === 'blinds') for (const b of s.blinds) if (b.tag) keys.push(`tag:${b.tag}`);
     for (const c of s.colony) {
@@ -2297,6 +2304,7 @@ export class RunSession {
       else if (c.climber) keys.push('lemming:climber');
       else if (c.floater) keys.push('lemming:floater');
       if (c.insured) keys.push('lemming:insured');
+      if (c.badge) keys.push(`badge:${c.badge}`);
     }
     return keys;
   }

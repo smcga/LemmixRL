@@ -351,13 +351,15 @@ describe('roguelike run', () => {
     const run = runOn('Orig-1-02');
     winCurrentBlind(run);
     const s = run.state;
-    s.jokers = [{ uid: 9000, id: 'headcount' }];
+    s.jokers = [{ uid: 9000, id: 'headcount', edition: 'rainbow' }];
     s.tarots = [{ uid: 9001, id: 'midas' }];
     s.colony[0].edition = 'gold';
     s.colony[1].climber = s.colony[1].floater = true;
-    s.shop!.offers[0] = { uid: 5000, type: 'joker', id: 'guild', price: 4, sold: false };
+    s.colony[2].badge = 'red';
+    s.shop!.offers[0] = { uid: 5000, type: 'joker', id: 'guild', price: 4, sold: false, edition: 'shiny' };
     const keys = run.visibleKeys();
-    for (const k of ['joker:headcount', 'tarot:midas', 'joker:guild', 'pack:lemmings', 'lemming:gold', 'lemming:athlete']) expect(keys).toContain(k);
+    for (const k of ['joker:headcount', 'tarot:midas', 'joker:guild', 'pack:lemmings', 'lemming:gold', 'lemming:athlete', 'badge:red', 'edition:rainbow', 'edition:shiny'])
+      expect(keys).toContain(k);
     expect(keys.some((k) => k.startsWith('tag:'))).toBe(false); // the bonuses are seen on the levels screen
     run.nextRound();
     expect(run.visibleKeys().some((k) => k.startsWith('tag:'))).toBe(true);
