@@ -59,6 +59,10 @@ try {
   await page.goto(url);
   await page.waitForFunction(() => (globalThis as Record<string, unknown>).lemmix, null, { timeout: 30000 });
   await page.evaluate(() => localStorage.clear());
+  // the first screen asks for a key (or a tap, or a click): the sound can start after it
+  await page.waitForFunction(() => (globalThis as any).phaserGame?.scene.isActive('start'), null, { timeout: 30000 });
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => (globalThis as any).phaserGame.scene.isActive('title'), null, { timeout: 5000 });
   await page.waitForTimeout(500);
   // the credits on the title are links (opened in a new tab)
   await ev(`window.open = (url) => { globalThis.openedUrl = url; return null; }`);
@@ -318,6 +322,10 @@ try {
   // the run is saved: after a reload it continues
   await page.reload();
   await page.waitForFunction(() => (globalThis as Record<string, unknown>).lemmix, null, { timeout: 30000 });
+  // the first screen asks for a key (or a tap, or a click): the sound can start after it
+  await page.waitForFunction(() => (globalThis as any).phaserGame?.scene.isActive('start'), null, { timeout: 30000 });
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => (globalThis as any).phaserGame.scene.isActive('title'), null, { timeout: 5000 });
   await page.keyboard.press('F6');
   await page.waitForTimeout(600);
   await clickSpot('continue');

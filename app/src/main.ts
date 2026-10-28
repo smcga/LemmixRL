@@ -8,6 +8,7 @@ import { RunScene } from './scenes/run.ts';
 import { TitleScene } from './scenes/title.ts';
 import { CollectionScene } from './scenes/collection.ts';
 import { RunPreviewScene } from './scenes/runpreview.ts';
+import { StartScene } from './scenes/start.ts';
 import { initDiagnostics } from './diagnostics.ts';
 import { initInstall } from './install.ts';
 import { initMusicPanel } from './musicpanel.ts';
@@ -39,7 +40,7 @@ const game = new Phaser.Game({
   disableContextMenu: true,
   audio: { noAudio: true },
   banner: false,
-  scene: [BootScene, DosScene, PlayerScene, RunScene, TitleScene, CollectionScene, RunPreviewScene],
+  scene: [BootScene, StartScene, DosScene, PlayerScene, RunScene, TitleScene, CollectionScene, RunPreviewScene],
 });
 
 /**
@@ -64,7 +65,7 @@ window.addEventListener('orientationchange', () => setTimeout(fit, 100));
  * LemmixRL: the music of the menus plays on Lematro's own screens (the title, the screens of a run, the collection, the
  * screen before a level of a run), never in a level, nor on the screens of the classic game (they have their own).
  */
-const MENU_SCENES = ['title', 'run', 'collection', 'runpreview'];
+const MENU_SCENES = ['start', 'title', 'run', 'collection', 'runpreview'];
 whenApp((app) => {
   game.events.on('step', () => app.sound.setMenuMusic(!game.scene.isActive('player') && MENU_SCENES.some((k) => game.scene.isActive(k))));
 });

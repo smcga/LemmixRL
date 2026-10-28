@@ -3,11 +3,10 @@ import * as Phaser from 'phaser';
 import { MiscOption } from '../../../engine/src/index.ts';
 import { LemmixApp } from '../app.ts';
 import { loadLemmixData } from '../data.ts';
-import { ScreenType } from '../screens/base.ts';
 import { WebSoundManager } from '../sound.ts';
 import { voice } from '../voice.ts';
 import { cssPx, safeAreaInsets } from '../touch.ts';
-import { gotoScreen, setApp } from './shared.ts';
+import { setApp } from './shared.ts';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -33,7 +32,8 @@ export class BootScene extends Phaser.Scene {
         setApp(app);
         // for debugging and browser tests
         if (import.meta.env.DEV) (globalThis as Record<string, unknown>).lemmix = app;
-        gotoScreen(this, ScreenType.Title);
+        // (first the screen that asks for a tap: the sound can start after it)
+        this.scene.start('start');
       } catch (e) {
         text.setText('Error: ' + String((e as Error).message ?? e));
         console.error(e);
