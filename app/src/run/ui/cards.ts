@@ -42,11 +42,28 @@ export interface CardFace {
   edition?: PowerEdition;
 }
 
-/** A card: a cream edge around a field in the colour of its kind, with its picture. Its position is its middle. */
+/** a little random sign: Balatro's juice goes one way or the other */
+const sign = () => (Math.random() > 0.5 ? 1 : -1);
+
+/**
+ * A card: a cream edge around a field in the colour of its kind, with its picture. Its position is its middle.
+ *
+ * It moves as a card of Balatro does: it is never quite still (a slow sway), it squashes and wobbles when something
+ * happens to it (its juice), it leans the way it is dragged, it tilts a little under the pointer with a sheen that
+ * follows it, and its shadow goes further away as it is lifted (hovered, selected, dragged). A pack has a foil glint
+ * that sweeps across it now and then. Its scale and rotation are worked out from all of these every frame.
+ */
 export class CardView extends Phaser.GameObjects.Container {
   homeX: number;
   homeY: number;
+  /** what moves it besides its position */
+  private readonly m = { scale: 1, flip: 1, sway: 0, lean: 0, tilt: 0, juiceS: 0, juiceR: 0, lift: 0, sheen: 0, sheenX: 0 };
   private readonly sway: Phaser.Tweens.Tween;
+  private readonly shadow: Phaser.GameObjects.Graphics;
+  private readonly sheen: Phaser.GameObjects.Graphics;
+  /** a white face over it: a card that materialises comes out of white, one that dissolves goes into it */
+  private readonly white: Phaser.GameObjects.Graphics;
+  private juiceTween: Phaser.Tweens.Tween | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -59,38 +76,31 @@ export class CardView extends Phaser.GameObjects.Container {
     super(scene, x, y);
     this.homeX = x;
     this.homeY = y;
-    const g = scene.add.graphics();
     const l = -cw / 2;
     const t = -ch / 2;
-    g.fillStyle(0x000000, 0.3);
-    g.fillRoundedRect(l + 3, t + 5, cw, ch, 6);
+    // the shadow: its own shape, moved further away the higher the card is
+    this.shadow = scene.add.graphics();
+    this.shadow.fillStyle(0x000000, 0.32);
+    if (face.pack) this.shadow.fillRect(l, t + 4, cw, ch - 8);
+    else this.shadow.fillRoundedRect(l, t, cw, ch, 6);
+    this.add(this.shadow);
+    const g = scene.add.graphics();
     if (face.pile)
       for (let i = 3; i >= 1; i--) {
         g.fillStyle(shade(COLORS.cream, 0.55 + i * 0.08), 1);
         g.fillRoundedRect(l + i * 2, t + i * 2, cw, ch, 6);
       }
-    if (face.pack) {
-      // the foil, its shine, and the crimped ends
-      g.fillStyle(shade(face.color, 0.75), 1);
-      g.fillRect(l, t + 6, cw, ch - 12);
-      g.fillStyle(face.color, 1);
-      g.fillRect(l + 3, t + 9, cw - 6, ch - 18);
-      g.fillStyle(0xffffff, 0.18);
-      g.fillRect(l + 8, t + 9, 6, ch - 18);
-      for (let x = 0; x < cw; x += 6) {
-        g.fillStyle(shade(face.color, 0.55), 1);
-        g.fillTriangle(l + x, t + 6, l + x + 6, t + 6, l + x + 3, t);
-        g.fillTriangle(l + x, t + ch - 6, l + x + 6, t + ch - 6, l + x + 3, t + ch);
-      }
-      g.fillStyle(COLORS.cream, 1);
-      g.fillRect(l + 3, t + ch - 30, cw - 6, 16);
-    } else if (!face.art || !('design' in face.art)) {
+    if (face.pack) this.drawPack(g, face.color, l, t, cw, ch);
+    else if (!face.art || !('design' in face.art)) {
       g.fillStyle(COLORS.cream, 1);
       g.fillRoundedRect(l, t, cw, ch, 6);
       g.fillStyle(shade(face.color, 0.4), 1);
       g.fillRoundedRect(l + 4, t + 4, cw - 8, ch - 8, 4);
       g.lineStyle(2, face.color, 1);
       g.strokeRoundedRect(l + 5, t + 5, cw - 10, ch - 10, 3);
+      // the light from above: the top of the field a little lighter
+      g.fillStyle(0xffffff, 0.05);
+      g.fillRoundedRect(l + 6, t + 6, cw - 12, (ch - 12) / 2, 3);
     }
     this.add(g);
     const art = face.art;
@@ -114,8 +124,17 @@ export class CardView extends Phaser.GameObjects.Container {
       name.setDropShadow(0, 0, 0, 0);
       if (name.width > cw - 10) name.setScale((cw - 10) / name.width);
       this.add(name);
-      for (const o of this.list) if (o !== g && o !== name && 'setY' in o) (o as unknown as { y: number }).y -= 10;
+      for (const o of this.list) if (o !== g && o !== name && o !== this.shadow && 'setY' in o) (o as unknown as { y: number }).y -= 10;
+      this.glint(l, t, cw, ch);
     }
+    this.sheen = scene.add.graphics();
+    this.add(this.sheen);
+    this.white = scene.add.graphics();
+    this.white.fillStyle(0xffffff, 1);
+    if (face.pack) this.white.fillRect(l, t + 6, cw, ch - 12);
+    else this.white.fillRoundedRect(l, t, cw, ch, 6);
+    this.white.setAlpha(0);
+    this.add(this.white);
     if (face.price) {
       const price = label(scene, 0, t - 11, face.price, { color: COLORS.gold, originX: 0.5, originY: 0.5 });
       const w = price.width + 14;
@@ -131,16 +150,127 @@ export class CardView extends Phaser.GameObjects.Container {
     this.setInteractive();
     // a card is never quite still
     this.sway = scene.tweens.add({
-      targets: this,
-      rotation: { from: -0.02, to: 0.02 },
+      targets: this.m,
+      sway: { from: -0.02, to: 0.02 },
       duration: 1700 + Math.random() * 900,
       delay: Math.random() * 600,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
-    this.once('destroy', () => scene.tweens.killTweensOf(this));
+    // under the pointer: it tilts towards it, and a sheen follows it
+    this.on('pointermove', (p: Phaser.Input.Pointer) => {
+      const px = Math.max(-0.5, Math.min(0.5, (p.worldX - this.x) / (cw * this.scaleY)));
+      this.m.tilt = -px * 0.05;
+      this.m.sheenX = -px;
+      this.m.sheen = 1;
+    });
+    this.on('pointerout', () => {
+      scene.tweens.add({ targets: this.m, tilt: 0, sheen: 0, duration: 220 });
+    });
+    scene.events.on('update', this.tick, this);
+    this.once('destroy', () => {
+      scene.events.off('update', this.tick, this);
+      // (everything that moves it goes with it: a tween left behind would reach for a card that is gone)
+      this.juiceTween?.remove();
+      scene.tweens.killTweensOf([this, this.m, this.white]);
+    });
+    this.tick();
     scene.add.existing(this);
+  }
+
+  /** every frame: its scale and rotation from what moves it, its shadow from how high it is, its sheen */
+  private tick(): void {
+    if (!this.active) return;
+    const m = this.m;
+    const s = m.scale * (1 + m.juiceS);
+    this.setScale(s * m.flip, s);
+    this.setRotation(m.sway + m.lean + m.tilt + m.juiceR);
+    // (Balatro: the shadow moves away and gets smaller as the card goes up)
+    this.shadow.setPosition(2 + 6 * m.lift, 4 + 12 * m.lift);
+    this.shadow.setScale(1 - 0.08 * m.lift);
+    this.shadow.setAlpha(1 - 0.35 * m.lift);
+    const sh = this.sheen;
+    sh.clear();
+    if (m.sheen > 0.01) {
+      const l = -this.cw / 2;
+      const x = m.sheenX * this.cw * 0.6;
+      const top = -this.ch / 2 + (this.face.pack ? 8 : 4);
+      const h = this.ch - (this.face.pack ? 16 : 8);
+      for (const [dx, w, a] of [
+        [-9, 6, 0.05],
+        [-3, 6, 0.1],
+        [3, 6, 0.05],
+      ] as const) {
+        const x0 = Math.max(l + 4, x + dx);
+        const x1 = Math.min(l + this.cw - 4, x + dx + w);
+        if (x1 > x0) {
+          sh.fillStyle(0xffffff, a * m.sheen);
+          sh.fillRect(x0, top, x1 - x0, h);
+        }
+      }
+    }
+  }
+
+  /** a pack: a foil wrapper with its shine and a crease or two, crimped and sealed at both ends, its name on a band */
+  private drawPack(g: Phaser.GameObjects.Graphics, color: number, l: number, t: number, cw: number, ch: number): void {
+    g.fillStyle(shade(color, 0.75), 1);
+    g.fillRect(l, t + 6, cw, ch - 12);
+    g.fillStyle(color, 1);
+    g.fillRect(l + 3, t + 9, cw - 6, ch - 18);
+    // the foil: lighter at the top, a shine down one side, creases
+    g.fillStyle(0xffffff, 0.1);
+    g.fillRect(l + 3, t + 9, cw - 6, (ch - 18) * 0.4);
+    g.fillStyle(0xffffff, 0.2);
+    g.fillRect(l + 8, t + 9, 6, ch - 18);
+    g.fillStyle(0xffffff, 0.1);
+    g.fillRect(l + cw * 0.64, t + 9, 2, ch - 18);
+    g.fillStyle(0x000000, 0.12);
+    g.fillRect(l + cw * 0.64 + 2, t + 9, 2, ch - 18);
+    g.fillRect(l + 3, t + 9 + (ch - 18) * 0.55, cw - 6, 1);
+    for (let x = 0; x < cw; x += 6) {
+      g.fillStyle(shade(color, 0.55), 1);
+      g.fillTriangle(l + x, t + 6, l + x + 6, t + 6, l + x + 3, t);
+      g.fillTriangle(l + x, t + ch - 6, l + x + 6, t + ch - 6, l + x + 3, t + ch);
+    }
+    // the seals: a darker strip under each crimp
+    g.fillStyle(shade(color, 0.6), 1);
+    g.fillRect(l, t + 6, cw, 3);
+    g.fillRect(l, t + ch - 9, cw, 3);
+    g.fillStyle(COLORS.cream, 1);
+    g.fillRect(l + 3, t + ch - 30, cw - 6, 16);
+  }
+
+  /** a glint that sweeps across the foil of a pack now and then (Balatro's booster shader) */
+  private glint(l: number, t: number, cw: number, ch: number): void {
+    const scene = this.scene;
+    const gl = scene.add.graphics();
+    this.add(gl);
+    const top = t + 9;
+    const h = ch - 18;
+    const slant = 0.5;
+    const band = 10;
+    const p = { v: 0 };
+    const draw = () => {
+      if (!gl.active) return;
+      gl.clear();
+      if (p.v <= 0 || p.v >= 1) return;
+      // a slanted band, cut to the foil row by row
+      const a = l - h * slant - band + p.v * (cw + h * slant + 2 * band);
+      gl.fillStyle(0xffffff, 0.35);
+      for (let y = 0; y < h; y += 3) {
+        const x0 = Math.max(l + 3, a + y * slant);
+        const x1 = Math.min(l + cw - 3, a + y * slant + band);
+        if (x1 > x0) gl.fillRect(x0, top + y, x1 - x0, Math.min(3, h - y));
+      }
+    };
+    const sweep = () => {
+      if (!this.active) return;
+      p.v = 0;
+      scene.tweens.add({ targets: p, v: 1, duration: 700, ease: 'Sine.easeInOut', onUpdate: draw, onComplete: draw });
+      scene.time.delayedCall(2600 + Math.random() * 1600, sweep);
+    };
+    scene.time.delayedCall(400 + Math.random() * 1800, sweep);
   }
 
   /** the look of a Power Card edition, over its picture */
@@ -204,24 +334,95 @@ export class CardView extends Phaser.GameObjects.Container {
 
   /** back to its place, raised a little when it is selected */
   settle(lift = 0, ms = 140): void {
-    this.scene.tweens.add({ targets: this, x: this.homeX, y: this.homeY - lift, scale: 1, duration: ms, ease: 'Cubic.easeOut' });
+    this.scene.tweens.add({ targets: this, x: this.homeX, y: this.homeY - lift, duration: ms, ease: 'Cubic.easeOut' });
+    this.scene.tweens.add({ targets: this.m, scale: 1, lean: 0, lift: lift > 0 ? 0.6 : 0, duration: ms, ease: 'Cubic.easeOut' });
     if (this.sway.isPaused()) this.sway.resume();
   }
 
+  /** bigger (hovered: up off the table a little) or back to its size */
   grow(scale: number): void {
-    this.scene.tweens.add({ targets: this, scale, duration: 90 });
+    this.scene.tweens.add({ targets: this.m, scale, lift: scale > 1 ? 0.4 : 0, duration: 90 });
   }
 
-  /** picked up: it follows the pointer, leaning the way it moves */
+  /** picked up: it follows the pointer, leaning the way it moves, high above the table */
   pickUp(): void {
     this.sway.pause();
-    this.grow(1.12);
+    this.scene.tweens.add({ targets: this.m, scale: 1.12, lift: 1, duration: 90 });
+    this.juice(0.06, 0.06);
   }
 
   follow(x: number, y: number): void {
     const lean = Math.max(-0.3, Math.min(0.3, (x - this.x) * 0.03));
-    this.rotation += (lean - this.rotation) * 0.35;
+    this.m.lean += (lean - this.m.lean) * 0.35;
     this.setPosition(x, y);
+  }
+
+  /**
+   * Balatro's juice: the card squashes and springs back with a wobble, both dying away in 0.4 seconds (the scale as
+   * sin(50.8 t) times (1 - t)^3, the rotation as sin(40.8 t) times (1 - t)^2).
+   */
+  juice(scale = 0.11, rot = 0.16 * sign()): void {
+    if (!this.active) return;
+    this.juiceTween?.remove();
+    const p = { t: 0 };
+    this.juiceTween = this.scene.tweens.add({
+      targets: p,
+      t: 1,
+      duration: 400,
+      onUpdate: () => {
+        const s = p.t * 0.4;
+        this.m.juiceS = scale * Math.sin(50.8 * s) * (1 - p.t) ** 3;
+        this.m.juiceR = rot * Math.sin(40.8 * s) * (1 - p.t) ** 2;
+      },
+      onComplete: () => {
+        this.m.juiceS = 0;
+        this.m.juiceR = 0;
+      },
+    });
+  }
+
+  /** the shake of a pack about to burst, growing with how far it is (0 to 1) */
+  shake(amount: number): void {
+    if (!this.active) return;
+    const t = this.scene.time.now / 1000;
+    this.m.juiceR = 0.065 * (Math.sin(5 * t) + Math.cos(0.33 + 41.15 * t) + Math.cos(67.12 * t)) * amount;
+    this.m.juiceS = 0.15 * amount;
+  }
+
+  /** It comes out of white, growing from small (Balatro's materialize). */
+  materialize(delay = 0, ms = 450): void {
+    if (!this.active) return;
+    this.m.scale = 0.35;
+    this.white.setAlpha(1);
+    this.scene.tweens.add({ targets: this.m, scale: 1, duration: ms, delay, ease: 'Back.easeOut' });
+    this.scene.tweens.add({
+      targets: this.white,
+      alpha: 0,
+      duration: ms,
+      delay: delay + ms * 0.3,
+      ease: 'Quad.easeIn',
+      onComplete: () => this.juice(),
+    });
+  }
+
+  /** It goes into white and away, smaller and smaller (Balatro's dissolve). The caller destroys it. */
+  dissolve(ms = 320, delay = 0): void {
+    if (!this.active) return;
+    this.sway.pause();
+    this.disableInteractive();
+    this.juice(0.06);
+    this.scene.tweens.add({ targets: this.white, alpha: 0.9, duration: ms * 0.6, delay });
+    this.scene.tweens.add({ targets: this.m, scale: 0.6, duration: ms, delay, ease: 'Quad.easeIn' });
+    this.scene.tweens.add({ targets: this, alpha: 0, duration: ms * 0.5, delay: delay + ms * 0.5 });
+  }
+
+  /** turned over: its width from nothing (0) to all of it (1) */
+  set turn(v: number) {
+    this.m.flip = v;
+  }
+
+  get turn(): number {
+    return this.m.flip;
   }
 }
 
@@ -316,6 +517,8 @@ export class CardTable {
     card.on('pointerover', () => {
       if (touch.active || this.press) return;
       this.hovered = card;
+      // (Balatro: a little juice as the pointer comes over a card)
+      card.juice(0.05, 0.03 * (Math.random() > 0.5 ? 1 : -1));
       if (card !== this.selected) card.grow(1.06);
       this.showTip(card);
     });
@@ -477,7 +680,6 @@ export class CardTable {
     if (card.active) {
       card.setDepth(0);
       card.settle(0, 200);
-      this.scene.tweens.add({ targets: card, rotation: 0, duration: 200 });
     }
   }
 

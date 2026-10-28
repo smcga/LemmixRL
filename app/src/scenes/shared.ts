@@ -24,6 +24,9 @@ export function getApp(): LemmixApp {
 
 /** TFormMain: shows the next screen. */
 export function gotoScreen(scene: Phaser.Scene, next: ScreenType): void {
+  // LemmixRL: the music of the menus stops as a level starts (main.ts turns it on and off with the screens, a frame
+  // later; this is at once)
+  if (next === ScreenType.Play) theApp?.sound.setMenuMusic(false);
   // LemmixRL: the level before it is played in a run has its own screen
   if (next === ScreenType.Preview && getApp().inRun) scene.scene.start('runpreview');
   else if (next === ScreenType.Play) scene.scene.start('player');
