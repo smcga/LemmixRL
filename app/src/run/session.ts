@@ -948,6 +948,49 @@ export class RunSession {
     return i === undefined ? undefined : this.card(squad[i]);
   }
 
+  /**
+   * Debug tools: the level passed as if every lemming of the squad was saved, with no skill used and the time it has
+   * (the rescue count of the Power Cards as for any attempt). The level need not have been played.
+   */
+  debugPass(secondsLeft?: number): AttemptOutcome {
+    const s = this.state;
+    const setup = s.setup!;
+    const squad = [...setup.hand];
+    const cards = squad.map((id) => this.card(id) ?? null);
+    const fates: Fate[] = squad.map(() => 'saved');
+    const used = zeroSkills();
+    const seconds = secondsLeft ?? setup.minutes * 60;
+    const { score, lines } = this.rescueCount(cards, cards, used, { fates, secondsLeft: seconds });
+    setup.selfCopy = null;
+    const outcome: AttemptOutcome = {
+      success: true,
+      secondChance: false,
+      score,
+      scoring: lines,
+      extra: 0,
+      extraSaved: 0,
+      exitOrder: squad.map((_, i) => i),
+      squad,
+      lapGold: 0,
+      events: ['Debug tools: passed with every lemming saved.'],
+      rescued: squad.length,
+      required: setup.rescue,
+      hand: squad.length,
+      fates,
+      skillsUsed: used,
+      secondsLeft: seconds,
+      timeUp: false,
+      nuked: false,
+      done: 100,
+      target: squad.length ? Math.trunc((setup.rescue * 100) / squad.length) : 0,
+    };
+    setup.attempts++;
+    s.stats.attempts++;
+    s.outcome = outcome;
+    s.phase = 'result';
+    return outcome;
+  }
+
   /** Back from the level without a result (the attempt does not count). */
   abandonAttempt(): void {
     if (this.state.phase === 'playing') this.state.phase = 'blinds';

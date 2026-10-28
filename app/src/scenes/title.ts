@@ -6,7 +6,7 @@
 import * as Phaser from 'phaser';
 import { SoundEffect } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
-import { editConfig } from '../dialogs.ts';
+import { debugOn, onDebugChange, setDebug } from '../debug.ts';
 import { ScreenType } from '../screens/base.ts';
 import { ensureRunAssets, lemmingSprite } from '../run/ui/assets.ts';
 import { CardView } from '../run/ui/cards.ts';
@@ -45,6 +45,7 @@ export class TitleScene extends Phaser.Scene {
     this.closed = false;
     this.settings = [];
     this.fullscreen = [];
+    this.designer = [];
     this.spots = {};
     ensureRunAssets(this, this.app);
     // (a run is played in the original style; the title is not a part of it)
@@ -79,7 +80,9 @@ export class TitleScene extends Phaser.Scene {
     this.button('classic', 674, 410, 154, 60, 'Classic\nLemmings', COLORS.purple, () => this.classic());
     // on a computer, full screen in the corner (on a phone or a tablet the first screen offers to install it as an app)
     this.fullscreenButton();
-    this.line(842, 24, [['Card designer', 'designer.html']]);
+    // (Debug tools: the card designer)
+    this.designerLink();
+    this.events.once('shutdown', onDebugChange(() => this.designerLink()));
     const onFullscreen = () => this.fullscreenButton();
     document.addEventListener('fullscreenchange', onFullscreen);
     this.events.once('shutdown', () => document.removeEventListener('fullscreenchange', onFullscreen));
@@ -114,7 +117,8 @@ export class TitleScene extends Phaser.Scene {
    * A line of text with links in it, centred on x: [text, url] parts; a url of null is plain text, 'about' opens the
    * credits. A link is underlined, lights up under the pointer, and opens in a new tab.
    */
-  private line(x: number, y: number, parts: [string, string | null][]): void {
+  private line(x: number, y: number, parts: [string, string | null][]): Phaser.GameObjects.GameObject[] {
+    const made: Phaser.GameObjects.GameObject[] = [];
     const texts = parts.map(([t, url]) => label(this, 0, y, t, { color: url ? COLORS.gold : COLORS.dim, originY: 0.5 }).setDepth(10));
     let lx = x - texts.reduce((n, t) => n + t.width, 0) / 2;
     texts.forEach((t, i) => {
@@ -123,6 +127,7 @@ export class TitleScene extends Phaser.Scene {
       const url = parts[i][1];
       if (!url) return;
       const under = this.add.rectangle(t.x, y + 8, t.width, 1, COLORS.gold).setOrigin(0, 0).setDepth(10);
+      made.push(under);
       t.setInteractive({ useHandCursor: true });
       t.on('pointerover', () => {
         t.setTint(COLORS.cream);
@@ -135,6 +140,17 @@ export class TitleScene extends Phaser.Scene {
       t.on('pointerup', () => (url === 'about' ? this.showAbout() : window.open(url, '_blank', 'noopener')));
       this.spots[`link:${parts[i][0]}`] = { x: t.x + t.width / 2, y };
     });
+    return [...texts, ...made];
+  }
+
+  private designer: Phaser.GameObjects.GameObject[] = [];
+
+  /** the link to the card designer, in the corner: with Debug tools on */
+  private designerLink(): void {
+    for (const o of this.designer) o.destroy();
+    this.designer = [];
+    delete this.spots['link:Card designer'];
+    if (debugOn()) this.designer = this.line(842, 24, [['Card designer', 'designer.html']]);
   }
 
   /** About: who made Lemmings, Lemmix and Balatro, and that this is a fan thing, not theirs */
@@ -255,8 +271,16 @@ export class TitleScene extends Phaser.Scene {
       );
       y += 52;
     }
-    o(new Button(this, 330, y, 300, 40, 'Game options...', COLORS.blue, () => void editConfig(this.app.config)));
-    o(label(this, W / 2, y + 52, 'Lemmix options: game speed, the mechanics of the original, the voice', { color: COLORS.dim, originX: 0.5, maxWidth: 320, align: 1 }));
+    // Debug tools: for testing (pass a level at once, the card designer, the music panel)
+    const debugCaption = () => (debugOn() ? 'Debug tools: on' : 'Debug tools: off');
+    this.spots['settings:debug'] = { x: 480, y: y + 20 };
+    const dbg = o(
+      new Button(this, 330, y, 300, 40, debugCaption(), COLORS.gray, () => {
+        setDebug(!debugOn());
+        dbg.setCaption(debugCaption());
+      }),
+    );
+    o(label(this, W / 2, y + 52, 'For testing: pass a level of a run at once, the card designer, the music panel', { color: COLORS.dim, originX: 0.5, maxWidth: 320, align: 1 }));
     this.spots['settings:back'] = { x: 480, y: 448 };
     o(new Button(this, 330, 430, 300, 36, 'Back', COLORS.orange, () => this.closeSettings()));
   }

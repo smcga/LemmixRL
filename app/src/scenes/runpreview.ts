@@ -17,6 +17,8 @@ import { Swirl, SWIRLS } from '../run/ui/swirl.ts';
 import { Button, COLORS, label, panel } from '../run/ui/widgets.ts';
 import { safeAreaInsets, touch } from '../touch.ts';
 import { getApp, gotoScreen, listen } from './shared.ts';
+import { debugOn } from '../debug.ts';
+import { saveRun } from '../run/storage.ts';
 
 const W = 960;
 const H = 540;
@@ -149,6 +151,11 @@ export class RunPreviewScene extends Phaser.Scene {
     new Button(this, 710, 464, 190, 44, "Let's go!", COLORS.orange, () => this.go(), { big: true });
     this.spots.back = { x: 120, y: 486 };
     new Button(this, 60, 470, 120, 32, 'Back', COLORS.gray, () => this.back());
+    // Debug tools: the level passed at once, every lemming saved
+    if (debugOn()) {
+      this.spots.debugPass = { x: 266, y: 486 };
+      new Button(this, 196, 470, 140, 32, 'Pass level', COLORS.red, () => this.debugPass());
+    }
     label(this, W / 2, 486, touch.active ? 'Tap to continue' : 'Press mouse button to continue', { color: COLORS.dim, originX: 0.5, originY: 0.5 });
     lemmingSprite(this, 682, 494, 'walk', 2);
 
@@ -177,6 +184,16 @@ export class RunPreviewScene extends Phaser.Scene {
     if (this.closed) return;
     this.closed = true;
     gotoScreen(this, ScreenType.Play);
+  }
+
+  /** Debug tools: passed without playing it, every lemming saved */
+  private debugPass(): void {
+    const run = this.app.run;
+    if (this.closed || !run) return;
+    this.closed = true;
+    run.debugPass();
+    saveRun(run.state);
+    gotoScreen(this, ScreenType.Run);
   }
 
   private back(): void {

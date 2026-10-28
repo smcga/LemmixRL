@@ -22,6 +22,7 @@ import {
 } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
 import { saveRun } from '../run/storage.ts';
+import { debugOn } from '../debug.ts';
 import { speak, voice, VoiceOption } from '../voice.ts';
 import { ScreenType } from './base.ts';
 import { SkillPanel } from './skillpanel.ts';
@@ -109,6 +110,8 @@ export class PlayerScreen implements GameView {
   private keyIsDown = 0;
   private lastReplayFileName = '';
   private closing = false;
+  /** Debug tools: the level is passed with every lemming saved (the 5 key in a run) */
+  private debugPassed = false;
   /** the mouse position in control coordinates of the image (the skill panel is below it) */
   mouseX = 0;
   mouseY = 0;
@@ -696,6 +699,12 @@ export class PlayerScreen implements GameView {
   private runKeyPress(ch: string): boolean {
     const game = this.game;
     switch (ch) {
+      // Debug tools: passed at once, every lemming saved
+      case '5':
+        if (!debugOn()) return false;
+        this.debugPassed = true;
+        game.finish();
+        return true;
       case 'F':
         this.keyPress('f');
         return true;
@@ -834,7 +843,8 @@ export class PlayerScreen implements GameView {
     // LemmixRL: the attempt of a blind is over
     const run = this.app.inRun ? this.app.run : null;
     if (run && next === ScreenType.Postview && run.state.phase === 'playing') {
-      run.finishAttempt(this.game);
+      if (this.debugPassed) run.debugPass(this.game.minutes * 60 + this.game.seconds);
+      else run.finishAttempt(this.game);
       saveRun(run.state);
     }
     this.close(next);
