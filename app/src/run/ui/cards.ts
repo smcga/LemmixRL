@@ -228,10 +228,13 @@ export class CardView extends Phaser.GameObjects.Container {
     g.fillStyle(0x000000, 0.12);
     g.fillRect(l + cw * 0.64 + 2, t + 9, 2, ch - 18);
     g.fillRect(l + 3, t + 9 + (ch - 18) * 0.55, cw - 6, 1);
-    for (let x = 0; x < cw; x += 6) {
+    const crimps = Math.max(1, Math.round(cw / 6));
+    const crimpWidth = cw / crimps;
+    for (let i = 0; i < crimps; i++) {
+      const x = i * crimpWidth;
       g.fillStyle(shade(color, 0.55), 1);
-      g.fillTriangle(l + x, t + 6, l + x + 6, t + 6, l + x + 3, t);
-      g.fillTriangle(l + x, t + ch - 6, l + x + 6, t + ch - 6, l + x + 3, t + ch);
+      g.fillTriangle(l + x, t + 6, l + x + crimpWidth, t + 6, l + x + crimpWidth / 2, t);
+      g.fillTriangle(l + x, t + ch - 6, l + x + crimpWidth, t + ch - 6, l + x + crimpWidth / 2, t + ch);
     }
     // the seals: a darker strip under each crimp
     g.fillStyle(shade(color, 0.6), 1);
