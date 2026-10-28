@@ -18,7 +18,7 @@ import { type BlindPreview, cardTitle, isSpecial, jokerSellValue, RunSession, ta
 import { colorsText } from '../run/colors.ts';
 import { hazardsText, levelHazards } from '../run/hazards.ts';
 import { describeSkills, SKILL_NAMES, SKILL_PLURALS, SKILLS, type Skill, totalSkills } from '../run/skills.ts';
-import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type JokerInstance, type PackChoice, type RescueLine, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
+import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type JokerInstance, type PackChoice, type RescueLine, type ShopOffer, START_COLONY, TAROT_SLOTS } from '../run/state.ts';
 import { loadMeta, loadRun, markSeen, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
 import { ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
 import { type Art, CARD_H, CARD_W, type CardBehaviour, CardTable, CardView, type DropTarget, inRect, type Rect } from '../run/ui/cards.ts';
@@ -418,6 +418,10 @@ export class RunScene extends Phaser.Scene {
     if (state.phase === 'playing') this.app.run.abandonAttempt();
     this.choosing = false;
     this.render();
+    if (this.app.run.retired.length) {
+      this.save();
+      this.toast(this.app.run.retired.join('\n'));
+    }
   }
 
   /* -------------------------------------------------------------------------------------------- the column on the left */
@@ -2064,6 +2068,67 @@ function jokerLines(run: RunSession, j: JokerInstance): string[] {
       break;
     case 'yorick':
       current = `{x}X${1 + Math.floor((j.counter ?? 0) / 23)}{} (${j.counter ?? 0} lost)`;
+      break;
+    case 'longservice': {
+      const left = 5 - ((j.counter ?? 0) % 6);
+      current = left === 0 ? '{x}X3{} this level' : `${left} level${left === 1 ? '' : 's'} to go`;
+      break;
+    }
+    case 'weakestlink':
+      current = `{+}+${2 * Math.min(...SKILLS.map((sk) => run.capability()[sk]))}{}`;
+      break;
+    case 'reserves':
+    {
+      const blind = run.currentBlind;
+      const squad = s.setup?.hand.length ?? (blind ? run.squadSize(run.level(blind.levelId)) : 0);
+      current = `{+}+${Math.floor(Math.max(0, s.colony.length - squad) / 5)}{}`;
+    }
+      break;
+    case 'nothanks':
+      current = `{+}+${2 * (j.counter ?? 0)}{}`;
+      break;
+    case 'stampede':
+    case 'campout':
+    case 'fragile':
+      current = `{x}X${+(1 + 0.25 * (j.counter ?? 0)).toFixed(2)}{}`;
+      break;
+    case 'bodysnatcher':
+    case 'populationboom':
+    case 'rabbitsfoot':
+      current = `{x}X${+(1 + 0.1 * (j.counter ?? 0)).toFixed(1)}{}`;
+      break;
+    case 'jetpack':
+      current = `{$}$${1 + (j.counter ?? 0)}{}`;
+      break;
+    case 'thinranks':
+      current = `{+}+${2 * Math.max(0, START_COLONY - s.colony.length)}{}`;
+      break;
+    case 'boosterclub':
+      current = `{+}+${s.stats.boostsUsed ?? 0}{}`;
+      break;
+    case 'bullmarket':
+      current = `{+}+${Math.floor(Math.max(0, s.money) / 2)}{}`;
+      break;
+    case 'fizzypop':
+      current = `${3 - (j.counter ?? 0)} level${3 - (j.counter ?? 0) === 1 ? '' : 's'} left`;
+      break;
+    case 'treasurechest':
+      current = `{+}+${s.jokers.filter((x) => x !== j).reduce((n, x) => n + jokerSellValue(x), 0)}{}`;
+      break;
+    case 'skippingrope':
+      current = `{x}X${+(1 + 0.25 * s.stats.skipped).toFixed(2)}{}`;
+      break;
+    case 'littlehelper':
+      current = `{+}+${Math.floor((j.counter ?? 0) / 10)}{} (${j.counter ?? 0} saved)`;
+      break;
+    case 'mirrorimage':
+      current = (j.counter ?? 0) >= 2 ? 'ready' : `${j.counter ?? 0}/2 levels`;
+      break;
+    case 'supersquad':
+      current = `${s.colony.filter((c) => run.isSuper(c)).length} Super Lemmings`;
+      break;
+    case 'ohno':
+      current = `{x}X${1 + (j.counter ?? 0)}{}`;
       break;
   }
   if (d.copies) {

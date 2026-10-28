@@ -232,7 +232,7 @@ try {
   if ((await run<string>('state.phase')) !== 'shop' || (await run<number>('state.colony.length')) <= colony) fail('the Take button of a card of a pack did not take it');
   // a tarot: its Use button opens the colony walking about, where a tap on a lemming lifts it into the sky (selected)
   await ev(
-    `(() => { const s = globalThis.lemmix.run.state; s.tarots = [{ uid: 9001, id: 'umbrella' }]; s.jokers = [{ uid: 9002, id: 'piggy' }]; for (const c of s.colony) c.floater = false; for (let i = 0; i < 3; i++) s.colony[i].insured = true; ${runScene}.render(); })()`,
+    `(() => { const s = globalThis.lemmix.run.state; s.tarots = [{ uid: 9001, id: 'umbrella' }]; s.jokers = [{ uid: 9002, id: 'headcount' }]; for (const c of s.colony) c.floater = false; for (let i = 0; i < 3; i++) s.colony[i].insured = true; ${runScene}.render(); })()`,
   );
   await page.waitForTimeout(200);
   await tapSpot('tarot:0');

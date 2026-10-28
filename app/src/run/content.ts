@@ -5,7 +5,7 @@
  */
 import { clothesOf, COLOR_NAMES, hairOf, hasHair, isFully, LEMMING_COLORS, type LemmingColor } from './colors.ts';
 import type { SkillCounts } from './skills.ts';
-import type { LemmingCard } from './state.ts';
+import { type LemmingCard, START_COLONY } from './state.ts';
 import { POWER_CARD_LIBRARY } from './power-cards/catalogue.ts';
 import type { Rarity } from './power-cards/schema.ts';
 import type { PowerCardLibrary } from './power-cards/schema.ts';
@@ -197,10 +197,37 @@ export interface RescueContext {
   color?: LemmingColor;
   /** the lemming of this Power Card (Teacher's Pet), by id */
   target?: number;
+  /** a Super Lemming, as the Power Cards see it (Everyone's Special: every lemming) */
+  isSuper: (c: LemmingCard) => boolean;
+  /** the lowest ability of the colony (with the Power Cards') */
+  lowestAbility: number;
+  /** the lemmings of the colony, and the ones not in the squad */
+  colonySize: number;
+  reserves: number;
+  /** the Super Lemmings of the colony */
+  colonySupers: number;
+  /** the Boosts used and the levels skipped this run */
+  boostsUsed: number;
+  skipped: number;
+  /** the level is a Level 3 */
+  boss: boolean;
+  /** the sell value of the other Power Cards */
+  otherSellValue: number;
+  /** a random number from 0 to 1 for this Power Card in this level, from the seed of the run (the Glitch) */
+  roll: number;
 }
 
 const savedWithHair = (c: RescueContext, color: LemmingColor) => c.savedCards.filter((x) => hasHair(x, color, c.ginger)).length;
 const firstSaved = (n: number) => (c: RescueContext) => ({ plus: Math.min(n, c.saved) });
+/** every saved lemming of the colony shares a hair colour (at least `min` of them) */
+const sameHair = (c: RescueContext, min = 1) => c.savedCards.length >= min && LEMMING_COLORS.some((col) => c.savedCards.every((x) => hasHair(x, col, c.ginger)));
+/** the Spiral Staircase: the places in the order of the saves that are Fibonacci numbers */
+const FIBONACCI = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144];
+
+/** A Super Lemming: a lemming with an edition (Gold, Lucky, Mentor, Champion, Wise), a Climber, a Floater or Insured. */
+export function isSuperLemming(c: LemmingCard): boolean {
+  return c.edition !== 'plain' || c.climber || c.floater || c.insured;
+}
 
 /** what a joker can see when it pays out */
 export interface PayoutContext {
@@ -227,8 +254,6 @@ export interface JokerDef {
   capacity?: Partial<SkillCounts>;
   /** new ability points to assign after every boss blind */
   pointsAfterBoss?: number;
-  /** more ability points that can be moved after every boss blind */
-  reassignAfterBoss?: number;
   /** raises the level's maximum of these skills (the rule breakers) */
   aboveMax?: Partial<SkillCounts>;
   /** one random skill above the level's maximum per blind */
@@ -246,8 +271,6 @@ export interface JokerDef {
   firstDeathReturns?: boolean;
   /** money at the cash out */
   payout?: (c: PayoutContext) => number;
-  /** raises the interest cap */
-  interestCap?: number;
   /** extra dollars of interest earned per $5 */
   interestPerFive?: number;
   /** plain lemmings that join the colony after every blind */
@@ -278,10 +301,6 @@ export interface JokerDef {
   recycler?: boolean;
   /** red and orange hair count as each other */
   ginger?: boolean;
-  /** lemmings with these clothes that explode respawn */
-  respawnClothes?: LemmingColor;
-  /** sell value gained for every lemming that splats */
-  splatValue?: number;
   /** sell value gained after every level */
   sellValueAfterLevel?: number;
   /** Boosts created when a level begins, if there is room */
@@ -289,7 +308,48 @@ export interface JokerDef {
   /** counts the Trainings used */
   countsTraining?: boolean;
   /** what it does after a level (see RunSession.accept) */
-  afterLevel?: 'wasteNot' | 'rainyDay' | 'purpleRain' | 'purpleBoost' | 'marmalade' | 'checklist' | 'changeling' | 'finalLap' | 'royalPurple' | 'salon' | 'trendsetter' | 'teacherspet' | 'popcorn' | 'yorick';
+  afterLevel?:
+    | 'rainyDay'
+    | 'purpleRain'
+    | 'purpleBoost'
+    | 'marmalade'
+    | 'checklist'
+    | 'changeling'
+    | 'finalLap'
+    | 'salon'
+    | 'trendsetter'
+    | 'teacherspet'
+    | 'popcorn'
+    | 'yorick'
+    | 'countLevels'
+    | 'moonLanding'
+    | 'bodySnatcher'
+    | 'jetpack'
+    | 'goldLeaf'
+    | 'campOut'
+    | 'littleHelper';
+  /** destroyed after this many levels (its counter counts them) */
+  lasts?: number;
+  /** what its counter counts, one for each time it happens (the cards it has, not the ones that copy it) */
+  counts?: 'packSkipped' | 'joined' | 'sold' | 'luckyPaid' | 'superDied' | 'superLeft';
+  /** what it does when a level begins (see RunSession.levelBegins) */
+  atLevelStart?: 'stampede' | 'rabble';
+  /** more (or fewer) lemmings in the squad */
+  squad?: number;
+  /** every lemming counts as a Super Lemming for the Power Cards */
+  allSuper?: boolean;
+  /** saved Super Lemmings count twice in the rescue count */
+  encore?: boolean;
+  /** shops and packs can offer Power Cards and Boosts you already have */
+  duplicates?: boolean;
+  /** multiplies every listed chance */
+  chanceMultiplier?: number;
+  /** offered only once this Power Card has been destroyed by its own chance (Little Mike after Big Mike) */
+  onlyAfter?: string;
+  /** after 2 levels, selling it copies a random Power Card */
+  copyOnSell?: boolean;
+  /** copies a random Boost when you leave the shop, past the Boost limit */
+  boostOnShopExit?: boolean;
   /** a copy of the only lemming out after 10 seconds joins the colony */
   selfReplication?: boolean;
   /** in the level (see level-rules.ts): 0 to 6 lemmings drop in at the first splat */
@@ -323,39 +383,27 @@ export const POWER_CARD_EFFECTS: Record<string, Omit<JokerDef, 'id' | 'name' | '
   umbrellas: { startFloaters: 3 },
   hardhat: { firstDeathReturns: true },
   disposal: { returns: ['bombed'] },
-  shelter: { returns: ['nuked'] },
   lifeguard: { returns: ['drowned'] },
   crashmats: { returns: ['splat'] },
   scout: { recruitsAfterBlind: 2 },
   unionrep: { payout: (c) => Math.floor(((c.rescued - c.required) * 10) / Math.max(1, c.hand)) },
-  nolem: { payout: (c) => (c.perfect ? 3 : 0) },
-  piggy: { interestCap: 5 },
   speedrun: { payout: (c) => Math.floor(c.secondsLeft / 60) },
   minimalist: { payout: (c) => (c.skillsUsed * 2 <= c.skillsAvailable ? 4 : 0) },
   headcount: { payout: (c) => Math.floor(c.colonySize / 20) },
   guild: { capacity: { builder: 2 } },
   longbridge: { extraBuilderBricks: 4 },
   demolition: { capacity: { basher: 1, miner: 1, digger: 1 } },
-  climbclub: { capacity: { climber: 2, floater: 2 } },
-  bombsquad: { capacity: { bomber: 2, blocker: 2 } },
   trainer: { pointsAfterBoss: 5 },
-  advisor: { reassignAfterBoss: 5 },
   // Lematro's own Power Cards
-  stowaway: { dropsExtra: 1 },
   hitchhikers: { dropsExtra: 2 },
-  gatecrashers: { dropsExtra: 3 },
-  coachtrip: { dropsExtra: 4 },
   rushhour: { dropsExtra: 5 },
   orangehair: { rescues: (c) => ({ plus: savedWithHair(c, 'orange') }) },
   redhair: { rescues: (c) => ({ plus: savedWithHair(c, 'red') }) },
   purplehair: { rescues: (c) => ({ plus: savedWithHair(c, 'purple') }) },
   greenhair: { rescues: (c) => ({ plus: savedWithHair(c, 'green') }) },
-  firstpast: { rescues: firstSaved(1) },
-  podium: { rescues: firstSaved(2) },
   medals: { rescues: firstSaved(3) },
   fewgood: { rescues: (c) => (c.saved > 0 && c.saved <= 3 ? { plus: 4 * c.saved } : null) },
   personalspace: { rescues: (c) => ({ times: Math.max(1, c.emptySlots) }) },
-  wastenot: { afterLevel: 'wasteNot' },
   paydayloan: { debt: 25 },
   recycler: { recycler: true, noCopy: true },
   goingup: { joinsAfterLevel: 'climber' },
@@ -376,7 +424,6 @@ export const POWER_CARD_EFFECTS: Record<string, Omit<JokerDef, 'id' | 'name' | '
   ginger: { ginger: true },
   bigmike: { respawns: 15, destroyChance: 1 / 6 },
   rainyday: { afterLevel: 'rainyDay' },
-  bluebombers: { respawnClothes: 'blue' },
   inversecurve: { requirementPerLevel: 0.01 },
   streak: {
     rescues: (c) => {
@@ -385,7 +432,6 @@ export const POWER_CARD_EFFECTS: Record<string, Omit<JokerDef, 'id' | 'name' | '
       return { plus: n };
     },
   },
-  omelette: { splatValue: 3, noCopy: true },
   sneak: { sneakAttack: true },
   checklist: { afterLevel: 'checklist', noCopy: true },
   changeling: { afterLevel: 'changeling', noCopy: true },
@@ -415,9 +461,7 @@ export const POWER_CARD_EFFECTS: Record<string, Omit<JokerDef, 'id' | 'name' | '
   paintbox: { rescues: (c) => (LEMMING_COLORS.every((col) => c.savedCards.some((x) => hairOf(x) === col)) ? { times: 3 } : null) },
   trendsetter: { afterLevel: 'trendsetter', rescues: (c) => ({ times: 1.1 ** c.savedCards.filter((x) => !!c.color && hasHair(x, c.color, c.ginger)).length }) },
   teacherspet: { afterLevel: 'teacherspet', rescues: (c) => (c.target !== undefined && c.savedCards.some((x) => x.id === c.target) ? { times: 2 } : null) },
-  bluecollar: { rescues: (c) => ({ plus: Math.floor(c.savedCards.filter((x) => clothesOf(x) === 'blue').length / 4) }) },
   jumpsuit: { rescues: (c) => ({ plus: 3 * c.savedCards.filter((x) => clothesOf(x) === 'orange').length }) },
-  royalpurple: { afterLevel: 'royalPurple' },
   redshirts: { rescues: (c) => ({ times: 1.2 ** c.savedCards.filter((x) => clothesOf(x) === 'red').length }) },
   camouflage: { lostRespawnClothes: 'green' },
   coordinated: { rescues: (c) => ({ times: 1.2 ** c.savedCards.filter((x) => hairOf(x) === clothesOf(x)).length }) },
@@ -439,6 +483,70 @@ export const POWER_CARD_EFFECTS: Record<string, Omit<JokerDef, 'id' | 'name' | '
   },
   yorick: { rescues: (c) => ({ times: 1 + Math.floor(c.counter / 23) }), afterLevel: 'yorick' },
   chicot: { bossRequirementMultiplier: 0.5, noCopy: true },
+  // Lematro Phase 1: the Balatro jokers that run on the hooks the game already has
+  lemming: { rescues: () => ({ plus: 4 }) },
+  matchingset: { rescues: (c) => (sameHair(c, 3) ? { plus: 5 } : null) },
+  samehair: { rescues: (c) => (sameHair(c) ? { plus: 3 } : null) },
+  longservice: { afterLevel: 'countLevels', rescues: (c) => (c.counter % 6 === 5 ? { times: 3 } : null) },
+  glitch: { rescues: (c) => ({ plus: Math.floor(c.roll * 16) }) },
+  weakestlink: { rescues: (c) => ({ plus: 2 * c.lowestAbility }) },
+  spiral: { rescues: (c) => ({ plus: 2 * FIBONACCI.filter((n) => n <= c.saved).length }) },
+  starturn: { rescues: (c) => ({ plus: 3 * c.savedCards.filter(c.isSuper).length }) },
+  rankandfile: { rescues: (c) => ({ plus: c.savedCards.filter((x) => !c.isSuper(x)).length }) },
+  everyonespecial: { allSuper: true },
+  moonlanding: { afterLevel: 'moonLanding' },
+  nightshift: { rescues: (c) => (c.savedCards.length && c.savedCards.every((x) => hairOf(x) === 'purple' || hairOf(x) === 'green') ? { times: 3 } : null) },
+  reserves: { rescues: (c) => ({ plus: Math.floor(Math.max(0, c.reserves) / 5) }) },
+  littlemike: { rescues: () => ({ times: 3 }), destroyChance: 1 / 1000, onlyAfter: 'bigmike' },
+  nothanks: { counts: 'packSkipped', rescues: (c) => ({ plus: 2 * c.counter }) },
+  stampede: { atLevelStart: 'stampede', rescues: (c) => ({ times: 1 + 0.25 * c.counter }) },
+  rabble: { atLevelStart: 'rabble', noCopy: true },
+  bodysnatcher: { afterLevel: 'bodySnatcher', rescues: (c) => ({ times: 1 + 0.1 * (c.counter + new Set(c.savedCards.filter(c.isSuper)).size) }) },
+  populationboom: { counts: 'joined', rescues: (c) => ({ times: 1 + 0.1 * c.counter }) },
+  jetpack: { afterLevel: 'jetpack', payout: (c) => 1 + c.counter },
+  goldleaf: { afterLevel: 'goldLeaf', noCopy: true },
+  photofinish: { rescues: (c) => (c.order[0] && c.isSuper(c.order[0]) ? { times: 2 } : null) },
+  thinranks: { rescues: (c) => ({ plus: 2 * Math.max(0, START_COLONY - c.colonySize) }) },
+  boosterclub: { rescues: (c) => ({ plus: c.boostsUsed }) },
+  plusone: { squad: 1 },
+  rabbitsfoot: { counts: 'luckyPaid', rescues: (c) => ({ times: 1 + 0.1 * c.counter }) },
+  bullmarket: { rescues: (c) => ({ plus: Math.floor(Math.max(0, c.money) / 2) }) },
+  fizzypop: { afterLevel: 'countLevels', lasts: 3, rescues: () => ({ times: 2 }) },
+  campout: { counts: 'sold', afterLevel: 'campOut', rescues: (c) => ({ times: 1 + 0.25 * c.counter }) },
+  grandfinale: { rescues: (c) => (c.boss ? { times: 2 } : null) },
+  encore: { encore: true },
+  treasurechest: { rescues: (c) => ({ plus: c.otherSellValue }) },
+  skippingrope: { rescues: (c) => ({ times: 1 + 0.25 * c.skipped }) },
+  fragile: { counts: 'superDied', rescues: (c) => ({ times: 1 + 0.25 * c.counter }) },
+  stagedoor: { duplicates: true },
+  littlehelper: { afterLevel: 'littleHelper', rescues: (c) => ({ plus: Math.floor(c.counter / 10) }) },
+  loadeddice: { chanceMultiplier: 2 },
+  birds: { rescues: (c) => (sameHair(c) ? { times: 2 } : null) },
+  stuntdouble: { rescues: () => ({ plus: 20 }), squad: -2 },
+  mirrorimage: { afterLevel: 'countLevels', copyOnSell: true, noCopy: true },
+  supersquad: { rescues: (c) => (c.colonySupers >= 16 ? { times: 3 } : null) },
+  ohno: { counts: 'superLeft', rescues: (c) => ({ times: 1 + c.counter }) },
+  yippee: { boostOnShopExit: true },
+};
+
+/** The Power Cards that were cut from the game: a saved run that has one sells it when it is loaded. */
+export const CUT_POWER_CARDS: Record<string, { name: string; price: number }> = {
+  shelter: { name: 'Fallout Shelter', price: 4 },
+  nolem: { name: 'Leave No Lem Behind', price: 4 },
+  piggy: { name: 'Piggy Bank', price: 5 },
+  climbclub: { name: 'Climbing Club', price: 4 },
+  bombsquad: { name: 'Bomb Squad', price: 4 },
+  advisor: { name: 'Careers Advisor', price: 4 },
+  stowaway: { name: 'Stowaway', price: 4 },
+  gatecrashers: { name: 'Gatecrashers', price: 6 },
+  coachtrip: { name: 'Coach Trip', price: 7 },
+  firstpast: { name: 'First Past the Post', price: 3 },
+  podium: { name: 'Podium', price: 4 },
+  wastenot: { name: 'Waste Not', price: 5 },
+  bluebombers: { name: 'Blue Bombers', price: 5 },
+  omelette: { name: 'Omelette', price: 4 },
+  bluecollar: { name: 'Blue Collar', price: 4 },
+  royalpurple: { name: 'Royal Purple', price: 5 },
 };
 
 /** what the placeholders of a description say before a Power Card has a colour or a lemming of its own */
@@ -494,7 +602,7 @@ export interface TarotDef {
 export const TAROTS: readonly TarotDef[] = [
   { id: 'umbrella', name: 'The Umbrella', price: 3, text: 'Makes up to {!}3{} selected lemmings {s}Floaters{}', select: 3 },
   { id: 'gear', name: 'The Climbing Gear', price: 3, text: 'Makes up to {!}3{} selected lemmings {s}Climbers{}', select: 3 },
-  { id: 'midas', name: 'The Midas', price: 3, text: 'Makes {!}1{} selected lemming {!}Gold{}', select: 1 },
+  { id: 'midas', name: 'The Gilding', price: 3, text: 'Makes {!}1{} selected lemming {!}Gold{}', select: 1 },
   { id: 'clover', name: 'The Four-Leaf', price: 3, text: 'Makes up to {!}2{} selected lemmings {!}Lucky{}', select: 2 },
   { id: 'mentor', name: 'The Mentor', price: 3, text: 'Makes {!}1{} selected lemming a {!}Mentor{}', select: 1 },
   { id: 'laurel', name: 'The Laurel', price: 3, text: 'Makes {!}1{} selected lemming a {!}Champion{}', select: 1 },
@@ -521,6 +629,9 @@ export const TAROTS: readonly TarotDef[] = [
   { id: 'sapphire', name: 'The Sapphire', price: 3, text: 'Gives up to {!}3{} selected lemmings {c:blue}Blue{} hair', select: 3, hair: 'blue' },
   { id: 'barber', name: 'The Barber', price: 3, text: 'Select {!}2{} lemmings: the first gets the hair of the second', select: 2, pair: true },
   { id: 'tailor', name: 'The Tailor', price: 3, text: 'Select {!}2{} lemmings: the first gets the clothes of the second', select: 2, pair: true },
+  // Lematro Phase 1
+  { id: 'foreman', name: 'The Foreman', price: 3, text: 'Creates up to {!}2{} random {!}Boosts{}, if there is room', select: 0 },
+  { id: 'audition', name: 'The Audition', price: 3, text: 'Creates a random {!}Power Card{}, if there is room', select: 0 },
 ];
 
 export function tarotDef(id: string): TarotDef {
@@ -563,10 +674,20 @@ export const TAGS: readonly TagDef[] = [
   { id: 'golden', name: 'Golden Exit', text: 'Doubles the payout of the next {!}Level 3{}' },
   { id: 'supply', name: 'Supply Drop', text: 'The next shop has {!}2{} more training offers' },
   { id: 'clone', name: 'Clone Bonus', text: 'Creates a copy of a random {!}Super Lemming{} (or a plain one)' },
-  { id: 'investment', name: 'Investment Bonus', text: 'Earn {$}$10{} after the next {!}Level 3{}' },
-  { id: 'coupon', name: 'Coupon Bonus', text: 'The offers in the next shop are {$}free{}' },
+  { id: 'investment', name: 'Retirement Fund', text: 'Earn {$}$10{} after the next {!}Level 3{}' },
+  { id: 'coupon', name: 'Free Lunch', text: 'The offers in the next shop are {$}free{}' },
   { id: 'training', name: 'Training Bonus', text: '{!}+3{} ability in a random skill' },
-  { id: 'economy', name: 'Economy Bonus', text: 'Earn {$}$1{} for every {!}10{} lemmings in your colony' },
+  { id: 'economy', name: 'Colony Dividend', text: 'Earn {$}$1{} for every {!}10{} lemmings in your colony' },
+  // Lematro Phase 1
+  { id: 'uncommon', name: 'Uncommon Bonus', text: 'The next shop has a free {!}Uncommon{} Power Card' },
+  { id: 'rare', name: 'Rare Bonus', text: 'The next shop has a free {!}Rare{} Power Card' },
+  { id: 'directorscut', name: "Director's Cut Bonus", text: "A free {!}Director's Cut{} reroll of the next {!}Level 3{}" },
+  { id: 'boostpack', name: 'Boost Bonus', text: 'Opens a free {!}Boost Pack{} at once' },
+  { id: 'powerpack', name: 'Power Bonus', text: 'Opens a free {!}Power Pack{} at once' },
+  { id: 'crowd', name: 'Crowd Bonus', text: '{!}+3{} lemmings in the squad of the next level' },
+  { id: 'reroll', name: 'Reroll Bonus', text: 'Rerolls in the next shop start at {$}$0{}' },
+  { id: 'reinforcements', name: 'Reinforcements', text: 'Up to {!}2{} Common Power Cards, if there is room' },
+  { id: 'fasttrack', name: 'Fast Track', text: 'Earn {$}$5{} for each level skipped this run' },
 ];
 
 export function tagDef(id: string): TagDef {

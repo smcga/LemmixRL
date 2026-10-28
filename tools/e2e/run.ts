@@ -191,7 +191,7 @@ try {
   if (s.phase !== 'shop' || s.colony.length <= colony0) fail(`a card of the pack was not taken: ${s.phase}, ${s.colony.length} lemmings`);
   // a joker and a tarot on offer: a click selects a card and shows its Buy button
   await ev(
-    `(() => { const s = globalThis.lemmix.run.state; s.money = 20; s.shop.offers = [{ uid: 9001, type: 'joker', id: 'piggy', price: 5, sold: false }, { uid: 9002, type: 'joker', id: 'guild', price: 4, sold: false }, { uid: 9003, type: 'tarot', id: 'recruiter', price: 3, sold: false }]; ${scene}.render(); })()`,
+    `(() => { const s = globalThis.lemmix.run.state; s.money = 20; s.shop.offers = [{ uid: 9001, type: 'joker', id: 'headcount', price: 5, sold: false }, { uid: 9002, type: 'joker', id: 'guild', price: 4, sold: false }, { uid: 9003, type: 'tarot', id: 'recruiter', price: 3, sold: false }]; ${scene}.render(); })()`,
   );
   await page.waitForTimeout(200);
   await clickSpot('offer:0');
@@ -199,14 +199,14 @@ try {
   await clickSpot('card:BUY');
   await dragSpot('offer:0', 500, 60); // (the next card on offer)
   s = await state();
-  if (s.jokers.map((j: any) => j.id).join() !== 'piggy,guild' || s.money !== 11) fail(`jokers bought: ${JSON.stringify(s.jokers)}, $${s.money}`);
+  if (s.jokers.map((j: any) => j.id).join() !== 'headcount,guild' || s.money !== 11) fail(`jokers bought: ${JSON.stringify(s.jokers)}, $${s.money}`);
   // a joker dragged along its row goes to another place; dragged to the tarots it is sold
   const j1 = await spot('joker:1');
   await dragSpot('joker:0', j1.x + 30, j1.y);
-  if ((await state()).jokers.map((j: any) => j.id).join() !== 'guild,piggy') fail('the joker did not move to another place');
+  if ((await state()).jokers.map((j: any) => j.id).join() !== 'guild,headcount') fail('the joker did not move to another place');
   await dragSpot('joker:0', 840, 60);
   s = await state();
-  if (s.jokers.map((j: any) => j.id).join() !== 'piggy' || s.money !== 13) fail(`joker sold: ${JSON.stringify(s.jokers)}, $${s.money}`);
+  if (s.jokers.map((j: any) => j.id).join() !== 'headcount' || s.money !== 13) fail(`joker sold: ${JSON.stringify(s.jokers)}, $${s.money}`);
   // the options: the volume of the music down to nothing (its sound option goes off), the sounds at half
   await clickSpot('options');
   const music = await spot('slider:music');
@@ -222,7 +222,7 @@ try {
   const scenes = () => ev<string>(`globalThis.phaserGame.scene.getScenes(true).map((s) => s.sys.settings.key).join()`);
   if (!(await scenes()).includes('collection')) fail('the collection did not open');
   const seen = await ev<string[]>(`JSON.parse(localStorage.getItem('lemmixrl.meta')).seen`);
-  for (const k of ['joker:piggy', 'joker:guild', 'pack:lemmings']) if (!seen.includes(k)) fail(`the collection did not see ${k}: ${seen}`);
+  for (const k of ['joker:headcount', 'joker:guild', 'pack:lemmings']) if (!seen.includes(k)) fail(`the collection did not see ${k}: ${seen}`);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
   if ((await scenes()) !== 'run' || (await state()).phase !== 'shop') fail('the collection did not go back to the run');

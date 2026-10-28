@@ -76,7 +76,7 @@ export interface BlindState {
 export interface JokerInstance {
   uid: number;
   id: string;
-  /** sell value it has gained (the Omelette, Nest Egg) */
+  /** sell value it has gained (the Nest Egg) */
   sellBonus?: number;
   /** what it has counted (Trainings, rerolls or levels, depending on the Power Card) */
   counter?: number;
@@ -116,6 +116,8 @@ export interface ShopState {
   freeRerollsUsed?: number;
   /** (saves of old: the free rerolls left when the shop opened; no longer used) */
   freeRerolls?: number;
+  /** what the first paid reroll costs (the Reroll Bonus: $0; else $2) */
+  rerollBase?: number;
 }
 
 /** what can be chosen from an open pack */
@@ -139,6 +141,8 @@ export type SpecialTrait = 'floater' | 'climber' | 'athlete' | 'gold' | 'lucky' 
 export interface PackState {
   kind: PackKind;
   choices: PackChoice[];
+  /** the phase after the pack (a pack of a Skip Bonus: the levels; else the shop) */
+  back?: RunPhase;
 }
 
 /** A blind that is being played: fixed when the player starts it, the same for every attempt. */
@@ -169,6 +173,8 @@ export interface BlindSetup {
   begun?: boolean;
   /** the lemming of the squad (card id) that was the only one out 10 seconds in (Self Replication) */
   selfCopy?: number | null;
+  /** the Crowd Bonus: 3 more lemmings in the squad */
+  crowd?: boolean;
 }
 
 /** a line of the rescue count: the lemmings saved, then the Power Cards that add (+) or multiply (X) */
@@ -247,6 +253,8 @@ export interface RunStats {
   saved: number;
   lost: number;
   earned: number;
+  /** the Boosts used (runs saved before it was counted do not have it) */
+  boostsUsed?: number;
 }
 
 export interface RunState {
@@ -269,7 +277,7 @@ export interface RunState {
   assign?: AssignState | null;
   jokers: JokerInstance[];
   tarots: TarotInstance[];
-  /** tags waiting for their moment (golden, investment, supply, coupon) */
+  /** tags waiting for their moment (golden, investment, supply, coupon, uncommon, rare, directorscut, crowd, reroll) */
   pendingTags: string[];
   blinds: BlindState[];
   /** the boss of this ante was rerolled */
@@ -281,5 +289,7 @@ export interface RunState {
   shop: ShopState | null;
   /** the pack opened in the shop (phase 'pack') */
   pack?: PackState | null;
+  /** the Power Cards destroyed by their own chance (Big Mike: Little Mike can be offered) */
+  extinct?: string[];
   stats: RunStats;
 }
