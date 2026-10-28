@@ -25,6 +25,7 @@ import { type Art, CARD_H, CARD_W, type CardBehaviour, CardTable, CardView, type
 import { consumableLook, EDITION_TINTS, JOKER_ART, PACK_LOOKS, RARITY_COLORS, RARITY_NAMES, TAROT_ART } from '../run/ui/art.ts';
 import { ColonyHome, HOME_LEVEL } from '../run/home.ts';
 import { HomeView } from '../run/ui/homeview.ts';
+import { SelectionTray } from '../run/ui/tray.ts';
 import { plainText } from '../run/rich.ts';
 import { lematroLogo } from '../run/ui/logo.ts';
 import { soundSliders } from '../run/ui/settings.ts';
@@ -1115,11 +1116,11 @@ export class RunScene extends Phaser.Scene {
       const swapTip = (): TipContent => ({
         title: 'Swaps',
         color: LEMMING_BADGE_COLORS.squad,
-        lines: [`Before the level begins, swap up to ${run.swapsLeft()} lemmings of the squad for others of the colony.`, 'Pick them in the colony (an orange line under their feet), then Swap.'],
+        lines: [`Before the level begins, swap up to ${run.swapsLeft()} lemmings of the squad for others of the colony.`, 'Click them in the colony (an orange arrow over each lemming of the squad) to put them in the tray, then Swap.'],
         x: x - 20,
         y: y + 250,
       });
-      const sw = this.btn('swapSquad', x + 8, y + 328, w - 16, 22, `Swap lemmings (${run.swapsLeft()} left)`, LEMMING_BADGE_COLORS.squad, () => this.showColony(null));
+      const sw = this.btn('swapSquad', x + 8, y + 328, w - 16, 22, `Swap lemmings (${run.swapsLeft()} left)`, LEMMING_BADGE_COLORS.squad, () => this.showColony(null, true));
       hoverTip(sw, this.tip, swapTip);
     }
     const meta = loadMeta().levels[l.id];
@@ -1687,12 +1688,12 @@ export class RunScene extends Phaser.Scene {
 
   /**
    * The colony at home (see home.ts and HomeView): every lemming of it in a little level of its own, played by the game.
-   * Pick shows who a lemming is (a drag picks a group); the skills are free at home, to sort the colony with walls,
-   * bridges and blockers, and the home stays as it is left. Before a level begins, lemmings of its squad (an orange line
-   * under their feet) can be picked and swapped for others (Swaps). With a boost, the lemmings picked are the ones it is
-   * used on.
+   * At home, Pick shows who a lemming is (a drag picks a group); the skills are free there, to sort the colony with
+   * walls, bridges and blockers, and the home stays as it is left. With a boost, or to swap lemmings of the squad out
+   * before a level begins (Swaps), the lemmings clicked go into a tray under the home, a numbered slot each (the same
+   * number over their heads), and a click on one of them again, or its x in the tray, puts it back.
    */
-  private showColony(tarot: TarotUse | null): void {
+  private showColony(tarot: TarotUse | null, swapping = false): void {
     const run = this.run;
     if (!run) return;
     const o = this.openOverlay(0.6);
@@ -1701,22 +1702,34 @@ export class RunScene extends Phaser.Scene {
     // the order of Previous and Next: the special lemmings first
     const order = () => [...colony().filter(isSpecial), ...colony().filter((c) => !isSpecial(c))];
     const inSquad = (c: LemmingCard) => (s.setup?.hand ?? []).includes(c.id);
-    o(panel(this, 40, 20, 880, 500, COLORS.panel, COLORS.purple, 12));
-    o(label(this, 64, 34, tarot ? `${tarot.name}: select ${tarot.max === 1 ? 'a lemming' : `up to ${tarot.max} lemmings`}` : `Your colony: ${colony().length} lemmings`, { size: 32, color: COLORS.gold, maxWidth: 820 }));
+    const canSwap = () => !!s.setup && !s.setup.begun && run.swapsLeft() > 0;
+    /** with a boost, the lemmings it is used on; to swap, the lemmings of the squad that go; at home, no tray */
+    const mode: 'boost' | 'swap' | 'home' = tarot ? 'boost' : swapping && canSwap() ? 'swap' : 'home';
+    const trayColor = mode === 'boost' ? COLORS.purple : LEMMING_BADGE_COLORS.squad;
+    const slots = () => (tarot ? tarot.max : run.swapsLeft());
+    o(panel(this, 40, 20, 880, 500, COLORS.panel, mode === 'swap' ? trayColor : COLORS.purple, 12));
+    const title =
+      mode === 'boost'
+        ? `${tarot!.name}: select ${tarot!.max === 1 ? 'a lemming' : `up to ${tarot!.max} lemmings`}`
+        : mode === 'swap'
+          ? `Swap lemmings: up to ${run.swapsLeft()} of the squad`
+          : `Your colony: ${colony().length} lemmings`;
+    const heading = o(label(this, 64, 34, title, { size: 32, color: COLORS.gold, maxWidth: 820 }));
     const sub = o(label(this, 64, 72, '', { color: COLORS.dim, maxWidth: 620 }));
-    /** the lemmings picked: one, or a group (a box); with a boost, the ones selected for it */
+    /** the lemmings picked: at home one, or a group (a box); with a boost or to swap, the ones in the tray, in order */
     let selection: number[] = [];
     let picked: LemmingCard | null = null;
     let changed = false;
     let resetting = false;
     const updateSub = () => {
-      if (tarot) {
-        sub.setText(`${selection.length} of ${tarot.max} selected${selection.length ? ': ' + selection.map((id) => run.card(id)?.name ?? '').join(', ') : ''}`);
-        return;
+      if (mode === 'boost')
+        sub.setText(tarot!.pair ? 'Lemming 1 becomes like lemming 2. Click a lemming again to put it back.' : 'Click lemmings to put them in the tray below. Click again to put one back.');
+      else if (mode === 'swap') sub.setText(plainText('Click lemmings of the squad (an orange arrow over them) to put them in the tray below.'));
+      else {
+        const specials = this.specialCounts(colony());
+        const squad = s.setup && !s.setup.begun ? ` · Squad ${s.setup.hand.length}, Swaps left ${run.swapsLeft()}` : '';
+        sub.setText(plainText((specials ? `Special: ${specials}` : 'All of them plain lemmings.') + squad));
       }
-      const specials = this.specialCounts(colony());
-      const squad = s.setup && !s.setup.begun ? ` · Squad ${s.setup.hand.length}, Swaps left ${run.swapsLeft()}` : '';
-      sub.setText(plainText((specials ? `Special: ${specials}` : 'All of them plain lemmings.') + squad));
     };
 
     // the home, played by the game (with its sounds, without its music)
@@ -1725,8 +1738,8 @@ export class RunScene extends Phaser.Scene {
     const info = new Tooltip(this);
     const view = new HomeView(this, home, 56, 96, o, {
       colony,
-      onPick: (c) => (tarot ? (c ? toggle(c) : null) : pickOne(c)),
-      onBox: (cards) => (tarot ? boxForBoost(cards) : pickGroup(cards)),
+      onPick: (c) => (mode === 'home' ? pickOne(c) : c ? toggle(c) : null),
+      onBox: (cards) => (mode === 'home' ? pickGroup(cards) : boxIntoTray(cards)),
       onHover: (c, x, y) => {
         if (touch.active) return;
         if (!c) {
@@ -1737,9 +1750,28 @@ export class RunScene extends Phaser.Scene {
         showTip(this.tip, { title: cardTitle(c), color: this.cardColor(c), lines: [], x, y: y - 58, center: true, width: Math.min(260, 40 + 8 * cardTitle(c).length), keywords: [] }, c);
       },
       spot: (name, x, y) => this.spot(name, x, y),
-      inSquad: (c) => !tarot && !!s.setup && !s.setup.begun && inSquad(c),
+      inSquad: (c) => mode !== 'boost' && !!s.setup && !s.setup.begun && inSquad(c),
+      prefer: mode === 'swap' ? inSquad : undefined,
     });
-    view.toolbar(56, 424);
+    view.strongSquad = mode === 'swap';
+    view.numberColor = trayColor;
+    // at home the tools; with a boost or to swap, the tray in their place
+    const tray =
+      mode === 'home'
+        ? null
+        : new SelectionTray(this, 56, 424, 600, 48, {
+            slots,
+            color: trayColor,
+            captions: tarot?.pair ? ['changes', 'is copied'] : undefined,
+            describe: (c) => this.shortDescription(c, mode === 'swap'),
+            nameColor: (c) => this.cardColor(c),
+            onRemove: (c) => putBack([c.id]),
+            onClear: () => putBack([...selection]),
+            spot: (name, x, y) => this.spot(name, x, y),
+            depth: 600,
+          });
+    if (tray) this.overlayCleanup.push(() => tray.destroy());
+    else view.toolbar(56, 424);
     this.homeView = view;
     this.overlayCleanup.push(() => {
       if (!resetting) s.home = home.save();
@@ -1754,8 +1786,8 @@ export class RunScene extends Phaser.Scene {
     // the panel at the side: who the lemmings picked are
     const showInfo = () => {
       const at = { x: 690, y: 96, width: 214, keywords: [] as { title: string; text: string }[] };
-      const group = tarot ? [] : selection.map((id) => run.card(id)).filter((c): c is LemmingCard => !!c);
-      if (picked && (tarot || group.length <= 1)) {
+      const group = mode === 'home' ? selection.map((id) => run.card(id)).filter((c): c is LemmingCard => !!c) : [];
+      if (picked && (mode !== 'home' || group.length <= 1)) {
         info.show({ ...this.cardTip(picked, inSquad(picked)), ...at });
       } else if (group.length > 1) {
         const names = group.slice(0, 6).map((c) => c.name).join(', ') + (group.length > 6 ? ` and ${group.length - 6} more` : '');
@@ -1767,17 +1799,28 @@ export class RunScene extends Phaser.Scene {
           badges: group.some(inSquad) ? [{ text: `${group.filter(inSquad).length} in squad`, color: LEMMING_BADGE_COLORS.squad }] : [],
           ...at,
         });
-      } else
+      } else if (mode === 'boost')
+        info.show({ title: tarot!.name, color: COLORS.purple, lines: [...(tarot!.text ? [tarot!.text, ''] : []), 'Click the lemmings, or drag a box around them.'], ...at });
+      else if (mode === 'swap')
         info.show({
-          title: tarot ? tarot.name : 'Your colony',
-          color: tarot ? COLORS.purple : COLORS.gold,
-          lines: tarot
-            ? [...(tarot.text ? [tarot.text, ''] : []), 'Pick the lemmings, or drag a box around them.']
-            : [
-                '{!}Pick{} a lemming to see who it is, or drag a box around a group.',
-                '',
-                'Skills are {$}free{} at home. {!}Dirt{} and {!}Erase{} paint the ground, {!}Poof{} sends a lemming back to the {!}Trapdoor{}, which you can move.',
-              ],
+          title: 'Swaps',
+          color: trayColor,
+          lines: [
+            `Before the level begins, up to {!}${run.swapsLeft()}{} lemmings of the squad can be swapped out.`,
+            '',
+            'Each one swapped out is replaced by the {!}next lemming{} of the colony.',
+          ],
+          ...at,
+        });
+      else
+        info.show({
+          title: 'Your colony',
+          color: COLORS.gold,
+          lines: [
+            '{!}Pick{} a lemming to see who it is, or drag a box around a group.',
+            '',
+            'Skills are {$}free{} at home. {!}Dirt{} and {!}Erase{} paint the ground, {!}Poof{} sends a lemming back to the {!}Trapdoor{}, which you can move.',
+          ],
           ...at,
         });
       updateButtons();
@@ -1786,9 +1829,11 @@ export class RunScene extends Phaser.Scene {
 
     const mark = () => {
       view.marked.clear();
-      for (const id of selection) view.marked.add(id);
+      if (mode === 'home') for (const id of selection) view.marked.add(id);
       if (picked) view.marked.add(picked.id);
+      view.numbered = mode === 'home' ? [] : [...selection];
       view.focus = picked?.id ?? null;
+      tray?.set(selection.map((id) => run.card(id)).filter((c): c is LemmingCard => !!c));
     };
     const pickOne = (c: LemmingCard | null) => {
       picked = c;
@@ -1804,30 +1849,55 @@ export class RunScene extends Phaser.Scene {
       showInfo();
       if (cards.length) this.sfx(SoundEffect.SkillButtonSelect);
     };
-    // with a boost: selected, or put back
+    /** can it go in the tray? (to swap: only lemmings of the squad) */
+    const fits = (c: LemmingCard) => mode !== 'swap' || inSquad(c);
+    const full = () =>
+      this.toast(
+        mode === 'boost'
+          ? `${tarot!.name} takes ${tarot!.max === 1 ? 'one lemming' : `${tarot!.max} lemmings`}: put one back first.`
+          : `${run.swapsLeft() === 1 ? 'One Swap' : `${run.swapsLeft()} Swaps`} left: put one back first.`,
+      );
+    // a click: into the tray, or out of it
     const toggle = (c: LemmingCard) => {
-      if (!tarot) return;
+      if (mode === 'home') return;
       picked = c;
       const i = selection.indexOf(c.id);
       if (i >= 0) selection.splice(i, 1);
-      else if (selection.length < tarot.max) selection.push(c.id);
-      else this.toast(`${tarot.name} takes ${tarot.max === 1 ? 'one lemming' : `${tarot.max} lemmings`}: put one back first.`);
+      else if (!fits(c)) this.toast(`${c.name} is not in the squad of the next level: only lemmings with an orange arrow can be swapped out.`);
+      else if (selection.length < slots()) selection.push(c.id);
+      else full();
       mark();
       showInfo();
       this.sfx(SoundEffect.SkillButtonSelect);
     };
-    const boxForBoost = (cards: LemmingCard[]) => {
-      if (!tarot || !cards.length) return;
-      // a box of selected lemmings puts them back; else it selects as many as the boost takes
-      if (cards.every((c) => selection.includes(c.id))) selection = selection.filter((id) => !cards.some((c) => c.id === id));
-      else for (const c of cards) if (!selection.includes(c.id) && selection.length < tarot.max) selection.push(c.id);
-      picked = cards[0];
+    // a box: the lemmings in it go into the tray, or come out of it if they are all in it
+    const boxIntoTray = (cards: LemmingCard[]) => {
+      const ok = cards.filter(fits);
+      if (!ok.length) {
+        if (cards.length) this.toast('None of them is in the squad of the next level.');
+        return;
+      }
+      if (ok.every((c) => selection.includes(c.id))) selection = selection.filter((id) => !ok.some((c) => c.id === id));
+      else {
+        for (const c of ok) if (!selection.includes(c.id) && selection.length < slots()) selection.push(c.id);
+        if (ok.some((c) => !selection.includes(c.id))) full();
+      }
+      picked = ok[0];
+      mark();
+      showInfo();
+      this.sfx(SoundEffect.SkillButtonSelect);
+    };
+    const putBack = (ids: number[]) => {
+      if (!ids.length) return;
+      selection = selection.filter((id) => !ids.includes(id));
+      if (picked && ids.includes(picked.id)) picked = null;
       mark();
       showInfo();
       this.sfx(SoundEffect.SkillButtonSelect);
     };
 
-    // Swap: the lemmings of the squad picked go, the next ones of the colony come in (before the level begins)
+    // Swap: the lemmings in the tray go, the next ones of the colony come in (before the level begins); at home, a
+    // button to swap lemmings of the squad
     let swapButton: Button | null = null;
     const doSwap = () => {
       const notes = run.swap(selection);
@@ -1837,27 +1907,41 @@ export class RunScene extends Phaser.Scene {
       this.sfx(SoundEffect.AssignSkill);
       selection = [];
       picked = null;
+      this.toast(notes.join('\n'));
+      if (!canSwap()) {
+        this.closeOverlay();
+        return;
+      }
+      heading.setText(`Swap lemmings: up to ${run.swapsLeft()} of the squad`);
       mark();
       showInfo();
-      this.toast(notes.join('\n'));
     };
-    if (!tarot) {
+    if (mode === 'swap') {
       this.spot('swap', 797, 410);
-      swapButton = o(new Button(this, 690, 396, 214, 28, 'Swap', LEMMING_BADGE_COLORS.squad, doSwap));
+      swapButton = o(new Button(this, 690, 396, 214, 28, 'Swap', trayColor, doSwap));
+    } else if (mode === 'home' && canSwap()) {
+      this.spot('swapMode', 797, 410);
+      o(
+        new Button(this, 690, 396, 214, 28, `Swap lemmings (${run.swapsLeft()} left)`, LEMMING_BADGE_COLORS.squad, () => {
+          this.closeOverlay();
+          this.showColony(null, true);
+        }),
+      );
     }
 
-    // Previous and Next: one lemming after the other (also with the arrow keys; Enter selects it for a boost)
+    // Previous and Next: one lemming after the other (also with the arrow keys; Enter puts it in the tray or back)
     const position = o(label(this, 797, 446, '', { color: COLORS.text, originX: 0.5, originY: 0.5 }));
     const browse = (d: number) => {
-      const list = order();
+      const list = mode === 'swap' ? order().filter(inSquad) : order();
       if (!list.length) return;
       const i = picked ? list.indexOf(picked) : d > 0 ? -1 : 0;
       const c = list[(i + d + list.length) % list.length];
-      if (tarot) {
+      if (mode === 'home') pickOne(c);
+      else {
         picked = c;
         mark();
         showInfo();
-      } else pickOne(c);
+      }
     };
     this.spot('colonyPrev', 720, 446);
     this.spot('colonyNext', 874, 446);
@@ -1865,29 +1949,30 @@ export class RunScene extends Phaser.Scene {
     o(new Button(this, 844, 432, 60, 28, '>', COLORS.blue, () => browse(1), { big: true }));
     let selectButton: Button | null = null;
     const updateButtons = () => {
-      const list = order();
-      position.setText(picked && list.includes(picked) ? `${list.indexOf(picked) + 1} / ${list.length}` : `${list.length} lemmings`);
+      const list = mode === 'swap' ? order().filter(inSquad) : order();
+      position.setText(picked && list.includes(picked) ? `${list.indexOf(picked) + 1} / ${list.length}` : `${list.length} ${mode === 'swap' ? 'in squad' : 'lemmings'}`);
       if (swapButton) {
         const n = run.swappable(selection).length;
-        swapButton.setVisible(n > 0);
-        swapButton.setCaption(`Swap ${n} (${run.swapsLeft()} left)`);
+        swapButton.setEnabled(n > 0);
+        swapButton.setCaption(n > 0 ? `Swap ${n === 1 ? '1 lemming' : `${n} lemmings`}` : 'Swap');
       }
       if (selectButton) {
-        selectButton.setVisible(!!picked);
-        selectButton.setCaption(picked && selection.includes(picked.id) ? 'Put back' : 'Select');
+        selectButton.setVisible(!!picked && (fits(picked) || selection.includes(picked.id)));
+        selectButton.setCaption(picked && selection.includes(picked.id) ? 'Put back' : 'Add to tray');
       }
     };
-    if (tarot) {
+    if (mode === 'boost') {
       this.spot('colonySelect', 797, 410);
-      selectButton = o(new Button(this, 690, 396, 214, 28, 'Select', COLORS.purple, () => picked && toggle(picked)));
+      selectButton = o(new Button(this, 690, 396, 214, 28, 'Add to tray', COLORS.purple, () => picked && toggle(picked)));
     }
     this.overlayKey = (key) => {
       if (key === 'ArrowLeft' || key === 'ArrowRight') browse(key === 'ArrowLeft' ? -1 : 1);
-      else if (key === 'Enter' && picked && tarot) toggle(picked);
+      else if (key === 'Enter' && picked && mode !== 'home') toggle(picked);
+      else if ((key === 'Backspace' || key === 'Delete') && mode !== 'home') putBack(selection.slice(-1));
     };
 
     // a new home: the ground as at first (a second click to be sure)
-    if (!tarot) {
+    if (mode === 'home') {
       let sure = false;
       this.spot('newHome', 116, 494);
       const again = o(
@@ -1915,7 +2000,7 @@ export class RunScene extends Phaser.Scene {
             tarot.pair && ids.length !== 2
               ? `${tarot.name} needs 2 lemmings: the first becomes like the second.`
               : ids.length === 0
-                ? 'Select at least one lemming.'
+                ? 'Put at least one lemming in the tray.'
                 : 'That does not work (the squad of a level cannot leave the colony).',
           );
           return;
@@ -1928,8 +2013,22 @@ export class RunScene extends Phaser.Scene {
       o(new Button(this, 600, 478, 130, 32, 'Use', COLORS.red, use));
     }
     this.spot('back', 820, 494);
-    o(new Button(this, 750, 478, 140, 32, tarot ? 'Cancel' : 'Back', COLORS.orange, () => this.closeOverlay()));
+    o(new Button(this, 750, 478, 140, 32, tarot ? 'Cancel' : mode === 'swap' ? 'Done' : 'Back', COLORS.orange, () => this.closeOverlay()));
+    mark();
     showInfo();
+  }
+
+  /** what a lemming is, in a few words (in the tray): its edition and abilities, or that it is a plain lemming */
+  private shortDescription(c: LemmingCard, squad: boolean): string {
+    const bits: string[] = [];
+    if (c.edition !== 'plain') bits.push(EDITION_NAMES[c.edition]);
+    if (c.climber && c.floater) bits.push('Athlete');
+    else if (c.climber) bits.push('Climber');
+    else if (c.floater) bits.push('Floater');
+    if (c.insured) bits.push('Insured');
+    if (c.badge) bits.push(BADGE_NAMES[c.badge]);
+    if (!bits.length) bits.push(squad ? 'In the squad' : 'Plain lemming');
+    return bits.join(', ');
   }
 
   /** the colour of a lemming's name: its edition */

@@ -37,6 +37,8 @@ export interface HomeViewOptions {
   inSquad?: (card: LemmingCard) => boolean;
   /** the colony, in its order (the indexes of the spots) */
   colony: () => LemmingCard[];
+  /** lemmings a click goes to first, when one of them is near enough (to swap: the squad) */
+  prefer?: (card: LemmingCard) => boolean;
 }
 
 /** frames of the game in a second */
@@ -50,6 +52,13 @@ export class HomeView {
   readonly marked = new Set<number>();
   /** the lemming picked last (its corners bob) */
   focus: number | null = null;
+  /** the lemmings in the tray of a Boost or a Swap, in order: a numbered tag over each head, as in the tray */
+  numbered: number[] = [];
+  /** the colour of those tags (and of their corners) */
+  numberColor: number = COLORS.gold;
+  /** the squad stands out (to be swapped): a thick orange line under the feet, and an arrow over the head */
+  strongSquad = false;
+  private readonly tags: Phaser.GameObjects.BitmapText[] = [];
   private readonly key: string;
   private readonly texture: Phaser.Textures.CanvasTexture;
   private readonly picture = new Bitmap32();
@@ -159,17 +168,26 @@ export class HomeView {
   lemmingAt(x: number, y: number): Lemming | null {
     let best: Lemming | null = null;
     let bestD = Infinity;
+    // (a lemming the click goes to first, a little further away too: they keep walking)
+    let preferred: Lemming | null = null;
+    let preferredD = Infinity;
     for (const l of this.home.lemmings()) {
       const dx = Math.abs(l.xPos - x);
       const dy = l.yPos - 5 - y;
-      if (dx > 6 || dy < -7 || dy > 8) continue;
+      if (dx > 9 || dy < -8 || dy > 9) continue;
       const d = dx * dx + dy * dy;
+      const card = this.opts.prefer && this.home.card(l);
+      if (card && this.opts.prefer!(card) && d < preferredD) {
+        preferredD = d;
+        preferred = l;
+      }
+      if (dx > 6 || dy < -7 || dy > 8) continue;
       if (d < bestD) {
         bestD = d;
         best = l;
       }
     }
-    return best;
+    return preferred ?? best;
   }
 
   private down(p: Phaser.Input.Pointer): void {
@@ -283,6 +301,7 @@ export class HomeView {
     g.clear();
     const lemmings = this.home.lemmings();
     let n = 0;
+    let tagCount = 0;
     const colony = this.opts.colony();
     for (const l of lemmings) {
       const c = this.home.card(l);
@@ -298,16 +317,34 @@ export class HomeView {
         n++;
       });
       // in the squad of the next level: an orange line under its feet
+      const order = this.numbered.indexOf(c.id);
       if (this.opts.inSquad?.(c)) {
         g.fillStyle(LEMMING_BADGE_COLORS.squad, 1);
-        g.fillRect(sx - 6, sy + 2, 14, 2);
+        if (this.strongSquad) {
+          g.fillRect(sx - 8, sy + 2, 18, 4);
+          // (and a little arrow over its head, unless it has a number there)
+          if (order < 0) g.fillTriangle(sx - 3, sy - 38, sx + 5, sy - 38, sx + 1, sy - 33);
+        } else g.fillRect(sx - 6, sy + 2, 14, 2);
       }
-      if (this.marked.has(c.id)) this.corners(g, sx, sy, c.id === this.focus);
+      if (order >= 0) {
+        this.corners(g, sx, sy, c.id === this.focus, this.numberColor);
+        // its number, as in the tray
+        g.fillStyle(0x000000, 1);
+        g.fillCircle(sx + 1, sy - 40, 9);
+        g.fillStyle(this.numberColor, 1);
+        g.fillCircle(sx + 1, sy - 40, 8);
+        let tag = this.tags[tagCount];
+        if (!tag) this.tags.push((tag = this.add(label(this.scene, 0, 0, '', { originX: 0.5, originY: 0.5 }))));
+        tag.setText(String(order + 1)).setPosition(sx + 1, sy - 40).setVisible(true);
+        tagCount++;
+      } else if (this.marked.has(c.id)) this.corners(g, sx, sy, c.id === this.focus);
       this.opts.spot?.(`colony:${colony.indexOf(c)}`, sx, sy - 10);
     }
     for (let i = n; i < this.pips.length; i++) this.pips[i].setVisible(false);
     for (const p of this.pips) this.scene.children.bringToTop(p);
     this.scene.children.bringToTop(g);
+    for (let i = tagCount; i < this.tags.length; i++) this.tags[i].setVisible(false);
+    for (const t of this.tags) this.scene.children.bringToTop(t);
     if ((this.tool === 'dirt' || this.tool === 'erase') && this.pointer) {
       g.lineStyle(1, this.tool === 'dirt' ? 0x8a4f2a : 0xffffff, 0.9);
       g.strokeCircle(this.x + this.pointer.x * SCALE, this.y + this.pointer.y * SCALE, BRUSH * SCALE + 1);
@@ -320,13 +357,13 @@ export class HomeView {
   }
 
   /** the corners of a box around a lemming (like the cursor of Lemmings); the one picked last bobs */
-  private corners(g: Phaser.GameObjects.Graphics, sx: number, sy: number, focus: boolean): void {
+  private corners(g: Phaser.GameObjects.Graphics, sx: number, sy: number, focus: boolean, color?: number): void {
     const b = focus ? Math.round(Math.sin(this.time * 6)) : 0;
     const x0 = sx - 11 - b;
     const x1 = sx + 13 + b;
     const y0 = sy - 24 - b;
     const y1 = sy + 3 + b;
-    g.lineStyle(2, focus ? COLORS.gold : 0xf0d080, 1);
+    g.lineStyle(2, color ?? (focus ? COLORS.gold : 0xf0d080), 1);
     for (const [cx, cy, dx, dy] of [
       [x0, y0, 1, 1],
       [x1, y0, -1, 1],
