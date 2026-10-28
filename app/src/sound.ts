@@ -180,9 +180,21 @@ export class WebSoundManager implements GameSoundManager {
     g.cancelScheduledValues(t);
     g.setValueAtTime(g.value, t);
     g.linearRampToValueAtTime(0, t + MENU_FADE_OUT);
-    m.source.stop(t + MENU_FADE_OUT + 0.05);
+    const source = m.source;
     const gain = m.gain;
-    m.source.onended = () => gain.disconnect();
+    source.stop(t + MENU_FADE_OUT + 0.05);
+    source.onended = () => gain.disconnect();
+    // (and once more on the clock of the page: on a phone the clock of the audio can stand still, an app on the home
+    // screen of an iPhone has its audio interrupted now and then, and what was planned on it would wait; cut off from
+    // the speakers it is quiet whatever its clock does)
+    setTimeout(() => {
+      try {
+        source.stop();
+      } catch {
+        // already stopped
+      }
+      gain.disconnect();
+    }, (MENU_FADE_OUT + 0.1) * 1000);
     m.source = null;
     m.gain = null;
   }
@@ -253,6 +265,7 @@ export class WebSoundManager implements GameSoundManager {
     const m = this.musics[index];
     if (!m) return;
     this.stopPreview(); // the track of the music panel stops when a level starts its music
+    this.setMenuMusic(false); // (and the music of the menus, whatever else happens)
     m.player?.play(this.musicVolume(m.volume, m.gain));
     m.isPlaying = true;
   }
