@@ -4,7 +4,7 @@
  */
 import { type Archive, type GameSoundManager, SoundEffect, SoundEffectFileNames } from '../../engine/src/index.ts';
 import { ModPlayer } from './modplayer.ts';
-import { musicGain } from './musicloudness.ts';
+import { MUSIC_TARGET_LUFS, musicGain } from './musicloudness.ts';
 
 interface PlayingSound {
   source: AudioBufferSourceNode;
@@ -19,6 +19,14 @@ const MUSIC_VOLUME = 0.2;
  * Lemmix they were about 20 dB louder than the music.
  */
 const SFX_LEVEL = 0.5;
+
+/** LemmixRL: the music of the screens around the levels (the title, the run, the collection), looped */
+const MENU_MUSIC_URL = new URL('./music/lematro_menu.mp3', import.meta.url).href;
+/** its loudness (LUFS, measured with LoudnessMeter over the whole file): it is played as loud as the music of the levels */
+const MENU_MUSIC_LUFS = -16.1;
+/** how long it fades in and out (seconds) */
+const MENU_FADE_IN = 1;
+const MENU_FADE_OUT = 0.4;
 
 interface Music {
   player: ModPlayer | null;
@@ -40,6 +48,17 @@ export class WebSoundManager implements GameSoundManager {
   private readonly musicGain: GainNode;
   private musicSettingValue = 1;
   private normalize = true;
+  /** LemmixRL: the music of the menus (loaded the first time it plays; it goes on where it stopped) */
+  private readonly menu: {
+    buffer: AudioBuffer | null;
+    loading: Promise<void> | null;
+    source: AudioBufferSourceNode | null;
+    gain: GainNode | null;
+    wanted: boolean;
+    /** where it is in the track: when it started (context time, less where it started from), and where it stopped */
+    startedAt: number;
+    offset: number;
+  } = { buffer: null, loading: null, source: null, gain: null, wanted: false, startedAt: 0, offset: 0 };
   /** LemmixRL (the music panel, ?music): a track played on its own */
   private preview: { player: ModPlayer; gain: number } | null = null;
 
@@ -103,6 +122,66 @@ export class WebSoundManager implements GameSoundManager {
     this.normalize = on;
     for (const m of this.musics) m.player?.setVolume(this.musicVolume(m.volume, m.gain));
     this.preview?.player.setVolume(this.musicVolume(MUSIC_VOLUME, this.preview.gain));
+    this.menu.gain?.gain.setValueAtTime(this.menuVolume(), this.context.currentTime);
+  }
+
+  /** LemmixRL: the music of the menus on (it fades in, from where it stopped) or off (it fades out) */
+  setMenuMusic(on: boolean): void {
+    if (on === this.menu.wanted) return;
+    this.menu.wanted = on;
+    if (on) void this.startMenuMusic();
+    else this.stopMenuMusic();
+  }
+
+  private menuVolume(): number {
+    return this.musicVolume(MUSIC_VOLUME, 10 ** ((MUSIC_TARGET_LUFS - MENU_MUSIC_LUFS) / 20));
+  }
+
+  private async startMenuMusic(): Promise<void> {
+    const m = this.menu;
+    if (!m.buffer) {
+      m.loading ??= fetch(MENU_MUSIC_URL)
+        .then((r) => r.arrayBuffer())
+        .then((b) => this.context.decodeAudioData(b))
+        .then((b) => {
+          m.buffer = b;
+        })
+        .catch(() => {
+          // no music for the menus: they stay quiet
+        });
+      await m.loading;
+    }
+    // (it may have been turned off, or on again, while it loaded)
+    if (!m.buffer || !m.wanted || m.source) return;
+    const t = this.context.currentTime;
+    const gain = this.context.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(this.menuVolume(), t + MENU_FADE_IN);
+    gain.connect(this.musicGain);
+    const source = this.context.createBufferSource();
+    source.buffer = m.buffer;
+    source.loop = true;
+    source.connect(gain);
+    source.start(t, m.offset);
+    m.startedAt = t - m.offset;
+    m.source = source;
+    m.gain = gain;
+  }
+
+  private stopMenuMusic(): void {
+    const m = this.menu;
+    if (!m.source || !m.gain || !m.buffer) return;
+    const t = this.context.currentTime;
+    m.offset = (t - m.startedAt) % m.buffer.duration;
+    const g = m.gain.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.linearRampToValueAtTime(0, t + MENU_FADE_OUT);
+    m.source.stop(t + MENU_FADE_OUT + 0.05);
+    const gain = m.gain;
+    m.source.onended = () => gain.disconnect();
+    m.source = null;
+    m.gain = null;
   }
 
   /** the volume of a music player: the volume the game sets, with the gain of its track when the music is normalised */
