@@ -13,7 +13,7 @@ describe('Power Card JSON boundary', () => {
     expect(JOKERS.map((c) => c.id).sort()).toEqual(Object.keys(POWER_CARD_EFFECTS).sort());
     expect(JOKERS).toHaveLength(Object.keys(POWER_CARD_EFFECTS).length);
     expect(JOKERS.filter((c) => c.rarity === 'legendary').map((c) => c.id)).toEqual(['triboulet', 'yorick', 'chicot', 'ohno', 'yippee']);
-    expect(JOKERS).toHaveLength(149);
+    expect(JOKERS).toHaveLength(150);
   });
   it('uses JSON metadata for gameplay while withholding unimplemented designs', () => {
     const library = structuredClone(POWER_CARD_LIBRARY);

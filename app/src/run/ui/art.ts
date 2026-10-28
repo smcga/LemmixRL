@@ -7,8 +7,14 @@ import { POWER_CARD_LIBRARY } from '../power-cards/catalogue.ts';
 import type { LemmingAnim } from '../power-cards/animations.ts';
 import type { PowerCardDesign } from '../power-cards/schema.ts';
 import { COLORS } from './widgets.ts';
-import { EDITION_TEXTS, type PackKind, type Rarity, type TarotDef, TRAIT_TEXTS } from '../content.ts';
+import { BADGE_COLORS, EDITION_TEXTS, type PackKind, type Rarity, type TarotDef, TRAIT_TEXTS } from '../content.ts';
 import type { LemmingCard, SpecialTrait } from '../state.ts';
+
+/** the small marks above a lemming (in a level and in the colony): its kind of Super Lemming, then its Badge */
+export function markerColors(c: LemmingCard): number[] {
+  const kind = markerColor(c);
+  return [...(kind !== null ? [kind] : []), ...(c.badge ? [BADGE_COLORS[c.badge]] : [])];
+}
 
 /** the colour of the small mark above a special lemming (in a level and in the colony), or none */
 export function markerColor(c: LemmingCard): number | null {
@@ -88,6 +94,10 @@ export const TAROT_ART: Record<string, Art> = {
   phantom: mayhemArt('phantom', [lemmingLayer('float', 3, 0, 8, { '#00b000': '#8c8ca8', '#4040e0': '#6a5a8a' })]),
   bonfire: mayhemArt('bonfire', [lemmingLayer('fry', 3, 0, 8), textLayer('$20', '#f3b958', 1.2, 0, -26)]),
   solesurvivor: mayhemArt('solesurvivor', [lemmingLayer('walk', 3, 0, 8), textLayer('x2', '#f3b958', 1.4, 0, -26)]),
+  goldbadge: mayhemArt('goldbadge', [lemmingLayer('walk', 3, 0, 8), textLayer('*', '#ffd23c', 2, 0, -24)]),
+  redbadge: mayhemArt('redbadge', [lemmingLayer('walk', 3, 0, 8), textLayer('*', '#e03030', 2, 0, -24)]),
+  bluebadge: mayhemArt('bluebadge', [lemmingLayer('walk', 3, 0, 8), textLayer('*', '#3a8cff', 2, 0, -24)]),
+  purplebadge: mayhemArt('purplebadge', [lemmingLayer('walk', 3, 0, 8), textLayer('*', '#b050f0', 2, 0, -24)]),
   prism: mayhemArt('prism', [lemmingLayer('walk', 3, 0, 8, { '#00b000': '#e060c0', '#4040e0': '#30b0e0' })]),
   // the Tribe cards: a lemming of the tribe, in its colours (as in Lemmings 2), and what it levels up
   classic: tribeArt('classic', 'walk', '#00b000', '#4040e0', '+2'),

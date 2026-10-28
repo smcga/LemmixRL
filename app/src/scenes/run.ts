@@ -12,7 +12,7 @@ import * as Phaser from 'phaser';
 import { SoundEffect, SoundOption } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
 import { type RunLevel, levelName } from '../run/catalog.ts';
-import { POWER_EDITION_NAMES, POWER_EDITION_TEXTS, type PowerEdition, EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, LEMMING_BADGE_COLORS, TRAIT_TEXTS, type Fate, isDeath, JOKERS, jokerDef, jokerText, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
+import { BADGE_COLORS, BADGE_NAMES, BADGE_TEXTS, POWER_EDITION_NAMES, POWER_EDITION_TEXTS, type PowerEdition, EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, LEMMING_BADGE_COLORS, TRAIT_TEXTS, type Fate, isDeath, JOKERS, jokerDef, jokerText, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
 import { normalizeSeed, randomSeed } from '../run/rng.ts';
 import { type BlindPreview, cardTitle, isSpecial, jokerSellValue, RunSession, tarotSellPrice } from '../run/session.ts';
 import { colorsText } from '../run/colors.ts';
@@ -1945,6 +1945,9 @@ export class RunScene extends Phaser.Scene {
     const does = [EDITION_TEXTS[c.edition], c.climber ? TRAIT_TEXTS.climber : '', c.floater ? TRAIT_TEXTS.floater : '', c.insured ? TRAIT_TEXTS.insured : ''].filter((t) => t);
     const saves = c.saves === 0 ? 'Not saved yet' : `Saved ${c.saves} time${c.saves === 1 ? '' : 's'}`;
     // (a line between one effect and the next, as Balatro has a box for each)
+    // its Badge and the Rescues it has gained for good (the Rambler), each in a box of its own
+    if (c.badge) does.push(`{!}${BADGE_NAMES[c.badge]}{}: ${BADGE_TEXTS[c.badge]}`);
+    if (c.bonus) does.push(`{+}+${c.bonus}{} Rescues when saved`);
     const lines = [...does.flatMap((t) => [t, '']), colorsText(c), `{~}${saves}{}`];
     const badges: { text: string; color: number }[] = [];
     if (c.edition !== 'plain') badges.push({ text: EDITION_NAMES[c.edition], color: LEMMING_BADGE_COLORS[c.edition] });
@@ -1952,6 +1955,7 @@ export class RunScene extends Phaser.Scene {
     else if (c.climber) badges.push({ text: 'Climber', color: LEMMING_BADGE_COLORS.climber });
     else if (c.floater) badges.push({ text: 'Floater', color: LEMMING_BADGE_COLORS.floater });
     if (c.insured) badges.push({ text: 'Insured', color: LEMMING_BADGE_COLORS.insured });
+    if (c.badge) badges.push({ text: BADGE_NAMES[c.badge], color: BADGE_COLORS[c.badge] });
     if (inSquad) badges.push({ text: 'In squad', color: LEMMING_BADGE_COLORS.squad });
     return { title: c.name, color: this.cardColor(c), lines, badges };
   }

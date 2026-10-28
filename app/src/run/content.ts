@@ -18,6 +18,19 @@ export type Edition = 'plain' | 'gold' | 'lucky' | 'mentor' | 'champion' | 'wise
 
 export const EDITION_NAMES: Record<Edition, string> = { plain: 'Lemming', gold: 'Gold', lucky: 'Lucky', mentor: 'Mentor', champion: 'Champion', wise: 'Wise' };
 
+/** a Badge: a mark on a lemming, besides its edition (Balatro's seals) */
+export type Badge = 'red' | 'gold' | 'blue' | 'purple';
+export const BADGES: readonly Badge[] = ['red', 'gold', 'blue', 'purple'];
+export const BADGE_NAMES: Record<Badge, string> = { red: 'Red Badge', gold: 'Gold Badge', blue: 'Blue Badge', purple: 'Purple Badge' };
+export const BADGE_TEXTS: Record<Badge, string> = {
+  red: 'Counts {!}twice{} when saved',
+  gold: 'Earns {$}$3{} when saved',
+  blue: 'Creates a {!}Tribe card{} when saved last, if there is room',
+  purple: 'Creates a {!}Boost{} when lost, if there is room',
+};
+/** the colours of the Badges (their mark above a lemming, and their box in a tooltip) */
+export const BADGE_COLORS: Record<Badge, number> = { red: 0xe03030, gold: 0xffd23c, blue: 0x3a8cff, purple: 0xb050f0 };
+
 /** what the abilities of a lemming do (in every level), as a description is written */
 export const TRAIT_TEXTS = {
   climber: '{s}Climbs{} walls in every level',
@@ -63,6 +76,7 @@ export const KEYWORDS: { match: RegExp; title: string; text: string }[] = [
   { match: /\bShiny\b/, title: 'Shiny', text: 'A Power Card edition: +5 Rescues.' },
   { match: /\bGlowing\b/, title: 'Glowing', text: 'A Power Card edition: +10 Rescues.' },
   { match: /\bRainbow\b/, title: 'Rainbow', text: 'A Power Card edition: X1.5 Rescues.' },
+  { match: /Badge/, title: 'Badge', text: 'A mark on a lemming: Red counts twice when saved, Gold earns $3 when saved, Blue makes a Tribe card when saved last, Purple a Boost when lost.' },
   { match: /Super Lemming/, title: 'Super Lemming', text: 'A special lemming: Gold, Lucky, Mentor, Champion or Wise, a Climber, a Floater or Insured.' },
 ];
 
@@ -405,7 +419,8 @@ export interface JokerDef {
     | 'roadCrew'
     | 'iceLolly'
     | 'freshApproach'
-    | 'returnsDesk';
+    | 'returnsDesk'
+    | 'rambler';
   /** destroyed after this many levels (its counter counts them) */
   lasts?: number;
   /** what its counter counts, one for each time it happens (the cards it has, not the ones that copy it) */
@@ -643,6 +658,8 @@ export const POWER_CARD_EFFECTS: Record<string, Omit<JokerDef, 'id' | 'name' | '
   greenparty: { atLevelStart: 'greenParty', onSwap: 'greenParty', rescues: (c) => ({ plus: c.counter }) },
   returnsdesk: { afterLevel: 'returnsDesk', onSwap: 'returnsDesk' },
   onthejob: { onSwap: 'onTheJob' },
+  // Lematro Phase 4
+  rambler: { afterLevel: 'rambler' },
 };
 
 /** the same kinds of skill used (and at least one) */
@@ -771,6 +788,10 @@ export const TAROTS: readonly TarotDef[] = [
   { id: 'phantom', name: 'The Phantom', price: 4, rare: true, text: 'A random Power Card becomes {!}Ghost{}. {!}-1{} lemming in every squad', select: 0 },
   { id: 'bonfire', name: 'The Bonfire', price: 4, rare: true, text: '{!}5{} random lemmings leave the colony. Earn {$}$20{}', select: 0 },
   { id: 'solesurvivor', name: 'The Sole Survivor', price: 4, rare: true, text: 'Copies a random Power Card. All your other Power Cards are destroyed', select: 0 },
+  { id: 'goldbadge', name: 'The Gold Badge', price: 4, rare: true, text: '{!}1{} selected lemming gets a {!}Gold Badge{}', select: 1 },
+  { id: 'redbadge', name: 'The Red Badge', price: 4, rare: true, text: '{!}1{} selected lemming gets a {!}Red Badge{}', select: 1 },
+  { id: 'bluebadge', name: 'The Blue Badge', price: 4, rare: true, text: '{!}1{} selected lemming gets a {!}Blue Badge{}', select: 1 },
+  { id: 'purplebadge', name: 'The Purple Badge', price: 4, rare: true, text: '{!}1{} selected lemming gets a {!}Purple Badge{}', select: 1 },
   { id: 'prism', name: 'The Prism', price: 4, rare: true, text: 'A random Power Card becomes {!}Rainbow{}. All the others are destroyed', select: 0 },
   // the Tribe cards (Balatro's planets): the tribes of Lemmings 2, each levels up a skill
   ...(

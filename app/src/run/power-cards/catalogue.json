@@ -5252,6 +5252,39 @@
           }
         ]
       }
+    },
+    {
+      "id": "rambler",
+      "name": "Rambler",
+      "rarity": "uncommon",
+      "price": 5,
+      "description": "Each saved lemming gains {+}+1{} Rescues for good",
+      "appearance": {
+        "background": "#1e4d3a",
+        "border": "#f4f1e6",
+        "layers": [
+          {
+            "type": "lemming",
+            "animation": "walk",
+            "scale": 3,
+            "x": 0,
+            "y": 8,
+            "colors": {
+              "#4040e0": "#806040"
+            },
+            "playback": "animated",
+            "frame": 0
+          },
+          {
+            "type": "text",
+            "text": "+1",
+            "color": "#5bd7ff",
+            "scale": 1.4,
+            "x": 0,
+            "y": -26
+          }
+        ]
+      }
     }
   ]
 }

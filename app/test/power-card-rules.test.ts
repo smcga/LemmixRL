@@ -1120,7 +1120,9 @@ describe('Lematro Phase 3: Mayhem boosts and The Lottery', () => {
   });
 
   it('the Mayhem Pack and the Mayhem Bonus; Conscription and The Cloning Vat are Mayhem boosts', () => {
-    expect(MAYHEM.map((t) => t.id).sort()).toEqual(['biggamble', 'bonfire', 'conscription', 'dyevat', 'makeover', 'phantom', 'prism', 'reaper', 'solesurvivor', 'summoning', 'uniform', 'vat']);
+    expect(MAYHEM.map((t) => t.id).sort()).toEqual(
+      ['biggamble', 'bonfire', 'conscription', 'dyevat', 'makeover', 'phantom', 'prism', 'reaper', 'solesurvivor', 'summoning', 'uniform', 'vat', 'goldbadge', 'redbadge', 'bluebadge', 'purplebadge'].sort(),
+    );
     expect(BOOSTS).toHaveLength(22);
     expect(TAGS).toHaveLength(24);
     const run = runOn('Orig-1-02');
@@ -1131,5 +1133,74 @@ describe('Lematro Phase 3: Mayhem boosts and The Lottery', () => {
     for (const c of run.state.pack!.choices) expect(c.type === 'tarot' && MAYHEM.some((t) => t.id === c.id)).toBe(true);
     run.skipPack();
     expect(run.state.phase).toBe('blinds');
+  });
+});
+
+describe('Lematro Phase 4: Badges and the Rambler', () => {
+  const use = (run: RunSession, id: string, selected: number[] = []) => {
+    run.state.tarots = [{ uid: 7000, id }];
+    return run.useTarot(7000, selected);
+  };
+
+  it('the Badge boosts give 1 selected lemming its Badge (in place of the one it had)', () => {
+    const run = runOn('Orig-1-02');
+    const c = run.state.colony[0];
+    expect(use(run, 'goldbadge')).toBeNull();
+    expect(use(run, 'goldbadge', [c.id])).toEqual([`${c.name} got a Gold Badge.`]);
+    expect(c.badge).toBe('gold');
+    use(run, 'purplebadge', [c.id]);
+    expect(c.badge).toBe('purple');
+    expect(MAYHEM).toHaveLength(16);
+    expect(BOOSTS).toHaveLength(22);
+  });
+
+  it('a Red Badge counts twice when saved, for the count and for the Power Cards', () => {
+    const run = runOn('Orig-1-02', ['starturn']);
+    const red = { ...card(run, 'red'), edition: 'gold' as const, badge: 'red' as const };
+    const plain = { ...card(run, 'red'), edition: 'plain' as const, climber: false, floater: false, insured: false };
+    const { score, lines } = run.rescueCount([red, plain], [], zeroSkills());
+    // 2 saved, +1 (Red Badge), Star Turn +3 twice
+    expect(score).toBe(3 + 6);
+    expect(lines[1]).toEqual({ label: 'Red Badges', plus: 1, total: 3 });
+  });
+
+  it('a Gold Badge earns $3 when saved; a Blue Badge saved last makes a Tribe card', () => {
+    const run = runOn('Orig-1-02');
+    const setup = run.ensureSetup();
+    run.card(setup.hand[0])!.badge = 'gold';
+    run.card(setup.hand[1])!.badge = 'gold';
+    run.card(setup.hand.at(-1)!)!.badge = 'blue';
+    const cash = winPerfect(run);
+    expect(cash.lines).toContainEqual({ label: 'Gold Badges (2)', amount: 6 });
+    expect(run.state.tarots).toHaveLength(1);
+    expect(TAROTS.find((t) => t.id === run.state.tarots[0].id)!.kind).toBe('tribe');
+  });
+
+  it('a Purple Badge makes a Boost when its lemming is lost', () => {
+    const run = runOn('Orig-1-02');
+    const setup = run.ensureSetup();
+    // Fun 2: the Floaters are saved, the others splat
+    for (const id of setup.hand.slice(0, 3)) run.card(id)!.floater = true;
+    run.card(setup.hand[1])!.badge = 'purple';
+    run.card(setup.hand[5])!.badge = 'purple';
+    playIdle(run);
+    const cash = run.accept();
+    expect(run.state.tarots).toHaveLength(1);
+    expect(BOOSTS.some((t) => t.id === run.state.tarots[0].id)).toBe(true);
+    expect(cash.notes.some((n) => n.includes('(Purple Badge) was lost'))).toBe(true);
+  });
+
+  it('the Rambler: each saved lemming gains +1 Rescues for good, counted when it is saved again', () => {
+    const run = runOn('Orig-1-02', ['rambler']);
+    const setup = run.ensureSetup();
+    const hand = [...setup.hand];
+    winPerfect(run);
+    for (const id of hand) expect(run.card(id)!.bonus).toBe(1);
+    const saved = hand.slice(0, 3).map((id) => run.card(id)!);
+    // sold: the bonus stays on the lemmings
+    run.state.jokers = [];
+    const { score, lines } = run.rescueCount(saved, saved, zeroSkills());
+    expect(score).toBe(6);
+    expect(lines.at(-1)).toEqual({ label: 'Lemming bonuses', plus: 3, total: 6 });
   });
 });

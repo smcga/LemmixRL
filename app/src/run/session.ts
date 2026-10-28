@@ -47,6 +47,8 @@ import {
   POWER_EDITION_RESCUES,
   POWER_EDITIONS,
   type PowerEdition,
+  type Badge,
+  BADGE_NAMES,
 } from './content.ts';
 import { Rng, RunRandom } from './rng.ts';
 import { SKILL_ACTIONS, SKILL_NAMES, SKILLS, type Skill, type SkillCounts, setSkills, totalSkills, zeroSkills } from './skills.ts';
@@ -750,15 +752,24 @@ export class RunSession {
     const s = this.state;
     const lines: RescueLine[] = [{ label: 'Lemmings saved', total: order.length }];
     const isSuper = (c: LemmingCard) => this.isSuper(c);
-    // Encore!: the saved Super Lemmings count twice (for the count and for the Power Cards), before any Power Card
-    const encores = this.activeJokers().filter((a) => a.d.encore);
-    if (encores.length) {
+    // before any Power Card: saved lemmings with a Red Badge count twice, and with Encore! the Super Lemmings too (for the
+    // count and for the Power Cards)
+    const twice = (extra: (c: LemmingCard) => number, label: string) => {
       const before = order.length;
-      order = order.flatMap((c) => (c && isSuper(c) ? Array<LemmingCard>(1 + encores.length).fill(c) : [c]));
-      if (order.length > before) lines.push({ label: encores[0].label, plus: order.length - before, total: order.length });
-    }
+      order = order.flatMap((c) => (c && extra(c) ? Array<LemmingCard>(1 + extra(c)).fill(c) : [c]));
+      if (order.length > before) lines.push({ label, plus: order.length - before, total: order.length });
+    };
+    twice((c) => (c.badge === 'red' ? 1 : 0), 'Red Badges');
+    const encores = this.activeJokers().filter((a) => a.d.encore);
+    if (encores.length) twice((c) => (isSuper(c) ? encores.length : 0), encores[0].label);
     const saved = order.length;
     let score = saved;
+    // the +Rescues the saved lemmings have gained for good (the Rambler)
+    const bonus = order.reduce((n, c) => n + (c?.bonus ?? 0), 0);
+    if (bonus) {
+      score += bonus;
+      lines.push({ label: 'Lemming bonuses', plus: bonus, total: score });
+    }
     const ginger = this.anyJoker((d) => d.ginger);
     const cap = this.capability();
     const setup = s.setup;
@@ -968,6 +979,8 @@ export class RunSession {
     let hardHats = this.activeJokers().filter((a) => a.d.id === 'hardhat').length;
     let respawns = this.jokerSum((d) => d.respawns) + (s.respawns ?? 0);
     const lostRespawn = new Set(this.activeJokers().map((a) => a.d.lostRespawnClothes).filter((c): c is LemmingColor => !!c));
+    // the lemmings with a Purple Badge that died (whether they came back or not), before the lost ones leave the colony
+    const purpleLost = deadIdx.map((i) => this.squadCard(out, i)).filter((c): c is LemmingCard => c?.badge === 'purple');
     // Fragile: the Super Lemmings that died (whether they came back or not)
     this.count('superDied', deadIdx.map((i) => this.squadCard(out, i)).filter((c) => !!c && this.isSuper(c)).length);
     // the hard hat saves the most valuable lemming
@@ -1041,6 +1054,22 @@ export class RunSession {
       }
     }
     if (gold > 0) lines.push({ label: `Gold lemmings (${gold})`, amount: 2 * gold });
+    // the Badges: Gold earns when saved, Blue makes a Tribe card when saved last, Purple a Boost when lost
+    const goldBadges = out.fates.filter((f, i) => f === 'saved' && this.squadCard(out, i)?.badge === 'gold').length;
+    if (goldBadges) lines.push({ label: `Gold Badges (${goldBadges})`, amount: 3 * goldBadges });
+    const lastIndex = (out.exitOrder ?? []).at(-1);
+    const last = lastIndex !== undefined && lastIndex >= 0 ? this.squadCard(out, lastIndex) : undefined;
+    if (last?.badge === 'blue' && s.tarots.length < TAROT_SLOTS) {
+      const t = { uid: this.uid(), id: rng.pick(TRIBES).id };
+      s.tarots.push(t);
+      notes.push(`${last.name} (Blue Badge) was saved last: ${tarotDef(t.id).name}.`);
+    }
+    for (const c of purpleLost) {
+      if (s.tarots.length >= TAROT_SLOTS) break;
+      const t = this.newTarot(rng);
+      s.tarots.push(t);
+      notes.push(`${c.name} (Purple Badge) was lost: ${tarotDef(t.id).name}.`);
+    }
 
     // the jokers
     const ctx: Omit<PayoutContext, 'counter'> = {
@@ -1269,6 +1298,10 @@ export class RunSession {
           break;
         case 'returnsDesk':
           if (own) j.color = colors.pick(LEMMING_COLORS.filter((c) => c !== j.color));
+          break;
+        case 'rambler':
+          for (const c of new Set(saved)) c.bonus = (c.bonus ?? 0) + 1;
+          if (saved.length) notes.push(`${d.name}: ${new Set(saved).size} lemming${new Set(saved).size === 1 ? '' : 's'} gained +1 Rescues for good.`);
           break;
       }
       if (d.selfReplication && setup.selfCopy != null) {
@@ -2091,6 +2124,15 @@ export class RunSession {
         const lost = s.jokers.length - 1;
         s.jokers = [keep, copy];
         notes.push(`${jokerDef(keep.id).name} was copied${lost ? `; ${lost} other Power Card${lost === 1 ? ' was' : 's were'} destroyed` : ''}.`);
+        break;
+      }
+      case 'goldbadge':
+      case 'redbadge':
+      case 'bluebadge':
+      case 'purplebadge': {
+        const badge = t.id.replace('badge', '') as Badge;
+        cards[0].badge = badge;
+        notes.push(`${cards[0].name} got a ${BADGE_NAMES[badge]}.`);
         break;
       }
       case 'prism': {
