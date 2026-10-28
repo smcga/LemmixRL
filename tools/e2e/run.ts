@@ -335,7 +335,7 @@ try {
   await clickSpot('giveUp');
   if ((await state()).phase !== 'over') fail('Give up did not end the run');
 
-  console.log('e2e ok: a run: from the title, abilities assigned, a level previewed, played (its own screen before it, the keys of a run) and cashed out, shop (a pack opened and a card of it taken, cards dragged to buy, sell and use), a Swap, skip, continued after a reload, given up in the game');
+  console.log('e2e ok: a run: from the title, abilities assigned, a level previewed, played (its own screen before it, the keys of a run) and cashed out, shop (a pack opened and a card of it taken, cards dragged to buy, sell and use), a Redraw, skip, continued after a reload, given up in the game');
 } finally {
   await browser.close();
   await server.close();
