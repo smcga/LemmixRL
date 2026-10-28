@@ -8,6 +8,7 @@
  */
 import { type Archive, type DataProvider, getStyle, STYLE_DESCRIPTIONS, StyleDef } from '../../engine/src/index.ts';
 import type { LemmixApp } from './app.ts';
+import { debugOn, onDebugChange } from './debug.ts';
 import { urlSwitch } from './diagnostics.ts';
 import { MUSIC_TARGET_LUFS, musicGainDb, musicLoudness } from './musicloudness.ts';
 import { whenApp } from './scenes/shared.ts';
@@ -55,8 +56,21 @@ export function levelTracks(provider: DataProvider, music: Map<string, Archive>)
 }
 
 export function initMusicPanel(): void {
-  if (!urlSwitch('music')) return;
-  whenApp((app) => new MusicPanel(app));
+  // shown with ?music, or with the Debug tools setting (and gone again when that is turned off)
+  const forced = urlSwitch('music');
+  whenApp((app) => {
+    let panel: MusicPanel | null = null;
+    const update = () => {
+      const show = forced || debugOn();
+      if (show && !panel) panel = new MusicPanel(app);
+      else if (!show && panel) {
+        panel.destroy();
+        panel = null;
+      }
+    };
+    update();
+    onDebugChange(update);
+  });
 }
 
 interface Row {
@@ -101,6 +115,8 @@ class MusicPanel {
   private readonly seconds: HTMLInputElement;
   private readonly playAllButton: HTMLButtonElement;
   private readonly normalize: HTMLInputElement;
+  private readonly root: HTMLDivElement;
+  private readonly timer: ReturnType<typeof setInterval>;
 
   constructor(private readonly app: LemmixApp) {
     const root = el(
@@ -188,9 +204,18 @@ class MusicPanel {
     }
     setHidden(hidden);
     document.body.appendChild(root);
+    this.root = root;
 
     this.update();
-    setInterval(() => this.tick(), 250);
+    this.timer = setInterval(() => this.tick(), 250);
+  }
+
+  /** gone from the page, and its track stopped */
+  destroy(): void {
+    clearInterval(this.timer);
+    this.playAll = false;
+    this.stop();
+    this.root.remove();
   }
 
   private button(text: string, onClick: () => void): HTMLButtonElement {

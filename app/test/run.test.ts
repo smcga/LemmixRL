@@ -627,3 +627,20 @@ describe('roguelike run', () => {
     expect(copy.startBlind().hand).toEqual(run.startBlind().hand);
   });
 });
+
+describe('Debug tools', () => {
+  it('pass a level as if every lemming of the squad was saved, and it pays out', () => {
+    const run = runOn('Orig-1-02');
+    const setup = run.startBlind();
+    const money = run.state.money;
+    const out = run.debugPass();
+    expect(out.success).toBe(true);
+    expect(out.rescued).toBe(setup.hand.length);
+    expect(out.fates.every((f) => f === 'saved')).toBe(true);
+    expect(out.score).toBeGreaterThanOrEqual(setup.hand.length);
+    expect(run.state.phase).toBe('result');
+    run.accept();
+    run.cashOut();
+    expect(run.state.money).toBeGreaterThan(money);
+  });
+});
