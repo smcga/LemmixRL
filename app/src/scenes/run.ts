@@ -12,13 +12,13 @@ import * as Phaser from 'phaser';
 import { SoundEffect, SoundOption } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
 import { type RunLevel, levelName } from '../run/catalog.ts';
-import { EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, LEMMING_BADGE_COLORS, TRAIT_TEXTS, type Fate, isDeath, JOKERS, jokerDef, jokerText, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
+import { POWER_EDITION_NAMES, POWER_EDITION_TEXTS, type PowerEdition, EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, LEMMING_BADGE_COLORS, TRAIT_TEXTS, type Fate, isDeath, JOKERS, jokerDef, jokerText, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
 import { normalizeSeed, randomSeed } from '../run/rng.ts';
 import { type BlindPreview, cardTitle, isSpecial, jokerSellValue, RunSession, tarotSellPrice } from '../run/session.ts';
 import { colorsText } from '../run/colors.ts';
 import { hazardsText, levelHazards } from '../run/hazards.ts';
 import { describeSkills, SKILL_NAMES, SKILL_PLURALS, SKILLS, type Skill, totalSkills } from '../run/skills.ts';
-import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, JOKER_SLOTS, type LemmingCard, type JokerInstance, type PackChoice, type RescueLine, type ShopOffer, START_COLONY, TAROT_SLOTS } from '../run/state.ts';
+import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, type LemmingCard, type JokerInstance, type PackChoice, type RescueLine, type ShopOffer, START_COLONY, TAROT_SLOTS } from '../run/state.ts';
 import { loadMeta, loadRun, markSeen, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
 import { ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
 import { type Art, CARD_H, CARD_W, type CardBehaviour, CardTable, CardView, type DropTarget, inRect, type Rect } from '../run/ui/cards.ts';
@@ -667,7 +667,7 @@ export class RunScene extends Phaser.Scene {
       g.lineStyle(2, 0xffffff, 0.1);
       g.strokeRoundedRect(a.x + 1, a.y + 1, a.w - 2, a.h - 2, 10);
     }
-    k(label(this, JOKER_AREA.x + 6, 108, `${s.jokers.length}/${JOKER_SLOTS}`, { color: COLORS.text }));
+    k(label(this, JOKER_AREA.x + 6, 108, `${s.jokers.length}/${run.jokerSlots()}`, { color: COLORS.text }));
     k(label(this, TAROT_AREA.x + TAROT_AREA.w - 6, 108, `${s.tarots.length}/${TAROT_SLOTS}`, { color: COLORS.text, originX: 1 }));
     const cy = JOKER_AREA.y + JOKER_AREA.h / 2;
     const canSell = s.phase !== 'over';
@@ -681,7 +681,7 @@ export class RunScene extends Phaser.Scene {
         this.save();
         this.render();
       };
-      const card = k(new CardView(this, jx[i], cy, { color: RARITY_COLORS[d.rarity], art: JOKER_ART[j.id] }));
+      const card = k(new CardView(this, jx[i], cy, { color: RARITY_COLORS[d.rarity], art: JOKER_ART[j.id], edition: j.edition }));
       this.spot(`joker:${i}`, jx[i], cy);
       this.table.add(card, {
         tip: () => ({ title: d.name, color: RARITY_COLORS[d.rarity], lines: jokerLines(run, j), badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } }),
@@ -1455,7 +1455,7 @@ export class RunScene extends Phaser.Scene {
       const info = this.choiceInfo(run, c);
       const x = x0 + i * pitch;
       const y = area.y + area.h / 2 - 8;
-      const card = k(new CardView(this, x, y, { color: info.color, art: info.art }, cw, ch));
+      const card = k(new CardView(this, x, y, { color: info.color, art: info.art, edition: info.edition }, cw, ch));
       this.spot(`choice:${i}`, x, y);
       // its name below it (the popup says the rest)
       const name = k(label(this, x, area.y + area.h - 12, info.title, { color: COLORS.text, originX: 0.5, originY: 0.5, maxWidth: pitch - 6, align: 1 }));
@@ -1500,7 +1500,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   /** what a card of a pack is */
-  private choiceInfo(run: RunSession, c: PackChoice): { title: string; color: number; lines: string[]; art: Art; badge: { text: string; color: number } } {
+  private choiceInfo(run: RunSession, c: PackChoice): { title: string; color: number; lines: string[]; art: Art; badge: { text: string; color: number }; edition?: PowerEdition } {
     const lemmings = (title: string, line: string, art: Art) => ({ title, color: COLORS.blue, lines: [line], art, badge: { text: 'Lemmings', color: COLORS.blue } });
     switch (c.type) {
       case 'recruits':
@@ -1540,7 +1540,7 @@ export class RunScene extends Phaser.Scene {
       }
       case 'joker': {
         const d = jokerDef(c.id);
-        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text], art: JOKER_ART[c.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } };
+        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text, ...editionLines(c.edition)], art: JOKER_ART[c.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] }, edition: c.edition };
       }
     }
     throw new Error('unknown card of a pack');
@@ -1550,7 +1550,7 @@ export class RunScene extends Phaser.Scene {
   private offerCard(run: RunSession, o: ShopOffer, cx: number, cy: number, spot: string): void {
     const info = this.offerInfo(run, o);
     const price = o.price === 0 ? 'FREE' : `$${o.price}`;
-    const card = this.k(new CardView(this, cx, cy, { color: info.color, art: info.art, price }));
+    const card = this.k(new CardView(this, cx, cy, { color: info.color, art: info.art, price, edition: info.edition }));
     this.spot(spot, cx, cy);
     const buy = () => this.buy(run, o);
     const buyUse = () => this.buyAndUse(run, o);
@@ -1572,12 +1572,12 @@ export class RunScene extends Phaser.Scene {
   private whyNot(run: RunSession, o: ShopOffer): string {
     const s = run.state;
     if (!run.canAfford(o.price)) return 'Not enough money.';
-    if (o.type === 'joker' && s.jokers.length >= JOKER_SLOTS) return 'No room for another Power Card (sell one).';
+    if (o.type === 'joker' && !run.canBuy(o) && s.jokers.length >= run.jokerSlots()) return 'No room for another Power Card (sell one).';
     if (o.type === 'tarot' && s.tarots.length >= TAROT_SLOTS) return 'No room for another boost (use one).';
     return '';
   }
 
-  private offerInfo(run: RunSession, o: ShopOffer): { title: string; color: number; lines: string[]; art: Art; badge: { text: string; color: number } } {
+  private offerInfo(run: RunSession, o: ShopOffer): { title: string; color: number; lines: string[]; art: Art; badge: { text: string; color: number }; edition?: PowerEdition } {
     switch (o.type) {
       case 'pack': {
         const d = PACKS[o.id as PackKind];
@@ -1586,7 +1586,7 @@ export class RunScene extends Phaser.Scene {
       }
       case 'joker': {
         const d = jokerDef(o.id);
-        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text], art: JOKER_ART[d.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } };
+        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text, ...editionLines(o.edition)], art: JOKER_ART[d.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] }, edition: o.edition };
       }
       case 'tarot': {
         const d = tarotDef(o.id);
@@ -2021,6 +2021,11 @@ export class RunScene extends Phaser.Scene {
   }
 }
 
+/** what the edition of a Power Card adds to its description: "Shiny: +5 Rescues" */
+function editionLines(e: PowerEdition | undefined): string[] {
+  return e ? ['', `{!}${POWER_EDITION_NAMES[e]}{}: ${POWER_EDITION_TEXTS[e]}`] : [];
+}
+
 /** the runs whose end has been recorded (the end screen can be shown again: back from the title) */
 const endedRuns = new WeakSet<RunSession>();
 
@@ -2049,7 +2054,7 @@ function jokerLines(run: RunSession, j: JokerInstance): string[] {
   let current: string | null = null;
   switch (j.id) {
     case 'personalspace':
-      current = `{x}X${Math.max(1, JOKER_SLOTS - s.jokers.length)}{}`;
+      current = `{x}X${Math.max(1, run.jokerSlots() - s.jokers.length)}{}`;
       break;
     case 'elders':
       current = `{x}X${+(1 + 0.2 * s.colony.filter((c) => c.edition === 'wise').length).toFixed(1)}{}`;
@@ -2164,7 +2169,7 @@ function jokerLines(run: RunSession, j: JokerInstance): string[] {
   }
   if (d.copies) {
     const t = run.copyOf(j.uid);
-    return [text, t ? `{~}(Copying{} {!}${jokerDef(t.id).name}{}{~}){}` : '{~}(Nothing it can copy){}'];
+    return [text, t ? `{~}(Copying{} {!}${jokerDef(t.id).name}{}{~}){}` : '{~}(Nothing it can copy){}', ...editionLines(j.edition)];
   }
-  return current ? [text, now(current)] : [text];
+  return [text, ...(current ? [now(current)] : []), ...editionLines(j.edition)];
 }

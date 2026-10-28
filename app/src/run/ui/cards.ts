@@ -8,6 +8,7 @@ import { touch } from '../../touch.ts';
 import { type LemmingAnim, lemmingSprite, SKILL_ICONS } from './assets.ts';
 import { Button, COLORS, label, shade, type TipContent, type Tooltip } from './widgets.ts';
 import type { PowerCardDesign } from '../power-cards/schema.ts';
+import type { PowerEdition } from '../content.ts';
 import { powerCardSprite } from '../power-cards/phaser.ts';
 import { getApp } from '../../scenes/shared.ts';
 
@@ -37,6 +38,8 @@ export interface CardFace {
   pile?: boolean;
   /** a pack: a foil wrapper, crimped at both ends, with its name on a band */
   pack?: string;
+  /** the edition of a Power Card: a sheen (Shiny), a glow (Glowing), a rainbow edge (Rainbow), see-through (Ghost) */
+  edition?: PowerEdition;
 }
 
 /** A card: a cream edge around a field in the colour of its kind, with its picture. Its position is its middle. */
@@ -105,6 +108,7 @@ export class CardView extends Phaser.GameObjects.Container {
         this.add(text);
       }
     }
+    if (face.edition) this.drawEdition(face.edition, l, t, cw, ch);
     if (face.pack) {
       const name = label(scene, 0, t + ch - 22, face.pack, { color: COLORS.ink, originX: 0.5, originY: 0.5 });
       name.setDropShadow(0, 0, 0, 0);
@@ -137,6 +141,60 @@ export class CardView extends Phaser.GameObjects.Container {
     });
     this.once('destroy', () => scene.tweens.killTweensOf(this));
     scene.add.existing(this);
+  }
+
+  /** the look of a Power Card edition, over its picture */
+  private drawEdition(edition: PowerEdition, l: number, t: number, cw: number, ch: number): void {
+    const scene = this.scene;
+    const g = scene.add.graphics();
+    switch (edition) {
+      case 'shiny':
+        // a silver edge and diagonal sheen
+        g.lineStyle(2, 0xe8eef8, 0.9);
+        g.strokeRoundedRect(l + 1, t + 1, cw - 2, ch - 2, 6);
+        g.fillStyle(0xffffff, 0.16);
+        for (const o of [6, 22, 30]) g.fillTriangle(l + o, t + 4, l + o + 10, t + 4, l + o - 18, t + ch - 4);
+        break;
+      case 'glowing': {
+        g.lineStyle(3, 0x5bf0e0, 1);
+        g.strokeRoundedRect(l - 1, t - 1, cw + 2, ch + 2, 7);
+        scene.tweens.add({ targets: g, alpha: { from: 1, to: 0.35 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        break;
+      }
+      case 'rainbow': {
+        const colors = [0xe03030, 0xf08820, 0xf0e040, 0x3fae4f, 0x3070f0, 0xa040e0];
+        const n = 24;
+        const perimeter = 2 * (cw + ch);
+        const at = (d: number): [number, number] => {
+          d = ((d % perimeter) + perimeter) % perimeter;
+          if (d < cw) return [l + d, t];
+          if (d < cw + ch) return [l + cw, t + d - cw];
+          if (d < 2 * cw + ch) return [l + cw - (d - cw - ch), t + ch];
+          return [l, t + ch - (d - 2 * cw - ch)];
+        };
+        let phase = 0;
+        const paint = () => {
+          g.clear();
+          for (let i = 0; i < n; i++) {
+            const [x0, y0] = at(phase + (i * perimeter) / n);
+            const [x1, y1] = at(phase + ((i + 1) * perimeter) / n);
+            g.lineStyle(3, colors[i % colors.length], 1);
+            g.lineBetween(x0, y0, x1, y1);
+          }
+        };
+        paint();
+        const timer = scene.time.addEvent({ delay: 80, loop: true, callback: () => ((phase += 3), paint()) });
+        this.once('destroy', () => timer.remove());
+        break;
+      }
+      case 'ghost':
+        // see-through, dark as a negative
+        g.fillStyle(0x201030, 0.4);
+        g.fillRoundedRect(l, t, cw, ch, 6);
+        this.setAlpha(0.8);
+        break;
+    }
+    this.add(g);
   }
 
   /** the card as it lies: its rectangle on the screen */

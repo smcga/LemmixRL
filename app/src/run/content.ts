@@ -59,6 +59,10 @@ export const KEYWORDS: { match: RegExp; title: string; text: string }[] = [
   { match: /[Rr]espawn/, title: 'Respawns', text: 'A lemming that dies comes back to the colony, as long as there are Respawns left in the level.' },
   { match: /Fully/, title: 'Fully', text: 'A lemming is Fully a colour when its hair and its clothes are both that colour.' },
   { match: /Wise/, title: 'Wise', text: 'A Super Lemming. It does nothing itself, but some Power Cards count the Wise lemmings of your colony.' },
+  { match: /\bGhost\b/, title: 'Ghost', text: 'A Power Card edition: +1 Power Card slot.' },
+  { match: /\bShiny\b/, title: 'Shiny', text: 'A Power Card edition: +5 Rescues.' },
+  { match: /\bGlowing\b/, title: 'Glowing', text: 'A Power Card edition: +10 Rescues.' },
+  { match: /\bRainbow\b/, title: 'Rainbow', text: 'A Power Card edition: X1.5 Rescues.' },
   { match: /Super Lemming/, title: 'Super Lemming', text: 'A special lemming: Gold, Lucky, Mentor, Champion or Wise, a Climber, a Floater or Insured.' },
 ];
 
@@ -166,6 +170,28 @@ export const LEMMING_NAMES = [
 ];
 
 /* ---------------------------------------------------------------------------------------------- jokers */
+
+/* ---------------------------------------------------------------------------------------------- Power Card editions */
+
+/** what a Power Card can be besides itself (Balatro's Foil, Holographic, Polychrome and Negative) */
+export type PowerEdition = 'shiny' | 'glowing' | 'rainbow' | 'ghost';
+export const POWER_EDITIONS: readonly PowerEdition[] = ['shiny', 'glowing', 'rainbow', 'ghost'];
+
+export const POWER_EDITION_NAMES: Record<PowerEdition, string> = { shiny: 'Shiny', glowing: 'Glowing', rainbow: 'Rainbow', ghost: 'Ghost' };
+export const POWER_EDITION_TEXTS: Record<PowerEdition, string> = {
+  shiny: '{+}+5{} Rescues',
+  glowing: '{+}+10{} Rescues',
+  rainbow: '{x}X1.5{} Rescues',
+  ghost: '{!}+1{} Power Card slot',
+};
+/** what an edition does to the rescue count, after the card's own ability */
+export const POWER_EDITION_RESCUES: Record<PowerEdition, { plus?: number; times?: number }> = { shiny: { plus: 5 }, glowing: { plus: 10 }, rainbow: { times: 1.5 }, ghost: {} };
+/** what an edition adds to the price of a Power Card (half of it to its sell value) */
+export const POWER_EDITION_PRICES: Record<PowerEdition, number> = { shiny: 2, glowing: 3, rainbow: 5, ghost: 5 };
+/** the chance that a Power Card of a shop or a pack has an edition (as in Balatro) */
+export const POWER_EDITION_CHANCES: Record<PowerEdition, number> = { shiny: 0.02, glowing: 0.014, rainbow: 0.003, ghost: 0.003 };
+/** the colours of the editions (their badges) */
+export const POWER_EDITION_COLORS: Record<PowerEdition, number> = { shiny: 0xb8c4d0, glowing: 0x39c5bb, rainbow: 0xe060c0, ghost: 0x6a5a8a };
 
 /** Legendary Power Cards are found in Boost Packs, not ordinary shop or Power Pack rarity rolls. */
 export const RARITY_WEIGHTS: Record<Rarity, number> = { common: 70, uncommon: 25, rare: 5, legendary: 0 };
@@ -695,6 +721,8 @@ export interface TarotDef {
   pair?: boolean;
   /** a Boost (Balatro's tarots), or a Tribe card (Balatro's planets: each levels up a skill) */
   kind?: 'boost' | 'tribe';
+  /** a Mayhem boost (Balatro's spectrals): rare and strong, found in Mayhem Packs and now and then in a Boost Pack */
+  rare?: boolean;
   /** the skill a Tribe card levels up (+2 ability) */
   tribeSkill?: Skill;
 }
@@ -715,8 +743,6 @@ export const TAROTS: readonly TarotDef[] = [
     select: 3,
     skillText: (s) => `Up to {!}3{} selected lemmings leave the colony for {!}+2{} {s}${s}{} ability each`,
   },
-  { id: 'conscription', name: 'Conscription', price: 3, text: '{!}5{} random plain lemmings leave, {!}3{} random {!}Super Lemmings{} join', select: 0 },
-  { id: 'vat', name: 'The Cloning Vat', price: 3, text: 'Creates a copy of {!}1{} selected lemming', select: 1 },
   { id: 'hermit', name: 'The Golden Handshake', price: 3, text: 'Up to {!}3{} selected lemmings retire for {$}$4{} each', select: 3 },
   { id: 'recruiter', name: 'The Recruiter', price: 3, text: '{!}5{} lemmings join the colony', select: 0 },
   { id: 'bootcamp', name: 'Boot Camp', price: 3, text: '{!}+5{} ability points to assign now', select: 0 },
@@ -732,6 +758,20 @@ export const TAROTS: readonly TarotDef[] = [
   // Lematro Phase 1
   { id: 'foreman', name: 'The Foreman', price: 3, text: 'Creates up to {!}2{} random {!}Boosts{}, if there is room', select: 0 },
   { id: 'audition', name: 'The Audition', price: 3, text: 'Creates a random {!}Power Card{}, if there is room', select: 0 },
+  { id: 'lottery', name: 'The Lottery', price: 3, text: '{%}1 in 4{} chance to make a random Power Card {!}Shiny{}, {!}Glowing{} or {!}Rainbow{}', select: 0 },
+  // the Mayhem boosts (Balatro's spectrals), named after the Mayhem rating
+  { id: 'conscription', name: 'Conscription', price: 4, rare: true, text: '{!}5{} random plain lemmings leave, {!}3{} random {!}Super Lemmings{} join', select: 0 },
+  { id: 'vat', name: 'The Cloning Vat', price: 4, rare: true, text: 'Creates a copy of {!}1{} selected lemming', select: 1 },
+  { id: 'reaper', name: 'The Reaper', price: 4, rare: true, text: '{!}1{} random lemming leaves, {!}2{} random {!}Champions{} join', select: 0 },
+  { id: 'summoning', name: 'The Summoning', price: 4, rare: true, text: '{!}1{} random lemming leaves, {!}4{} random {!}Super Lemmings{} join', select: 0 },
+  { id: 'makeover', name: 'The Makeover', price: 4, rare: true, text: '{!}1{} selected plain lemming becomes {!}Gold{}, {!}Lucky{}, {!}Mentor{}, {!}Champion{} or {!}Wise{}', select: 1 },
+  { id: 'biggamble', name: 'The Big Gamble', price: 4, rare: true, text: 'Creates a {!}Rare{} Power Card. Your money goes to {$}$0{}', select: 0 },
+  { id: 'dyevat', name: 'The Dye Vat', price: 4, rare: true, text: 'Every lemming of the colony gets the same random hair colour', select: 0 },
+  { id: 'uniform', name: 'The Uniform', price: 4, rare: true, text: 'Every lemming gets the same random clothes colour. {!}-1{} lemming in every squad', select: 0 },
+  { id: 'phantom', name: 'The Phantom', price: 4, rare: true, text: 'A random Power Card becomes {!}Ghost{}. {!}-1{} lemming in every squad', select: 0 },
+  { id: 'bonfire', name: 'The Bonfire', price: 4, rare: true, text: '{!}5{} random lemmings leave the colony. Earn {$}$20{}', select: 0 },
+  { id: 'solesurvivor', name: 'The Sole Survivor', price: 4, rare: true, text: 'Copies a random Power Card. All your other Power Cards are destroyed', select: 0 },
+  { id: 'prism', name: 'The Prism', price: 4, rare: true, text: 'A random Power Card becomes {!}Rainbow{}. All the others are destroyed', select: 0 },
   // the Tribe cards (Balatro's planets): the tribes of Lemmings 2, each levels up a skill
   ...(
     [
@@ -761,7 +801,8 @@ export const TAROTS: readonly TarotDef[] = [
 ];
 
 /** the Boosts (Balatro's tarots) and the Tribe cards (its planets) */
-export const BOOSTS: readonly TarotDef[] = TAROTS.filter((t) => t.kind !== 'tribe');
+export const BOOSTS: readonly TarotDef[] = TAROTS.filter((t) => t.kind !== 'tribe' && !t.rare);
+export const MAYHEM: readonly TarotDef[] = TAROTS.filter((t) => t.rare);
 export const TRIBES: readonly TarotDef[] = TAROTS.filter((t) => t.kind === 'tribe');
 
 export function tarotDef(id: string): TarotDef {
@@ -772,7 +813,7 @@ export function tarotDef(id: string): TarotDef {
 
 /* ---------------------------------------------------------------------------------------------- packs */
 
-export type PackKind = 'lemmings' | 'training' | 'boost' | 'gadget';
+export type PackKind = 'lemmings' | 'training' | 'boost' | 'gadget' | 'mayhem';
 
 export interface PackDef {
   kind: PackKind;
@@ -789,6 +830,7 @@ export const PACKS: Record<PackKind, PackDef> = {
   training: { kind: 'training', name: 'Tribe Pack', price: 4, size: 3, text: 'Choose {!}1{} of {!}3{} {!}Tribe cards{} to use at once' },
   boost: { kind: 'boost', name: 'Boost Pack', price: 4, size: 3, text: 'Choose {!}1{} of {!}3{} {!}Boosts{} to use at once. A {!}Legendary{} Power Card can rarely appear' },
   gadget: { kind: 'gadget', name: 'Power Pack', price: 6, size: 2, text: 'Choose {!}1{} of {!}2{} {!}Power Cards{}' },
+  mayhem: { kind: 'mayhem', name: 'Mayhem Pack', price: 4, size: 2, text: 'Choose {!}1{} of {!}2{} {!}Mayhem{} boosts to use at once' },
 };
 
 /* ---------------------------------------------------------------------------------------------- tags */
@@ -821,6 +863,12 @@ export const TAGS: readonly TagDef[] = [
   { id: 'fasttrack', name: 'Fast Track', text: 'Earn {$}$5{} for each level skipped this run' },
   // Lematro Phase 2
   { id: 'sparechange', name: 'Spare Change', text: 'Earn {$}$1{} for each {!}Swap{} left unused this run' },
+  // Lematro Phase 3
+  { id: 'ghostbonus', name: 'Ghost Bonus', text: 'The next Power Card you get is {!}Ghost{}' },
+  { id: 'shinybonus', name: 'Shiny Bonus', text: 'The next Power Card you get is {!}Shiny{}' },
+  { id: 'glowingbonus', name: 'Glowing Bonus', text: 'The next Power Card you get is {!}Glowing{}' },
+  { id: 'rainbowbonus', name: 'Rainbow Bonus', text: 'The next Power Card you get is {!}Rainbow{}' },
+  { id: 'mayhembonus', name: 'Mayhem Bonus', text: 'Opens a free {!}Mayhem Pack{} at once' },
 ];
 
 export function tagDef(id: string): TagDef {

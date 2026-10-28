@@ -3,8 +3,8 @@ import { Bitmap32, createSessionFromInfo, getStyle, StyleDef } from '../../engin
 import { repoDataProvider } from '../../engine/src/node/repoData.ts';
 import { LevelCatalog } from '../src/run/catalog.ts';
 import { hairOf, lemmingPalette, remapColor } from '../src/run/colors.ts';
-import { JOKERS, keywordsOf, TAROTS } from '../src/run/content.ts';
-import { jokerSellValue, ROUND_SCALE, RunSession } from '../src/run/session.ts';
+import { BOOSTS, JOKERS, keywordsOf, MAYHEM, TAGS, TAROTS } from '../src/run/content.ts';
+import { isSpecial, jokerSellValue, ROUND_SCALE, RunSession } from '../src/run/session.ts';
 import { SKILLS, type SkillCounts, zeroSkills } from '../src/run/skills.ts';
 import { JOKER_SLOTS, TAROT_SLOTS, type LemmingCard } from '../src/run/state.ts';
 
@@ -980,5 +980,156 @@ describe('Lematro Phase 2: Tribe cards', () => {
     expect(run2.choosePack(0)).not.toBeNull();
     expect(run2.state.phase).toBe('blinds');
     expect(run2.state.stats.tribesUsed).toBe(1);
+  });
+});
+
+describe('Lematro Phase 3: Power Card editions', () => {
+  it('Shiny, Glowing and Rainbow act after the card itself, left to right; Ghost gives a slot', () => {
+    const run = runOn('Orig-1-02', ['lemming', 'lemming', 'lemming']);
+    const [a, b, c] = run.state.jokers;
+    a.edition = 'rainbow';
+    b.edition = 'shiny';
+    c.edition = 'glowing';
+    // 1, +4 = 5, X1.5 = 7.5, +4 = 11.5, +5 = 16.5, +4 = 20.5, +10 = 30.5
+    const { score, lines } = run.rescueCount([card(run, 'red')], [], zeroSkills());
+    expect(score).toBe(30);
+    expect(lines.map((l) => l.label)).toEqual(['Lemmings saved', 'Lemming', 'Lemming (Rainbow)', 'Lemming', 'Lemming (Shiny)', 'Lemming', 'Lemming (Glowing)']);
+    // a copy acts as the card it copies, but its edition is its own
+    const copy = runOn('Orig-1-02', ['copycat', 'lemming']);
+    copy.state.jokers[1].edition = 'shiny';
+    expect(copy.rescueCount([card(copy, 'red')], [], zeroSkills()).score).toBe(1 + 4 + 4 + 5);
+    // Ghost: a sixth slot (Personal Space sees it)
+    const ghost = runOn('Orig-1-02', ['personalspace']);
+    ghost.state.jokers[0].edition = 'ghost';
+    expect(ghost.jokerSlots()).toBe(JOKER_SLOTS + 1);
+    expect(ghost.rescueCount([card(ghost, 'red')], [], zeroSkills()).score).toBe(JOKER_SLOTS);
+  });
+
+  it('an edition adds to the sell value; a Ghost Power Card can be bought with no room', () => {
+    const run = runOn('Orig-1-02', ['lemming', 'lemming', 'lemming', 'lemming', 'lemming']);
+    expect(jokerSellValue({ uid: 1, id: 'lemming', edition: 'rainbow' })).toBe(1 + 2);
+    run.state.money = 50;
+    run.state.phase = 'shop';
+    run.state.shop = {
+      offers: [
+        { uid: 1, type: 'joker', id: 'glitch', price: 4, sold: false },
+        { uid: 2, type: 'joker', id: 'spiral', price: 13, sold: false, edition: 'ghost' },
+      ],
+      packs: [],
+      rerolls: 0,
+    };
+    expect(run.canBuy(run.state.shop.offers[0])).toBe(false);
+    expect(run.buy(2)).toBe(true);
+    expect(run.state.jokers.at(-1)).toMatchObject({ id: 'spiral', edition: 'ghost' });
+    expect(run.jokerSlots()).toBe(JOKER_SLOTS + 1);
+    expect(run.buy(1)).toBe(false);
+  });
+
+  it('the edition Skip Bonuses: the next Power Card you get', () => {
+    const run = runOn('Orig-1-02');
+    run.state.blinds[0].tag = 'rainbowbonus';
+    run.skipBlind();
+    expect(run.state.pendingTags).toEqual(['rainbowbonus']);
+    run.state.tarots = [{ uid: 7000, id: 'audition' }];
+    run.useTarot(7000);
+    expect(run.state.jokers[0].edition).toBe('rainbow');
+    expect(run.state.pendingTags).toEqual([]);
+  });
+
+  it('shops and Power Packs now and then offer a Power Card with an edition, at a higher price', () => {
+    const run = runOn('Orig-1-02');
+    run.state.money = 10000;
+    run.state.phase = 'shop';
+    run.state.shop = { offers: [], packs: [], rerolls: 0 };
+    const seen = new Set<string>();
+    for (let i = 0; i < 400; i++) {
+      run.reroll();
+      for (const o of run.state.shop!.offers)
+        if (o.type === 'joker' && o.edition) {
+          seen.add(o.edition);
+          expect(o.price).toBeGreaterThan(JOKERS.find((d) => d.id === o.id)!.price);
+        }
+    }
+    expect(seen.has('shiny')).toBe(true);
+  });
+});
+
+describe('Lematro Phase 3: Mayhem boosts and The Lottery', () => {
+  const use = (run: RunSession, id: string, selected: number[] = []) => {
+    run.state.tarots = [{ uid: 7000, id }];
+    return run.useTarot(7000, selected);
+  };
+
+  it('The Reaper, The Summoning, The Bonfire, The Dye Vat and The Uniform', () => {
+    const run = runOn('Orig-1-02', ['ohno']);
+    const size = run.state.colony.length;
+    expect(use(run, 'reaper')).not.toBeNull();
+    expect(run.state.colony.length).toBe(size + 1);
+    expect(run.state.colony.slice(-2).map((c) => c.edition)).toEqual(['champion', 'champion']);
+    use(run, 'summoning');
+    expect(run.state.colony.length).toBe(size + 4);
+    expect(run.state.colony.slice(-4).every((c) => isSpecial(c))).toBe(true);
+    const money = run.state.money;
+    use(run, 'bonfire');
+    expect([run.state.colony.length, run.state.money]).toEqual([size - 1, money + 20]);
+    use(run, 'dyevat');
+    expect(new Set(run.state.colony.map((c) => c.hair)).size).toBe(1);
+    const squad = run.ensureSetup().hand.length;
+    use(run, 'uniform');
+    expect(new Set(run.state.colony.map((c) => c.clothes)).size).toBe(1);
+    expect(run.ensureSetup().hand).toHaveLength(squad - 1);
+  });
+
+  it('The Makeover gives a plain lemming a random edition (not one that has one)', () => {
+    const run = runOn('Orig-1-02');
+    const [a, b] = run.state.colony;
+    a.edition = 'plain';
+    b.edition = 'gold';
+    expect(use(run, 'makeover', [b.id])).toBeNull();
+    expect(use(run, 'makeover', [a.id])).not.toBeNull();
+    expect(['gold', 'lucky', 'mentor', 'champion', 'wise']).toContain(a.edition);
+  });
+
+  it('The Big Gamble, The Phantom, The Sole Survivor and The Prism', () => {
+    const run = runOn('Orig-1-02', ['lemming', 'glitch', 'nestegg']);
+    run.state.money = 30;
+    use(run, 'biggamble');
+    expect(run.state.money).toBe(0);
+    expect(rarityOf(run.state.jokers[3].id)).toBe('rare');
+    use(run, 'phantom');
+    expect(run.state.jokers.filter((j) => j.edition === 'ghost')).toHaveLength(1);
+    expect(run.state.squadBonus).toBe(-1);
+    use(run, 'solesurvivor');
+    expect(run.state.jokers).toHaveLength(2);
+    expect(run.state.jokers[0].id).toBe(run.state.jokers[1].id);
+    expect(run.state.jokers[1].edition).not.toBe('ghost');
+    const prism = runOn('Orig-1-02', ['lemming', 'glitch']);
+    prism.state.jokers[0].edition = 'shiny';
+    use(prism, 'prism');
+    expect(prism.state.jokers).toEqual([expect.objectContaining({ id: 'glitch', edition: 'rainbow' })]);
+    // nothing without an edition to give one to
+    expect(use(prism, 'prism')).toBeNull();
+  });
+
+  it('The Lottery: 1 in 4 (4 in 4 with Loaded Dice and a copy of them) for Shiny, Glowing or Rainbow', () => {
+    const run = runOn('Orig-1-02', ['copycat', 'loadeddice', 'lemming']);
+    expect(use(run, 'lottery')).not.toBeNull();
+    expect(['shiny', 'glowing', 'rainbow']).toContain(run.state.jokers.find((j) => j.edition)?.edition);
+    const none = runOn('Orig-1-02');
+    expect(use(none, 'lottery')).toBeNull();
+  });
+
+  it('the Mayhem Pack and the Mayhem Bonus; Conscription and The Cloning Vat are Mayhem boosts', () => {
+    expect(MAYHEM.map((t) => t.id).sort()).toEqual(['biggamble', 'bonfire', 'conscription', 'dyevat', 'makeover', 'phantom', 'prism', 'reaper', 'solesurvivor', 'summoning', 'uniform', 'vat']);
+    expect(BOOSTS).toHaveLength(22);
+    expect(TAGS).toHaveLength(24);
+    const run = runOn('Orig-1-02');
+    run.state.blinds[0].tag = 'mayhembonus';
+    run.skipBlind();
+    expect(run.state.pack!.kind).toBe('mayhem');
+    expect(run.state.pack!.choices).toHaveLength(2);
+    for (const c of run.state.pack!.choices) expect(c.type === 'tarot' && MAYHEM.some((t) => t.id === c.id)).toBe(true);
+    run.skipPack();
+    expect(run.state.phase).toBe('blinds');
   });
 });

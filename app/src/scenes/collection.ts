@@ -8,10 +8,10 @@
 import * as Phaser from 'phaser';
 import { SoundEffect } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
-import { BOOSTS, JOKERS, PACKS, type PackKind, TAGS, TRIBES } from '../run/content.ts';
+import { BOOSTS, JOKERS, MAYHEM, PACKS, type PackKind, TAGS, TRIBES } from '../run/content.ts';
 import type { SpecialTrait } from '../run/state.ts';
 import { markSeen, seenSet } from '../run/storage.ts';
-import { JOKER_ART, PACK_LOOKS, RARITY_COLORS, RARITY_NAMES, TAG_ART, TAROT_ART, TRAIT_LOOKS } from '../run/ui/art.ts';
+import { consumableLook, JOKER_ART, PACK_LOOKS, RARITY_COLORS, RARITY_NAMES, TAG_ART, TAROT_ART, TRAIT_LOOKS } from '../run/ui/art.ts';
 import { ensureRunAssets } from '../run/ui/assets.ts';
 import { type Art, CARD_H, CARD_W, CardTable, CardView } from '../run/ui/cards.ts';
 import { Swirl, SWIRLS } from '../run/ui/swirl.ts';
@@ -48,7 +48,7 @@ const TABS: { name: string; color: number; entries: () => Entry[] }[] = [
   {
     name: 'Boosts',
     color: COLORS.purple,
-    entries: () => BOOSTS.map((d) => ({ key: `tarot:${d.id}`, title: d.name, lines: [d.text], color: COLORS.purple, art: TAROT_ART[d.id], badge: 'Boost' })),
+    entries: () => [...BOOSTS, ...MAYHEM].map((d) => ({ key: `tarot:${d.id}`, title: d.name, lines: [d.text], color: consumableLook(d).color, art: TAROT_ART[d.id], badge: consumableLook(d).badge })),
   },
   {
     name: 'Tribes',
