@@ -84,7 +84,7 @@ describe('the colours of a description', () => {
     const titles = (id: string) => keywordsOf(plainText(jokerDef(id).text)).map((k) => k.title);
     expect(titles('orangehair')).toContain('+Rescues');
     expect(titles('redshirts')).toContain('X Rescues');
-    expect(titles('stowaway')).toContain('Drop in');
+    expect(titles('hitchhikers')).toContain('Drop in');
     expect(titles('camouflage')).toContain('Respawns');
     expect(titles('coordinated')).toContain('Fully');
     // Paratroopers are of the colony: they parachute in, they do not "drop in"
@@ -127,7 +127,7 @@ describe('Copycat and Hive Mind', () => {
 });
 
 describe('hair and clothes', () => {
-  it('Follow the Leader, Paint Box, Blue Collar, Orange Jumpsuit, Redshirts, Colour Coordinated', () => {
+  it('Follow the Leader, Paint Box, Orange Jumpsuit, Redshirts, Colour Coordinated', () => {
     let run = runWith(['follow']);
     // green green orange orange green: 2 follow the one before
     expect(score(run, [lem(run, 0, 'green'), lem(run, 1, 'green'), lem(run, 2, 'orange'), lem(run, 3, 'orange'), lem(run, 4, 'green')])).toBe(5 + 2);
@@ -135,8 +135,6 @@ describe('hair and clothes', () => {
     const five = [lem(run, 0, 'green'), lem(run, 1, 'orange'), lem(run, 2, 'red'), lem(run, 3, 'purple'), lem(run, 4, 'blue')];
     expect(score(run, five)).toBe(15);
     expect(score(run, five.slice(0, 4))).toBe(4);
-    run = runWith(['bluecollar']);
-    expect(score(run, [0, 1, 2, 3, 4, 5, 6, 7].map((i) => lem(run, i, 'green', 'blue')))).toBe(8 + 2);
     run = runWith(['jumpsuit']);
     expect(score(run, [lem(run, 0, 'green', 'orange'), lem(run, 1, 'green')])).toBe(2 + 3);
     run = runWith(['redshirts']);
@@ -164,8 +162,8 @@ describe('hair and clothes', () => {
     expect(run.rescueCount(withPet, withPet, zeroSkills()).score).toBe(Math.floor(n * 1.1 ** withPet.filter((c) => c.hair === trend.color).length * 2 + 1e-9));
   });
 
-  it('Royal Purple and the Hair Salon pay; Camouflage brings back lost lemmings in green clothes', () => {
-    const run = runWith(['royalpurple', 'salon', 'camouflage']);
+  it('the Hair Salon pays; Camouflage brings back lost lemmings in green clothes', () => {
+    const run = runWith(['salon', 'camouflage']);
     const setup = run.ensureSetup();
     // Fun 2: the floaters are saved, the others splat
     const hairs = ['green', 'orange', 'red'] as const;
@@ -175,7 +173,6 @@ describe('hair and clothes', () => {
     const out = playIdle(run);
     expect(out.rescued).toBe(3);
     const cash = run.accept();
-    expect(cash.lines).toContainEqual({ label: 'Royal Purple', amount: 3 });
     expect(cash.lines).toContainEqual({ label: 'Hair Salon', amount: 3 });
     expect(run.state.colony.length).toBe(size);
     expect(cash.notes.some((n) => n.includes('(Camouflage)'))).toBe(true);

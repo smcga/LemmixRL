@@ -170,7 +170,7 @@ describe('roguelike run', () => {
   it('pays the rescue bonus, gold lemmings, jokers and interest', () => {
     const run = runOn('Orig-1-02');
     run.state.money = 23;
-    run.state.jokers.push({ uid: 902, id: 'nolem' });
+    run.state.jokers.push({ uid: 902, id: 'goldenlemming' });
     const setup = run.ensureSetup();
     for (const id of setup.hand) run.card(id)!.floater = true;
     run.card(setup.hand[0])!.edition = 'gold';
@@ -182,10 +182,10 @@ describe('roguelike run', () => {
       { label: 'Rescue bonus (100%)', amount: 4 },
       { label: 'Perfect rescue', amount: 2 },
       { label: 'Gold lemmings (1)', amount: 2 },
-      { label: 'Leave No Lem Behind', amount: 3 },
+      { label: 'Golden Lemming', amount: 4 },
       { label: 'Interest ($1 per $5)', amount: 4 },
     ]);
-    expect(cash.total).toBe(19);
+    expect(cash.total).toBe(20);
   });
 
   it('champions multiply the rescue bonus', () => {
@@ -284,7 +284,7 @@ describe('roguelike run', () => {
     run.choosePack(0);
     expect(s.capacity.digger).toBe(cap.digger + 1);
     // a gadget needs room; a boost that wants lemmings needs some; a skipped pack gives nothing
-    s.jokers = [1, 2, 3, 4, 5].map((uid) => ({ uid: 9000 + uid, id: 'piggy' }));
+    s.jokers = [1, 2, 3, 4, 5].map((uid) => ({ uid: 9000 + uid, id: 'headcount' }));
     s.pack = { kind: 'gadget', choices: [{ type: 'joker', id: 'guild' }] };
     s.phase = 'pack';
     expect(run.canChoose(0)).toBe(false);
@@ -351,13 +351,13 @@ describe('roguelike run', () => {
     const run = runOn('Orig-1-02');
     winCurrentBlind(run);
     const s = run.state;
-    s.jokers = [{ uid: 9000, id: 'piggy' }];
+    s.jokers = [{ uid: 9000, id: 'headcount' }];
     s.tarots = [{ uid: 9001, id: 'midas' }];
     s.colony[0].edition = 'gold';
     s.colony[1].climber = s.colony[1].floater = true;
     s.shop!.offers[0] = { uid: 5000, type: 'joker', id: 'guild', price: 4, sold: false };
     const keys = run.visibleKeys();
-    for (const k of ['joker:piggy', 'tarot:midas', 'joker:guild', 'pack:lemmings', 'lemming:gold', 'lemming:athlete']) expect(keys).toContain(k);
+    for (const k of ['joker:headcount', 'tarot:midas', 'joker:guild', 'pack:lemmings', 'lemming:gold', 'lemming:athlete']) expect(keys).toContain(k);
     expect(keys.some((k) => k.startsWith('tag:'))).toBe(false); // the bonuses are seen on the levels screen
     run.nextRound();
     expect(run.visibleKeys().some((k) => k.startsWith('tag:'))).toBe(true);
@@ -421,7 +421,7 @@ describe('roguelike run', () => {
     expect(s.money).toBe(4);
     // not twice, and not a joker
     expect(run.buyAndUse(5001, [s.colony[1].id])).toBeNull();
-    s.shop!.offers[2] = { uid: 5002, type: 'joker', id: 'piggy', price: 5, sold: false };
+    s.shop!.offers[2] = { uid: 5002, type: 'joker', id: 'headcount', price: 5, sold: false };
     expect(run.canBuyAndUse(s.shop!.offers[2])).toBe(false);
   });
 
@@ -430,7 +430,7 @@ describe('roguelike run', () => {
     const s = run.state;
     s.tarots = [{ uid: 6000, id: 'recruiter' }];
     s.jokers = [
-      { uid: 7000, id: 'piggy' },
+      { uid: 7000, id: 'headcount' },
       { uid: 7001, id: 'guild' },
       { uid: 7002, id: 'scout' },
     ];
@@ -440,9 +440,9 @@ describe('roguelike run', () => {
     expect(s.tarots.length).toBe(0);
     expect(run.sellTarot(6000)).toBe(false);
     expect(run.moveJoker(7000, 2)).toBe(true);
-    expect(s.jokers.map((j) => j.id)).toEqual(['guild', 'scout', 'piggy']);
+    expect(s.jokers.map((j) => j.id)).toEqual(['guild', 'scout', 'headcount']);
     expect(run.moveJoker(7002, 0)).toBe(true);
-    expect(s.jokers.map((j) => j.id)).toEqual(['scout', 'guild', 'piggy']);
+    expect(s.jokers.map((j) => j.id)).toEqual(['scout', 'guild', 'headcount']);
     expect(run.moveJoker(7002, 0)).toBe(false);
     expect(run.capability().builder).toBe(SPREAD.builder + 2); // the order changes nothing
     // not while the abilities are assigned
@@ -556,14 +556,14 @@ describe('roguelike run', () => {
   it('the cap only stops points from being added: a skill above it (training) keeps its points', () => {
     const run = started('CAP');
     run.state.capacity.digger = 23;
-    run.state.jokers.push({ uid: 990, id: 'trainer' }, { uid: 991, id: 'advisor' });
+    run.state.jokers.push({ uid: 990, id: 'trainer' });
     run.state.blinds[0].status = 'defeated';
     run.state.blinds[1].status = 'defeated';
     run.state.blinds[2].status = 'current';
     winCurrentBlind(run, false); // the boss
-    // Personal Trainer: 5 new points; Careers Advisor: 5 more to move
-    expect(run.state.assign).toMatchObject({ newPoints: 5, reassign: BOSS_REASSIGN_POINTS + 5 });
-    expect(run.state.assign!.sources).toEqual(['Personal Trainer: +5 points', 'Careers Advisor: 5 more to move']);
+    // Personal Trainer: 5 new points
+    expect(run.state.assign).toMatchObject({ newPoints: 5, reassign: BOSS_REASSIGN_POINTS });
+    expect(run.state.assign!.sources).toEqual(['Personal Trainer: +5 points']);
     expect(run.canFinishAssignment()).toBe(false); // the 5 new points
     run.setAbility('digger', 30);
     expect(run.state.capacity.digger).toBe(23);

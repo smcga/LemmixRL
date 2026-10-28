@@ -74,6 +74,8 @@ export const TAROT_ART: Record<string, Art> = {
   sapphire: boostArt('sapphire', [lemmingLayer('walk', 3, 0, 6, { '#00b000': '#3070f0' })]),
   barber: boostArt('barber', [lemmingLayer('walk', 2, -12, 10), lemmingLayer('walkLeft', 2, 12, 10, { '#00b000': '#e03030' }), textLayer('<', '#f3b958', 1.6, 0, -18)]),
   tailor: boostArt('tailor', [lemmingLayer('walk', 2, -12, 10), lemmingLayer('walkLeft', 2, 12, 10, { '#4040e0': '#e07020' }), textLayer('<', '#f3b958', 1.6, 0, -18)]),
+  foreman: boostArt('foreman', [lemmingLayer('build', 3, 0, 8), textLayer('+2', '#f3b958', 1.4, 0, -26)]),
+  audition: boostArt('audition', [lemmingLayer('exit', 3, 0, 8, { '#00b000': '#f3b958' }), textLayer('+1', '#f3b958', 1.4, 0, -26)]),
 };
 
 export const EDITION_TINTS: Record<string, number> = { plain: 0xffffff, gold: COLORS.gold, lucky: 0x7dff7d, mentor: 0x9fd0ff, champion: 0xd090ff, wise: 0xe8e8f0 };
@@ -89,6 +91,15 @@ export const TAG_ART: Record<string, Art> = {
   coupon: { text: '$0', color: COLORS.green },
   training: { icon: 'miner' },
   economy: { text: '$$', color: COLORS.gold },
+  uncommon: { anim: 'walk', tint: COLORS.green },
+  rare: { anim: 'walk', tint: COLORS.red },
+  directorscut: { anim: 'shrug', tint: COLORS.gold },
+  boostpack: { anim: 'float', tint: COLORS.purple },
+  powerpack: { anim: 'build', tint: COLORS.orange },
+  crowd: { text: '+3', color: COLORS.gold },
+  reroll: { text: '$0', color: COLORS.gold },
+  reinforcements: { anim: 'walkLeft', tint: COLORS.blue },
+  fasttrack: { text: '$5', color: COLORS.gold },
 };
 
 /** the kinds of special lemmings: their name, what they do, and their picture */

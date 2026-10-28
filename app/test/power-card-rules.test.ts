@@ -3,7 +3,7 @@ import { Bitmap32, createSessionFromInfo, getStyle, StyleDef } from '../../engin
 import { repoDataProvider } from '../../engine/src/node/repoData.ts';
 import { LevelCatalog } from '../src/run/catalog.ts';
 import { hairOf, lemmingPalette, remapColor } from '../src/run/colors.ts';
-import { keywordsOf } from '../src/run/content.ts';
+import { JOKERS, keywordsOf } from '../src/run/content.ts';
 import { jokerSellValue, ROUND_SCALE, RunSession } from '../src/run/session.ts';
 import { SKILLS, type SkillCounts, zeroSkills } from '../src/run/skills.ts';
 import { JOKER_SLOTS, TAROT_SLOTS, type LemmingCard } from '../src/run/state.ts';
@@ -154,7 +154,7 @@ describe('Power Cards: money, the shop and after a level', () => {
   });
 
   it('the Recycling Plant destroys the Power Card to its left when a level begins, for an ability', () => {
-    const run = runOn('Orig-1-02', ['omelette', 'recycler']);
+    const run = runOn('Orig-1-02', ['nestegg', 'recycler']);
     run.state.jokers[0].sellBonus = 6;
     const total = SKILLS.reduce((n, sk) => n + run.state.capacity[sk], 0);
     const value = jokerSellValue(run.state.jokers[0]);
@@ -163,8 +163,8 @@ describe('Power Cards: money, the shop and after a level', () => {
     expect(SKILLS.reduce((n, sk) => n + run.state.capacity[sk], 0)).toBe(total + value);
   });
 
-  it('Going Up!, Going Down!, the Omelette and Big Mike after a level', () => {
-    const run = runOn('Orig-1-02', ['goingup', 'goingdown', 'omelette', 'bigmike']);
+  it('Going Up!, Going Down! and Big Mike after a level', () => {
+    const run = runOn('Orig-1-02', ['goingup', 'goingdown', 'bigmike']);
     const setup = run.ensureSetup();
     for (const id of setup.hand.slice(0, 3)) run.card(id)!.floater = true;
     const size = run.state.colony.length;
@@ -177,8 +177,6 @@ describe('Power Cards: money, the shop and after a level', () => {
       [true, false],
       [false, true],
     ]);
-    const omelette = run.state.jokers.find((j) => j.id === 'omelette')!;
-    expect(omelette.sellBonus).toBe(21);
   });
 
   it('the Checklist pays for the colour on its list, and changes it', () => {
@@ -253,7 +251,7 @@ describe('Power Cards inspired by missing Balatro Joker families', () => {
     expect(run.rescueCount([card(run, 'green')], [], zeroSkills()).score).toBe(5);
   });
 
-  it('Golden Lemming, Golden Ticket and To the Moon pay out, while Nest Egg grows in value', () => {
+  it('Golden Lemming, Gold Rush and Savings Burrow pay out, while Nest Egg grows in value', () => {
     const run = runOn('Orig-1-02', ['goldenlemming', 'goldenticket', 'tothemoon', 'nestegg']);
     run.state.money = 25;
     const setup = run.ensureSetup();
@@ -261,7 +259,7 @@ describe('Power Cards inspired by missing Balatro Joker families', () => {
     run.card(setup.hand[1])!.edition = 'gold';
     const cash = winPerfect(run);
     expect(cash.lines).toContainEqual({ label: 'Golden Lemming', amount: 4 });
-    expect(cash.lines).toContainEqual({ label: 'Golden Ticket', amount: 8 });
+    expect(cash.lines).toContainEqual({ label: 'Gold Rush', amount: 8 });
     expect(cash.lines).toContainEqual({ label: 'Interest ($2 per $5)', amount: 10 });
     const egg = run.state.jokers.find((j) => j.id === 'nestegg')!;
     expect(egg.sellBonus).toBe(3);
@@ -370,3 +368,358 @@ describe('Power Cards: colours and keywords', () => {
     expect(keywordsOf('Fully Green lemmings').map((k) => k.title)).toContain('Fully');
   });
 });
+
+describe('Lematro Phase 1: the rescue count', () => {
+  const score = (run: RunSession, order: LemmingCard[]) => run.rescueCount(order, order, zeroSkills()).score;
+  const lems = (run: RunSession, hairs: LemmingCard['hair'][], edition: LemmingCard['edition'] = 'plain') =>
+    hairs.map((h, i) => ({ ...run.state.colony[i], hair: h, clothes: 'blue' as const, edition, climber: false, floater: false, insured: false }));
+
+  it('Lemming, Matching Set, Same Hair Day, Birds of a Feather and Night Shift', () => {
+    let run = runOn('Orig-1-02', ['lemming']);
+    expect(score(run, lems(run, ['red']))).toBe(5);
+    run = runOn('Orig-1-02', ['matchingset']);
+    expect(score(run, lems(run, ['red', 'red', 'red']))).toBe(8);
+    expect(score(run, lems(run, ['red', 'red']))).toBe(2);
+    expect(score(run, lems(run, ['red', 'red', 'blue']))).toBe(3);
+    run = runOn('Orig-1-02', ['samehair']);
+    expect(score(run, lems(run, ['blue', 'blue']))).toBe(5);
+    expect(score(run, [])).toBe(0);
+    run = runOn('Orig-1-02', ['birds', 'ginger']);
+    // the Ginger Lemming: red and orange are the same colour
+    expect(score(run, lems(run, ['red', 'orange']))).toBe(4);
+    run = runOn('Orig-1-02', ['nightshift']);
+    expect(score(run, lems(run, ['green', 'purple']))).toBe(6);
+    expect(score(run, lems(run, ['green', 'orange']))).toBe(2);
+  });
+
+  it('Long Service every 6th level, the Glitch from the seed, the Weakest Link and the Spiral Staircase', () => {
+    let run = runOn('Orig-1-02', ['longservice']);
+    run.state.jokers[0].counter = 4;
+    expect(score(run, lems(run, ['red']))).toBe(1);
+    run.state.jokers[0].counter = 5;
+    expect(score(run, lems(run, ['red']))).toBe(3);
+
+    run = runOn('Orig-1-02', ['glitch']);
+    run.ensureSetup();
+    const a = score(run, lems(run, ['red']));
+    expect(a).toBeGreaterThanOrEqual(1);
+    expect(a).toBeLessThanOrEqual(16);
+    expect(score(run, lems(run, ['red']))).toBe(a);
+
+    run = runOn('Orig-1-02', ['weakestlink']);
+    const low = Math.min(...SKILLS.map((sk) => run.capability()[sk]));
+    expect(score(run, lems(run, ['red']))).toBe(1 + 2 * low);
+
+    run = runOn('Orig-1-02', ['spiral']);
+    // the 1st, 2nd, 3rd, 5th and 8th of 8
+    expect(score(run, lems(run, Array(8).fill('red')))).toBe(8 + 10);
+  });
+
+  it("Star Turn, Rank and File, Photo Finish, Everyone's Special and Encore!", () => {
+    let run = runOn('Orig-1-02', ['starturn', 'rankandfile']);
+    const order = [...lems(run, ['red'], 'gold'), ...lems(run, ['red', 'red'])];
+    expect(score(run, order)).toBe(3 + 3 + 2);
+    run = runOn('Orig-1-02', ['photofinish']);
+    expect(score(run, order)).toBe(6);
+    expect(score(run, [...order].reverse())).toBe(3);
+    run = runOn('Orig-1-02', ['everyonespecial', 'starturn', 'rankandfile']);
+    expect(score(run, order)).toBe(3 + 9);
+    run = runOn('Orig-1-02', ['encore', 'starturn']);
+    // the Gold one counts twice: 4 saved, and Star Turn gives +3 twice
+    const { score: s, lines } = run.rescueCount(order, order, zeroSkills());
+    expect(s).toBe(4 + 6);
+    expect(lines[1]).toMatchObject({ label: 'Encore!', plus: 1, total: 4 });
+  });
+
+  it('Reserves, Thin Ranks, Booster Club, Bull Market, Treasure Chest, Skipping Rope, Grand Finale and Super Squad', () => {
+    let run = runOn('Orig-1-02', ['reserves']);
+    const setup = run.ensureSetup();
+    expect(score(run, lems(run, ['red']))).toBe(1 + Math.floor((run.state.colony.length - setup.hand.length) / 5));
+    run = runOn('Orig-1-02', ['thinranks']);
+    run.state.colony.splice(0, 5);
+    expect(score(run, lems(run, ['red']))).toBe(11);
+    run = runOn('Orig-1-02', ['boosterclub', 'bullmarket']);
+    run.state.stats.boostsUsed = 3;
+    run.state.money = 9;
+    expect(score(run, lems(run, ['red']))).toBe(1 + 3 + 4);
+    run = runOn('Orig-1-02', ['treasurechest', 'nestegg', 'lemming']);
+    run.state.jokers[1].sellBonus = 3;
+    // the others sell for $2 + $3 and $1
+    expect(score(run, lems(run, ['red']))).toBe(1 + 6 + 4);
+    run = runOn('Orig-1-02', ['skippingrope']);
+    run.state.stats.skipped = 4;
+    expect(score(run, lems(run, ['red', 'red']))).toBe(4);
+    run = runOn('Orig-1-02', ['grandfinale']);
+    expect(score(run, lems(run, ['red']))).toBe(1);
+    run.state.blinds[0].status = run.state.blinds[1].status = 'defeated';
+    run.state.blinds[2].status = 'current';
+    run.ensureSetup();
+    expect(score(run, lems(run, ['red']))).toBe(2);
+    run = runOn('Orig-1-02', ['supersquad']);
+    for (const c of run.state.colony) Object.assign(c, { edition: 'plain', climber: false, floater: false, insured: false });
+    for (const c of run.state.colony.slice(0, 15)) c.climber = true;
+    expect(score(run, lems(run, ['red']))).toBe(1);
+    run.state.colony[15].insured = true;
+    expect(score(run, lems(run, ['red']))).toBe(3);
+  });
+});
+
+describe('Lematro Phase 1: the new hooks', () => {
+  it('Plus One, Stunt Double and the Crowd Bonus change the squad', () => {
+    let run = runOn('Orig-1-02', ['plusone']);
+    expect(run.ensureSetup().hand).toHaveLength(11);
+    run = runOn('Orig-1-02', ['stuntdouble']);
+    expect(run.ensureSetup().hand).toHaveLength(8);
+    expect(run.rescueCount([card(run, 'red')], [], zeroSkills()).score).toBe(21);
+    run = runOn('Orig-1-02');
+    run.state.pendingTags.push('crowd');
+    expect(run.preview(0).squad).toBe(13);
+    expect(run.startBlind().hand).toHaveLength(13);
+    expect(run.state.pendingTags).not.toContain('crowd');
+    // bought before the level begins: the squad grows at once
+    run = runOn('Orig-1-02');
+    expect(run.ensureSetup().hand).toHaveLength(10);
+    run.state.jokers.push({ uid: 990, id: 'plusone' });
+    expect(run.ensureSetup().hand).toHaveLength(11);
+  });
+
+  it('No Thanks gains when a pack is skipped; Camp Out when a card is sold, until a Level 3', () => {
+    const run = runOn('Orig-1-02', ['nothanks', 'campout', 'lemming']);
+    run.state.phase = 'pack';
+    run.state.pack = { kind: 'training', choices: [{ type: 'allSkills', amount: 1 }] };
+    run.skipPack();
+    expect(run.state.phase).toBe('shop');
+    expect(run.state.jokers[0].counter).toBe(1);
+    expect(run.sellJoker(902)).toBe(true);
+    run.state.tarots = [{ uid: 7000, id: 'recruiter' }];
+    expect(run.sellTarot(7000)).toBe(true);
+    expect(run.state.jokers[1].counter).toBe(2);
+    // 1 saved +2 = 3, X1.5
+    expect(run.rescueCount([card(run, 'red')], [], zeroSkills()).score).toBe(4);
+  });
+
+  it('a Stampede gains and destroys a Power Card at Levels 1 and 2; the Rabble brings 2 Common Power Cards', () => {
+    let run = runOn('Orig-1-02', ['stampede', 'lemming', 'glitch']);
+    run.startBlind();
+    expect(run.state.jokers).toHaveLength(2);
+    expect(run.state.jokers[0]).toMatchObject({ id: 'stampede', counter: 1 });
+    run = runOn('Orig-1-02', ['rabble']);
+    const setup = run.startBlind();
+    expect(run.state.jokers).toHaveLength(3);
+    expect(run.state.jokers.slice(1).map((j) => rarityOf(j.id))).toEqual(['common', 'common']);
+    expect(setup.begun).toBe(true);
+  });
+
+  it('Body Snatcher, Gold Leaf, Jetpack, Fizzy Pop and Little Helper after a level', () => {
+    const run = runOn('Orig-1-02', ['bodysnatcher', 'goldleaf', 'jetpack', 'fizzypop', 'littlehelper']);
+    const setup = run.ensureSetup();
+    run.card(setup.hand[1])!.edition = 'lucky';
+    run.card(setup.hand[2])!.climber = true;
+    const cash = winPerfect(run);
+    expect(cash.lines).toContainEqual({ label: 'Jetpack', amount: 1 });
+    // Gold Leaf made the first Super Lemming Gold, then Body Snatcher made both plain (X0.2 gained)
+    expect(run.card(setup.hand[1])).toMatchObject({ edition: 'plain', climber: false });
+    expect(run.card(setup.hand[2])).toMatchObject({ edition: 'plain', climber: false });
+    const [snatcher, , jet, fizzy, helper] = run.state.jokers;
+    expect(snatcher.counter).toBe(2);
+    expect(fizzy.counter).toBe(1);
+    expect(helper.counter).toBe(10);
+    expect(jet.counter ?? 0).toBe(0);
+    winPerfect(run);
+    winPerfect(run); // a Level 3: the Jetpack rises
+    expect(run.state.jokers.some((j) => j.id === 'fizzypop')).toBe(false);
+    expect(run.state.jokers.find((j) => j.id === 'jetpack')!.counter).toBe(1);
+  });
+
+  it('Gold Leaf turns the first Super Lemming saved Gold', () => {
+    const run = runOn('Orig-1-02', ['goldleaf']);
+    const setup = run.ensureSetup();
+    run.card(setup.hand[3])!.edition = 'mentor';
+    run.card(setup.hand[5])!.floater = true;
+    winPerfect(run);
+    expect(run.card(setup.hand[3])!.edition).toBe('gold');
+    expect(run.card(setup.hand[5])!.edition).toBe('plain');
+  });
+
+  it('Population Boom counts the lemmings that join; Fragile and Oh No! the Super Lemmings that die and are lost', () => {
+    let run = runOn('Orig-1-02', ['populationboom']);
+    run.recruit(5);
+    expect(run.state.jokers[0].counter).toBe(5);
+    run = runOn('Orig-1-02', ['fragile', 'ohno']);
+    const setup = run.ensureSetup();
+    // Fun 2: the Floaters are saved, the others splat (and the Gold ones are lost for good)
+    for (const id of setup.hand.slice(0, 3)) run.card(id)!.floater = true;
+    for (const id of setup.hand.slice(3, 6)) run.card(id)!.edition = 'gold';
+    for (const id of setup.hand.slice(6)) Object.assign(run.card(id)!, { edition: 'plain', climber: false, floater: false, insured: false });
+    playIdle(run);
+    run.accept();
+    expect(run.state.jokers.map((j) => j.counter)).toEqual([3, 3]);
+    expect(run.rescueCount([card(run, 'red')], [], zeroSkills()).score).toBe(Math.floor(1 * 1.75 * 4));
+  });
+
+  it("Loaded Dice double the listed chances; Moon Landing and the Rabbit's Foot", () => {
+    // a Rainy Day Fund pays every Floater with a 1 in 2 chance doubled
+    const run = runOn('Orig-1-02', ['loadeddice', 'rainyday']);
+    const setup = run.ensureSetup();
+    for (const id of setup.hand.slice(0, 4)) run.card(id)!.floater = true;
+    playIdle(run);
+    expect(run.accept().lines).toContainEqual({ label: 'Rainy Day Fund', amount: 4 });
+    // Copycat copies the Loaded Dice: 1 in 4 four times over, every time
+    const moon = runOn('Orig-1-02', ['copycat', 'loadeddice', 'moonlanding', 'rabbitsfoot']);
+    const total = () => SKILLS.reduce((n, sk) => n + moon.state.capacity[sk], 0);
+    const before = total();
+    const s2 = moon.ensureSetup();
+    for (const id of s2.hand) moon.card(id)!.edition = 'lucky';
+    const cash = winPerfect(moon);
+    expect(total()).toBe(before + 1);
+    const lucky = cash.lines.filter((l) => l.label.startsWith('Lucky ')).length;
+    expect(lucky).toBe(10);
+    expect(moon.state.jokers[3].counter).toBe(10);
+  });
+
+  it('Little Mike is offered only after Big Mike was destroyed; Stage Door offers what you have', () => {
+    const run = runOn('Orig-1-02');
+    const offers = (r: RunSession) => (r as unknown as { offerable(): { id: string }[] }).offerable().map((d) => d.id);
+    expect(offers(run)).not.toContain('littlemike');
+    run.state.extinct = ['bigmike'];
+    expect(offers(run)).toContain('littlemike');
+    run.state.jokers.push({ uid: 990, id: 'lemming' });
+    expect(offers(run)).not.toContain('lemming');
+    run.state.jokers.push({ uid: 991, id: 'stagedoor' });
+    expect(offers(run)).toEqual(expect.arrayContaining(['lemming', 'stagedoor']));
+  });
+
+  it('Big Mike destroyed by its chance makes Little Mike possible', () => {
+    const run = runOn('Orig-1-02', ['bigmike']);
+    for (let i = 0; i < 40 && run.state.jokers.length; i++) {
+      if (run.state.phase === 'over') break;
+      run.state.blinds.forEach((b, k) => (b.levelId = k === run.currentBlindIndex ? 'Orig-1-02' : b.levelId));
+      winPerfect(run);
+    }
+    expect(run.state.jokers.some((j) => j.id === 'bigmike')).toBe(false);
+    expect(run.state.extinct).toContain('bigmike');
+  });
+
+  it('Mirror Image copies a random Power Card when sold after 2 levels; Yippee! copies a Boost past the limit', () => {
+    const run = runOn('Orig-1-02', ['mirrorimage', 'nestegg']);
+    run.state.jokers[0].counter = 1;
+    run.state.jokers[1].sellBonus = 6;
+    const early = structuredClone(run.state);
+    expect(run.sellJoker(900)).toBe(true);
+    expect(run.state.jokers.map((j) => j.id)).toEqual(['nestegg']);
+    const later = new RunSession(catalog, early);
+    later.state.jokers[0].counter = 2;
+    expect(later.sellJoker(900)).toBe(true);
+    expect(later.state.jokers.map((j) => [j.id, j.sellBonus])).toEqual([
+      ['nestegg', 6],
+      ['nestegg', 6],
+    ]);
+
+    const yip = runOn('Orig-1-02', ['yippee']);
+    yip.state.phase = 'shop';
+    yip.state.shop = { offers: [], packs: [], rerolls: 0 };
+    yip.state.tarots = [
+      { uid: 7000, id: 'recruiter' },
+      { uid: 7001, id: 'recruiter' },
+    ];
+    yip.nextRound();
+    expect(yip.state.tarots).toHaveLength(TAROT_SLOTS + 1);
+    expect(yip.state.tarots[2].id).toBe('recruiter');
+  });
+});
+
+describe('Lematro Phase 1: Boosts and Skip Bonuses', () => {
+  it('The Foreman makes up to 2 Boosts, The Audition a Power Card, if there is room', () => {
+    const run = runOn('Orig-1-02');
+    run.state.tarots = [{ uid: 7000, id: 'foreman' }];
+    expect(run.useTarot(7000)).not.toBeNull();
+    expect(run.state.tarots).toHaveLength(2);
+    expect(run.state.stats.boostsUsed).toBe(1);
+    run.state.tarots = [
+      { uid: 7001, id: 'foreman' },
+      { uid: 7002, id: 'recruiter' },
+    ];
+    run.useTarot(7001);
+    expect(run.state.tarots).toHaveLength(2);
+    run.state.tarots = [{ uid: 7003, id: 'audition' }];
+    run.useTarot(7003);
+    expect(run.state.jokers).toHaveLength(1);
+    run.state.jokers.push(...[1, 2, 3, 4].map((i) => ({ uid: 8000 + i, id: 'lemming' })));
+    run.state.tarots = [{ uid: 7004, id: 'audition' }];
+    expect(run.useTarot(7004)).toEqual(['The Audition: no room for a Power Card.']);
+  });
+
+  it('the Boost and Power Bonuses open a free pack, then back to the levels', () => {
+    const run = runOn('Orig-1-02');
+    run.state.blinds[0].tag = 'powerpack';
+    run.skipBlind();
+    expect(run.state.phase).toBe('pack');
+    expect(run.state.pack!.kind).toBe('gadget');
+    expect(run.choosePack(0)).not.toBeNull();
+    expect(run.state.phase).toBe('blinds');
+    expect(run.state.jokers).toHaveLength(1);
+    run.state.blinds[1].tag = 'boostpack';
+    run.skipBlind();
+    expect(run.state.pack!.kind).toBe('boost');
+    run.skipPack();
+    expect([run.state.phase, run.currentBlind!.kind]).toEqual(['blinds', 'boss']);
+  });
+
+  it('Fast Track, Reinforcements, the Reroll Bonus and the Uncommon and Rare Bonuses', () => {
+    const run = runOn('Orig-1-02');
+    run.state.stats.skipped = 2;
+    run.state.blinds[0].tag = 'fasttrack';
+    const money = run.state.money;
+    run.skipBlind();
+    expect(run.state.money).toBe(money + 15);
+    run.state.blinds[1].tag = 'reinforcements';
+    run.skipBlind();
+    expect(run.state.jokers.map((j) => rarityOf(j.id))).toEqual(['common', 'common']);
+
+    const shop = runOn('Orig-1-02');
+    const s = shop.state;
+    s.pendingTags.push('reroll', 'uncommon', 'rare');
+    for (const id of shop.ensureSetup().hand) shop.card(id)!.floater = true;
+    playIdle(shop);
+    shop.accept();
+    shop.cashOut();
+    expect(s.phase).toBe('shop');
+    expect(shop.rerollPrice()).toBe(0);
+    expect(s.shop!.offers.slice(0, 2).map((o) => [o.type, rarityOf(o.id), o.price])).toEqual([
+      ['joker', 'uncommon', 0],
+      ['joker', 'rare', 0],
+    ]);
+    expect(s.pendingTags).toEqual([]);
+  });
+
+  it("the Director's Cut Bonus rerolls Level 3 for free, also after a paid reroll", () => {
+    const run = runOn('Orig-1-02');
+    run.state.money = 6;
+    expect(run.rerollBoss()).toBe(true);
+    expect(run.state.money).toBe(0);
+    expect(run.canRerollBoss()).toBe(false);
+    run.state.pendingTags.push('directorscut');
+    expect(run.bossRerollPrice()).toBe(0);
+    const before = run.state.blinds[2].levelId;
+    expect(run.rerollBoss()).toBe(true);
+    expect(run.state.blinds[2].levelId).not.toBe(before);
+    expect(run.state.money).toBe(0);
+    expect(run.state.pendingTags).toEqual([]);
+  });
+
+  it('a saved run with a Power Card that was cut sells it when it is loaded', () => {
+    const run = runOn('Orig-1-02', ['lemming']);
+    const saved = structuredClone(run.state);
+    saved.jokers.push({ uid: 991, id: 'omelette', sellBonus: 6 }, { uid: 992, id: 'piggy' });
+    saved.money = 0;
+    const loaded = new RunSession(catalog, saved);
+    expect(loaded.state.jokers.map((j) => j.id)).toEqual(['lemming']);
+    expect(loaded.state.money).toBe(2 + 6 + 2);
+    expect(loaded.retired).toEqual(['Omelette is no longer in the game: sold for $8.', 'Piggy Bank is no longer in the game: sold for $2.']);
+  });
+});
+
+/** the rarity of a Power Card */
+function rarityOf(id: string) {
+  return JOKERS.find((d) => d.id === id)?.rarity;
+}

@@ -23,7 +23,7 @@ export interface Meta {
   runs: number;
   wins: number;
   bestAnte: number;
-  /** what the player has come across, for the collection: "joker:piggy", "tarot:midas", "pack:boost", "tag:coupon",
+  /** what the player has come across, for the collection: "joker:guild", "tarot:midas", "pack:boost", "tag:coupon",
    * "lemming:gold" (records saved before the collection existed do not have it) */
   seen?: string[];
 }
