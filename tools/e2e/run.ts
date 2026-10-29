@@ -159,6 +159,23 @@ try {
     const cursor = await ev<{ x: number; y: number; visible: boolean; depth: number; cardDepth: number }>(`(() => { const p = ${player}; return { x: p.cursorImage.x + 7 * p.scaleFactor, y: p.cursorImage.y + 7 * p.scaleFactor, visible: p.cursorImage.visible, depth: p.cursorImage.depth, cardDepth: p.levelCards.container.depth }; })()`);
     if (!cursor.visible || cursor.depth <= cursor.cardDepth || Math.abs(cursor.x - point.x) > 2 || Math.abs(cursor.y - point.y) > 2) fail('the cursor jumped near the card bar: ' + JSON.stringify({ point, cursor }));
   }
+  // The visible side margins still act like the level's edges; entering the card bar stops mouse scrolling.
+  const geom = await ev<{ left: number; top: number; scale: number; offset: number }>(`(() => { const p = ${player}; return { left: p.left, top: p.top, scale: p.scaleFactor, offset: p.player.offsetHorz }; })()`);
+  await ev(`${player}.player.offsetHorz = -500 * ${player}.scaleFactor`);
+  await page.mouse.move(geom.left + 320 * geom.scale + 10, geom.top + 50 * geom.scale);
+  await page.waitForTimeout(250);
+  const afterRight = await ev<number>(`${player}.player.offsetHorz`);
+  if (afterRight >= -500 * geom.scale) fail('the right edge did not scroll the level');
+  await page.mouse.move(geom.left - 10, geom.top + 50 * geom.scale);
+  await page.waitForTimeout(250);
+  const afterLeft = await ev<number>(`${player}.player.offsetHorz`);
+  if (afterLeft <= afterRight) fail('the left edge did not scroll the level');
+  const bar = await cardPoint(358, 54);
+  await page.mouse.move(bar.x, bar.y);
+  const stopped = await ev<number>(`${player}.player.offsetHorz`);
+  await page.waitForTimeout(250);
+  if ((await ev<number>(`${player}.player.offsetHorz`)) !== stopped) fail('the level kept scrolling over the card bar');
+  await ev(`${player}.player.offsetHorz = ${geom.offset}`);
   await clickCardPoint(358, 54);
   const selectedLem = await ev<{ x: number; y: number; id: number }>(`(() => { const p = ${player}; const l = globalThis.lemmix.game.lemmingList.find((v) => !v.isRemoved && globalThis.lemmix.run.cardOfLemming(v)); return { x: p.left + l.xPos * p.scaleFactor + p.player.offsetHorz, y: p.top + (l.yPos - 8) * p.scaleFactor, id: globalThis.lemmix.run.cardOfLemming(l).id }; })()`);
   await page.mouse.click(selectedLem.x, selectedLem.y);
