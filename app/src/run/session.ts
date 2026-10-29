@@ -776,7 +776,12 @@ export class RunSession {
     };
     twice((c) => (c.badge === 'red' ? 1 : 0), 'Red Badges');
     const encores = this.activeJokers().filter((a) => a.d.encore);
-    if (encores.length) twice((c) => (isSuper(c) ? encores.length : 0), encores[0].label);
+    const encoreCount = order.filter((c) => !!c && isSuper(c)).length;
+    const beforeEncore = order.length;
+    encores.forEach((encore, i) => {
+      if (encoreCount) lines.push({ label: encore.label, jokerUid: encore.slot.uid, plus: encoreCount, total: beforeEncore + encoreCount * (i + 1) });
+    });
+    if (encores.length) order = order.flatMap((c) => c && isSuper(c) ? Array<LemmingCard>(1 + encores.length).fill(c) : [c]);
     const saved = order.length;
     let score = saved;
     // the +Rescues the saved lemmings have gained for good (the Rambler)
@@ -821,10 +826,10 @@ export class RunSession {
       wise: s.colony.filter((c) => c.edition === 'wise').length,
       ginger,
     };
-    const add = (label: string, plus: number, times: number) => {
+    const add = (label: string, plus: number, times: number, jokerUid: number) => {
       if (plus === 0 && times === 1) return;
       score = (score + plus) * times;
-      lines.push({ label, ...(plus ? { plus } : {}), ...(times !== 1 ? { times: Math.round(times * 100) / 100 } : {}), total: Math.floor(score + 1e-9) });
+      lines.push({ label, jokerUid, ...(plus ? { plus } : {}), ...(times !== 1 ? { times: Math.round(times * 100) / 100 } : {}), total: Math.floor(score + 1e-9) });
     };
     // every Power Card from left to right: its ability (or the one it copies), then its edition
     const active = new Map(this.activeJokers().map((a) => [a.slot.uid, a]));
@@ -834,11 +839,11 @@ export class RunSession {
         // (the Glitch: the same number in every attempt of the level, a different one in every level)
         const roll = new Rng(`${s.seed}/glitch/${s.ante}/${setup?.blind ?? 0}/${setup?.levelId ?? ''}/${a.slot.uid}`).next();
         const r = a.d.rescues({ ...base, counter: a.j.counter ?? 0, color: a.j.color, target: a.j.target, otherSellValue: sellValues - jokerSellValue(a.slot), roll });
-        if (r) add(a.label, r.plus ?? 0, r.times ?? 1);
+        if (r) add(a.label, r.plus ?? 0, r.times ?? 1, slot.uid);
       }
       if (slot.edition) {
         const e = POWER_EDITION_RESCUES[slot.edition];
-        add(`${jokerDef(slot.id).name} (${POWER_EDITION_NAMES[slot.edition]})`, e.plus ?? 0, e.times ?? 1);
+        add(`${jokerDef(slot.id).name} (${POWER_EDITION_NAMES[slot.edition]})`, e.plus ?? 0, e.times ?? 1, slot.uid);
       }
     }
     return { score: Math.floor(score + 1e-9), lines };

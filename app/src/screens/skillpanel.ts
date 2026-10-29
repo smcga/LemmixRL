@@ -53,6 +53,8 @@ export class SkillPanel implements GameToolbar {
   private updateCount = 0;
   /** set when the bitmap changed */
   dirty = true;
+  /** Runs display saved lemmings as a count, regardless of classic display options. */
+  forceSavedCount = false;
   /** the horizontal scroll position of the game image in bitmap pixels (for the minimap frame) */
   getScrollX: () => number = () => 0;
   onMinimapClick: ((x: number, y: number) => void) | null = null;
@@ -239,7 +241,7 @@ export class SkillPanel implements GameToolbar {
   setInfoLemmingsSaved(num: number, max: number, showCount: boolean): void {
     // NB: with showCount the original copies 5 characters of a 3 character string; the two characters behind it read
     // as #0 here (drawn as empty)
-    const s = !showCount ? (percentage(max, num) + '%').padEnd(5) : String(num).padEnd(3);
+    const s = !(showCount || this.forceSavedCount) ? (percentage(max, num) + '%').padEnd(5) : String(num).padEnd(3);
     for (let i = 0; i < 5; i++) this.newDrawStr[26 + i] = s[i] ?? '\0';
   }
 

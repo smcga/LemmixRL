@@ -88,8 +88,7 @@ type TarotUse = { uid?: number; offer?: number; pack?: number; max: number; name
 
 /** "Rescue 72/80 (90%)": the requirement of a level, of the squad you bring to it */
 function rescueText(p: BlindPreview): string {
-  const all = p.squad + p.extra;
-  return `Rescue ${p.required}/${all} (${percent(p.required, all)}%)`;
+  return `${p.required} Rescues needed`;
 }
 
 function percent(n: number, of: number): number {
@@ -156,6 +155,9 @@ export class RunScene extends Phaser.Scene {
   private shownMoney: number | null = null;
   /** the swirl behind everything, in the colours of what is going on */
   private swirl!: Swirl;
+  private scoringCards = new Map<number, CardView>();
+  private scoringToken = 0;
+  private shownOutcome: object | null = null;
 
   constructor() {
     super('run');
@@ -173,6 +175,7 @@ export class RunScene extends Phaser.Scene {
     this.spots = {};
     this.shown = '';
     this.shownMoney = null;
+    this.shownOutcome = null;
     ensureRunAssets(this, this.app);
     this.tip = new Tooltip(this);
     this.table = new CardTable(this, this.tip, (name, x, y) => this.spot(name, x, y));
@@ -302,6 +305,8 @@ export class RunScene extends Phaser.Scene {
   }
 
   private clear(): void {
+    this.scoringToken++;
+    this.scoringCards.clear();
     this.tip.hide();
     this.table.clear();
     this.tweens.killTweensOf(this.objs);
@@ -315,14 +320,11 @@ export class RunScene extends Phaser.Scene {
   private render(): void {
     this.clear();
     const run = this.run;
-    // a level that was won is cashed out: there is no going back to it (the result is shown with the cash out); one that
-    // was not won is the end of the run (a run saved at its result, before that was so, ends here too)
-    if (run && !this.choosing && run.state.phase === 'result') {
-      if (run.state.outcome?.success) this.acceptResult(run);
-      else run.giveUp();
-    }
-    if (run && !this.choosing && run.state.phase === 'over') this.noteEnd(run);
-    const phase = this.choosing || !run ? 'start' : run.state.phase === 'playing' ? 'blinds' : run.state.phase;
+    const outcome = run?.state.outcome;
+    const showingScore = !!run && !this.choosing && !!outcome && this.shownOutcome !== outcome &&
+      (run.state.phase === 'result' || (run.state.phase === 'over' && !outcome.success));
+    if (run && !this.choosing && run.state.phase === 'over' && !showingScore) this.noteEnd(run);
+    const phase = showingScore ? 'result' : this.choosing || !run ? 'start' : run.state.phase === 'playing' ? 'blinds' : run.state.phase;
     this.swirl.set(this.swirlColors(run, phase));
     if (this.choosing || !run) {
       this.renderStart();
@@ -339,6 +341,9 @@ export class RunScene extends Phaser.Scene {
         break;
       case 'blinds':
         this.renderBlinds(run);
+        break;
+      case 'result':
+        this.renderScoring(run);
         break;
       case 'cashout':
         this.renderCashout(run);
@@ -604,7 +609,7 @@ export class RunScene extends Phaser.Scene {
       o(label(this, 412, y + 24, l.title, { color: COLORS.text, maxWidth: 260 }));
       const hz = levelHazards(this.app.style, this.app.data.provider, l);
       o(label(this, 412, y + 44, hazardsText(hz), { color: hz.water || hz.fire || hz.traps ? COLORS.red : COLORS.green }));
-      o(label(this, 412, y + 58, `Rescue ${p.required} of ${p.squad + p.extra}`, { color: COLORS.dim }));
+      o(label(this, 412, y + 58, `${p.required} Rescues needed`, { color: COLORS.dim }));
       this.spot(`info:preview:${i}`, 712, y + 54);
       o(new Button(this, 680, y + 44, 64, 22, 'Preview', COLORS.blue, preview));
     });
@@ -691,7 +696,7 @@ export class RunScene extends Phaser.Scene {
     k(label(this, JOKER_AREA.x + 6, 108, `${s.jokers.length}/${run.jokerSlots()}`, { color: COLORS.text }));
     k(label(this, TAROT_AREA.x + TAROT_AREA.w - 6, 108, `${s.tarots.length}/${TAROT_SLOTS}`, { color: COLORS.text, originX: 1 }));
     const cy = JOKER_AREA.y + JOKER_AREA.h / 2;
-    const canSell = s.phase !== 'over';
+    const canSell = s.phase !== 'over' && s.phase !== 'result';
 
     const jx = this.slots(JOKER_AREA, s.jokers.length);
     s.jokers.forEach((j, i) => {
@@ -703,6 +708,7 @@ export class RunScene extends Phaser.Scene {
         this.render();
       };
       const card = k(new CardView(this, jx[i], cy, { color: RARITY_COLORS[d.rarity], art: JOKER_ART[j.id], edition: j.edition }));
+      this.scoringCards.set(j.uid, card);
       this.spot(`joker:${i}`, jx[i], cy);
       this.table.add(card, {
         tip: () => ({ title: d.name, color: RARITY_COLORS[d.rarity], lines: jokerLines(run, j), badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } }),
@@ -1081,7 +1087,7 @@ export class RunScene extends Phaser.Scene {
       }));
       if (squadSpecials.length) k(label(this, x + 12 + 70, y + 171, `*${squadSpecials.length}`, { color: COLORS.purple }));
     }
-    row(y + 191, 'Rescue at least', `${p.required} (${percent(p.required, p.squad + p.extra)}%)`, p.tooFewLemmings ? COLORS.red : COLORS.text);
+    row(y + 191, 'Rescues needed', String(p.required), COLORS.text);
     const rescueZone = k(this.add.zone(x + 8, y + 190, w - 16, 20).setOrigin(0, 0).setInteractive());
     hoverTip(rescueZone, this.tip, () => ({
       title: 'Rescue count',
@@ -1221,6 +1227,47 @@ export class RunScene extends Phaser.Scene {
     saveMeta(meta);
     this.save();
     this.sfx(run.state.won ? SoundEffect.Yippee : SoundEffect.Explosion);
+  }
+
+  /** Replay the recorded scoring steps; the outcome was already decided by the simulation. */
+  private renderScoring(run: RunSession): void {
+    const out = run.state.outcome!;
+    const lines = out.scoring?.length ? out.scoring : [{ label: 'Lemmings saved', total: out.rescued }];
+    const x = MAIN_X + 60, y = MAIN_Y, w = MAIN_R - MAIN_X - 120;
+    this.k(panel(this, x, y, w, 440, COLORS.panel, COLORS.panelLight, 12));
+    this.k(label(this, x + w / 2, y + 32, 'RESCUE COUNT', { size: 28, color: COLORS.gold, originX: 0.5 }));
+    this.k(label(this, x + w / 2, y + 76, `TARGET ${out.required}`, { size: 24, color: COLORS.red, originX: 0.5 }));
+    const total = this.k(label(this, x + w / 2, y + 128, '0', { size: 48, color: COLORS.blue, originX: 0.5 }));
+    const detail = this.k(label(this, x + w / 2, y + 200, '', { size: 20, originX: 0.5, maxWidth: w - 40, align: 1 }));
+    const verdict = this.k(label(this, x + w / 2, y + 270, '', { size: 24, originX: 0.5 }));
+    const token = this.scoringToken;
+    const finish = () => {
+      this.shownOutcome = out;
+      if (out.success) this.acceptResult(run);
+      else if (run.state.phase !== 'over') run.giveUp();
+      this.save();
+      this.render();
+    };
+    this.btn('score-continue', x + 100, y + 360, w - 200, 48, 'Continue', COLORS.orange, finish, { big: true });
+    lines.forEach((line, i) => this.time.delayedCall(350 + i * 650, () => {
+      if (token !== this.scoringToken) return;
+      total.setText(String(line.total));
+      const effect = [line.plus ? `+${line.plus}` : '', line.times !== undefined ? `X${line.times}` : ''].filter(Boolean).join(' ');
+      detail.setText(`${line.label}${effect ? `  ${effect} RESCUES` : ''}`);
+      detail.setTint(line.times !== undefined ? COLORS.red : COLORS.blue);
+      this.tweens.add({ targets: total, scaleX: 1.2, scaleY: 1.2, duration: 120, yoyo: true });
+      const card = line.jokerUid === undefined ? undefined : this.scoringCards.get(line.jokerUid);
+      if (card) {
+        this.tweens.add({ targets: card, angle: { from: -8, to: 8 }, scaleX: 1.15, scaleY: 1.15, duration: 100, yoyo: true, repeat: 1, onComplete: () => card.setAngle(0).setScale(1) });
+        const pop = this.k(label(this, card.x, card.y + 28, effect, { size: 24, color: line.times !== undefined ? COLORS.red : COLORS.blue, originX: 0.5 }));
+        this.tweens.add({ targets: pop, y: pop.y + 50, alpha: 0, duration: 800, onComplete: () => pop.destroy() });
+      }
+      this.sfx(SoundEffect.AssignSkill);
+      if (i === lines.length - 1) {
+        verdict.setText(out.secondChance ? 'SAVED BY SECOND CHANCE!' : out.success ? 'TARGET REACHED!' : 'TARGET MISSED');
+        verdict.setTint(out.success ? COLORS.green : COLORS.red);
+      }
+    }));
   }
 
   /* -------------------------------------------------------------------------------------------- cash out */
@@ -1384,7 +1431,7 @@ export class RunScene extends Phaser.Scene {
       const name = k(label(this, x + 20, by + 70, levelName(nl), { purple: true }));
       this.wikiButton(nl, name.x + name.width + 6, by + 69, 'wiki:next');
       const np = run.preview(index);
-      k(label(this, x + 220, by + 6, `Rescue ${np.required} (${percent(np.required, np.squad + np.extra)}%)`, { color: COLORS.dim, originX: 1 }));
+      k(label(this, x + 220, by + 6, `${np.required} Rescues needed`, { color: COLORS.dim, originX: 1 }));
       k(label(this, x + 20, by + 90, nl.title, { color: COLORS.text, maxWidth: 200 }));
       const hz = levelHazards(this.app.style, this.app.data.provider, nl);
       k(label(this, x + 20, by + 110, hazardsText(hz), { color: hz.water || hz.fire || hz.traps ? COLORS.red : COLORS.green, maxWidth: 200 }));
@@ -2324,3 +2371,4 @@ export function describeRun(run: RunSession): string {
     `known jokers ${JOKERS.length}, editions ${Object.keys(EDITION_NAMES).length}`,
   ].join('\n');
 }
+
