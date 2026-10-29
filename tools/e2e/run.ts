@@ -127,7 +127,7 @@ try {
   if ((await state()).phase !== 'blinds') fail('the assignment did not end');
 
   // the small blind becomes "Just dig!"
-  await ev(`(() => { const s = globalThis.lemmix.run.state; s.blinds[0].levelId = 'Orig-1-01'; s.setup = null; globalThis.phaserGame.scene.getScene('run').render(); })()`);
+  await ev(`(() => { const s = globalThis.lemmix.run.state; s.blinds[0].levelId = 'Orig-1-01'; s.setup = null; s.jokers.push({uid: 900001, id: 'longbridge'}); s.tarots.push({uid: 900002, id: 'ember'}, {uid: 900003, id: 'umbrella'}); globalThis.phaserGame.scene.getScene('run').render(); })()`);
   await clickSpot('play', 800); // Select
   // the level before it is played: the screen of a run (a click anywhere goes on, as in Lemmings)
   const active = () => ev<string>(`globalThis.phaserGame.scene.getScenes(true).map((s) => s.sys.settings.key).join()`);
@@ -146,9 +146,24 @@ try {
   const player = `globalThis.phaserGame.scene.getScene('player')`;
   const labels = await ev<string[]>(`${player}.touchBar.buttons.map((b) => b.def.label)`);
   if (labels.some((l) => ['WALKER', 'STEP', '-1 SEC'].includes(l))) fail('a run has the touch buttons of time and the walker: ' + labels.join());
-  if (!(await ev<boolean>(`${player}.keysHint.visible`))) fail('the keys of a run are not shown under the game');
   await page.keyboard.press('p');
   if (!(await ev<boolean>('globalThis.lemmix.game.isPaused'))) fail('P did not pause the level of a run');
+  // The cards above the level use the same pointer as the game. Select a living lemming while paused, then use a Boost.
+  const cardPoint = (x: number, y: number) => ev<{ x: number; y: number }>(`(() => { const c = ${player}.levelCards.container; return { x: c.x + ${x} * c.scaleX, y: c.y + ${y} * c.scaleY }; })()`);
+  const clickCardPoint = async (x: number, y: number) => { const p = await cardPoint(x, y); await page.mouse.click(p.x, p.y); await page.waitForTimeout(100); };
+  await clickCardPoint(358, 54);
+  const selectedLem = await ev<{ x: number; y: number; id: number }>(`(() => { const p = ${player}; const l = globalThis.lemmix.game.lemmingList.find((v) => !v.isRemoved && globalThis.lemmix.run.cardOfLemming(v)); return { x: p.left + l.xPos * p.scaleFactor + p.player.offsetHorz, y: p.top + (l.yPos - 8) * p.scaleFactor, id: globalThis.lemmix.run.cardOfLemming(l).id }; })()`);
+  await page.mouse.click(selectedLem.x, selectedLem.y);
+  if (!(await ev<number[]>(`${player}.levelCards.targets`)).includes(selectedLem.id)) fail('the living lemming was not selected');
+  await clickCardPoint(854, 27);
+  if ((await state()).colony.find((c: any) => c.id === selectedLem.id).hair !== 'red') fail('the Boost did not change the selected lemming: ' + JSON.stringify(await ev(`({selected: ${player}.levelCards.selected, targets: ${player}.levelCards.targets, message: ${player}.levelCards.message})`)));
+  await clickCardPoint(358, 54);
+  await clickCardPoint(921, 27);
+  if ((await state()).tarots.length) fail('the consumable was not sold');
+  await clickCardPoint(32, 54);
+  await clickCardPoint(921, 27);
+  if ((await state()).jokers.length) fail('the Power Card was not sold');
+  await ev('globalThis.lemmix.run.state.money = 4'); // keep the rest of this run test independent of the sales
   const it0 = await ev<number>('globalThis.lemmix.game.currentIteration');
   await page.keyboard.press('!'); // (rewind one second, in Lemmix)
   await page.keyboard.press('1'); // (skip one second)
@@ -158,8 +173,8 @@ try {
   const l = await ev<{ x: number; y: number; scroll: number }>(
     `(() => { const g = globalThis.lemmix.game; const lem = g.lemmingList.find((x) => !x.isRemoved && x.action === 1); return { x: lem.xPos, y: lem.yPos, scroll: g.level.info.screenPosition }; })()`,
   );
-  // the game is at scale 3 in 1280 x 720 (320 x 200 * 3, centered)
-  await page.mouse.move(160 + (l.x - l.scroll + 3) * 3, 60 + (l.y - 8) * 3);
+  const gamePoint = await ev<{ x: number; y: number }>(`(() => { const p = ${player}; return { x: p.left + (${l.x} + 3) * p.scaleFactor + p.player.offsetHorz, y: p.top + (${l.y} - 8) * p.scaleFactor }; })()`);
+  await page.mouse.move(gamePoint.x, gamePoint.y);
   await page.mouse.down();
   await page.mouse.up();
   await page.waitForTimeout(300);
