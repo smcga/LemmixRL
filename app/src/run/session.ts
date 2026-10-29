@@ -1896,7 +1896,8 @@ export class RunSession {
       const original = this.random.stream('mirror').pick(s.jokers);
       s.jokers.push({ ...structuredClone(original), uid: this.uid() });
     }
-    if (s.setup) this.refreshSetup(s.setup);
+    if (s.phase === 'playing') this.refreshLevelEffects();
+    else if (s.setup) this.refreshSetup(s.setup);
     return true;
   }
 
@@ -1911,10 +1912,10 @@ export class RunSession {
     return true;
   }
 
-  /** A tarot can be sold wherever it can be used (not while a level is played or the abilities are assigned). */
+  /** A tarot can be sold between levels or while a level is being played. */
   canSellTarot(): boolean {
     const p = this.state.phase;
-    return p === 'blinds' || p === 'cashout' || p === 'shop';
+    return p === 'blinds' || p === 'cashout' || p === 'shop' || p === 'playing';
   }
 
   sellTarot(uid: number): boolean {
@@ -1956,15 +1957,19 @@ export class RunSession {
 
   /** Uses a tarot on the selected cards (ids). Returns what happened, or null when it cannot be used. */
   useTarot(uid: number, selected: number[] = []): string[] | null {
+    return this.applyTarot(uid, selected, false);
+  }
+
+  private applyTarot(uid: number, selected: number[], inLevel: boolean): string[] | null {
     const s = this.state;
     const i = s.tarots.findIndex((t) => t.uid === uid);
-    if (i < 0 || s.phase === 'playing' || s.phase === 'result' || s.phase === 'assign' || s.phase === 'over') return null;
+    if (i < 0 || (s.phase === 'playing' && !inLevel) || s.phase === 'result' || s.phase === 'assign' || s.phase === 'over') return null;
     const t = s.tarots[i];
     const d = tarotDef(t.id);
     const cards = [...new Set(selected)].map((id) => this.card(id)).filter((c): c is LemmingCard => !!c);
     if (cards.length > d.select || (d.select > 0 && cards.length === 0) || (d.pair && cards.length !== 2)) return null;
     // the squad of a blind that has started is fixed: its lemmings cannot leave the colony
-    const squad = new Set(s.setup?.hand ?? []);
+    const squad = new Set([...(s.setup?.hand ?? []), ...(s.phase === 'playing' ? (this.play?.paratroopers ?? []) : [])]);
     if ((t.id === 'manual' || t.id === 'hermit') && cards.some((c) => squad.has(c.id))) return null;
     const rng = this.random.stream('tarot');
     const notes: string[] = [];
@@ -2208,8 +2213,35 @@ export class RunSession {
     if (d.kind === 'tribe') this.noteTribe();
     else s.stats.boostsUsed = (s.stats.boostsUsed ?? 0) + 1;
     // a changed squad card keeps its place; a removed one is gone from the colony (the setup refers to ids)
-    if (s.setup) this.refreshSetup(s.setup);
+    if (s.phase === 'playing') this.refreshLevelEffects();
+    else if (s.setup) this.refreshSetup(s.setup);
     return notes;
+  }
+
+  /** Use a Boost on living, released squad members. Selection order matters for paired Boosts. */
+  useLevelTarot(uid: number, selected: number[]): string[] | null {
+    const play = this.play;
+    const t = this.state.tarots.find((item) => item.uid === uid);
+    if (this.state.phase !== 'playing' || !play || !t || !play.game.playing || play.game.isFinished) return null;
+    // These open the assignment screen or remove the selected squad member from the level.
+    if (['bootcamp', 'rethink', 'manual', 'hermit'].includes(t.id)) return null;
+    const alive = new Map(play.game.lemmingList.filter((l) => !l.isRemoved).map((l) => [play.cardOf(l)?.id, l]));
+    if (selected.some((id) => !alive.has(id))) return null;
+    const notes = this.applyTarot(uid, selected, true);
+    if (!notes) return null;
+    for (const id of selected) {
+      const l = alive.get(id);
+      const card = this.card(id);
+      if (l && card) play.game.grantPermanentAbilities(l, card.climber, card.floater);
+    }
+    return notes;
+  }
+
+  /** Refresh dynamic hooks after a Power Card is sold or created during play. */
+  private refreshLevelEffects(): void {
+    if (!this.play) return;
+    this.play.game.extraBuilderBricks = this.jokerSum((d) => d.extraBuilderBricks);
+    this.play.attach();
   }
 
   private takePendingTag(id: string): boolean {

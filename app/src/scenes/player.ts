@@ -17,6 +17,7 @@ import { keepScreenOn } from '../wakelock.ts';
 import { download, selectFile, showMessage, showText } from '../ui.ts';
 import { getApp, gotoScreen, isGameKey, keyMods, listen } from './shared.ts';
 import { TouchBar } from './touchbar.ts';
+import { LevelCards } from './level-cards.ts';
 
 const DOUBLE_CLICK_MS = 500;
 /** a finger that moves more than this (CSS pixels) scrolls instead of tapping */
@@ -52,6 +53,9 @@ export class PlayerScene extends Phaser.Scene {
   private dialogOpen = 0;
   /** LemmixRL: the marks above the special lemmings of a run's squad */
   private markers: Phaser.GameObjects.Rectangle[] = [];
+  private levelCards: LevelCards | null = null;
+  private outsideGameMouse: { x: number; y: number } | null = null;
+  private selectionMarks: Phaser.GameObjects.BitmapText[] = [];
   /** LemmixRL: touch screens */
   private touchBar!: TouchBar;
   private portraitHint!: Phaser.GameObjects.BitmapText;
@@ -81,11 +85,20 @@ export class PlayerScene extends Phaser.Scene {
     const bar = this.barSpace();
     const gap = bar ? cssPx(12) : 0;
     const w = this.scale.width - ins.left - ins.right - (bar?.vertical ? bar.w + gap : 0);
-    const h = this.scale.height - ins.top - ins.bottom - (bar && !bar.vertical ? bar.h + gap : 0);
+    const h = this.scale.height - ins.top - ins.bottom - this.cardStripHeight() - (bar && !bar.vertical ? bar.h + gap : 0);
     const max = Math.max(1, Math.min(Math.floor(w / 320), Math.floor(h / 200)));
     // the zoom factor of the options counts pixels as the browser shows them; the canvas has device pixels
     const zf = Math.round(getApp().config.zoomFactor * pixelRatio());
     return zf > 0 && zf <= max ? zf : max;
+  }
+
+  private cardStripScale(): number {
+    const ins = safeAreaInsets();
+    return Math.min((this.scale.width - ins.left - ins.right) / 960, cssPx(1.2));
+  }
+
+  private cardStripHeight(): number {
+    return getApp().inRun ? Math.ceil(110 * this.cardStripScale()) : 0;
   }
 
   create(): void {
@@ -94,6 +107,9 @@ export class PlayerScene extends Phaser.Scene {
     this.capture = null;
     this.messageTexts.clear();
     this.markers = [];
+    this.selectionMarks = [];
+    this.levelCards = null;
+    this.outsideGameMouse = null;
     this.scaleFactor = this.computeScale();
     const dialog = async <T>(p: () => Promise<T>): Promise<T> => {
       this.dialogOpen++;
@@ -126,7 +142,7 @@ export class PlayerScene extends Phaser.Scene {
       tex.update(this.cursorBitmap(name));
       this.cursorTextures.set(id, tex);
     }
-    this.cursorImage = this.add.image(0, 0, this.cursorTextures.get(1)!.key).setOrigin(0, 0);
+    this.cursorImage = this.add.image(0, 0, this.cursorTextures.get(1)!.key).setOrigin(0, 0).setDepth(1000);
 
     this.textCam = this.cameras.add(0, 0, 1, 1);
     this.uiCam = this.cameras.add(0, 0, this.scale.width, this.scale.height);
@@ -137,6 +153,11 @@ export class PlayerScene extends Phaser.Scene {
     // LemmixRL: the buttons for touch screens (the keys of Lemmix that a phone does not have)
     this.panelTaps = new DoubleTap<SkillPanelButton>(DOUBLE_CLICK_MS, cssPx(TOUCH_SLOP));
     ensureRunAssets(this, app);
+    if (app.inRun && app.run) {
+      this.levelCards = new LevelCards(this, app.run);
+      this.cameras.main.ignore(this.levelCards.container);
+      this.textCam.ignore(this.levelCards.container);
+    }
     const p = this.player;
     // (a run has no walker selection, frame steps or rewinding: the level is played as it goes)
     const run = app.inRun;
@@ -224,33 +245,39 @@ export class PlayerScene extends Phaser.Scene {
     const bar = this.barSpace();
     const gap = cssPx(12);
     const areaW = W - ins.left - ins.right;
-    const areaH = H - ins.top - ins.bottom;
+    const strip = this.cardStripHeight();
+    const areaTop = ins.top + strip;
+    const areaH = H - areaTop - ins.bottom;
+    if (this.levelCards) {
+      const cardScale = this.cardStripScale();
+      this.levelCards.layout(ins.left + (areaW - 960 * cardScale) / 2, ins.top, cardScale);
+    }
     if (bar?.vertical) {
       this.left = ins.left + Math.floor((areaW - (320 * s + gap + bar.w)) / 2);
-      this.top = ins.top + Math.floor((areaH - 200 * s) / 2);
+      this.top = areaTop + Math.floor((areaH - 200 * s) / 2);
       const h = Math.min(areaH - 2 * gap, cssPx(this.touchBar.size * 48));
-      this.touchBar.layout(this.left + 320 * s + gap, ins.top + Math.floor((areaH - h) / 2), bar.w, h, true);
+      this.touchBar.layout(this.left + 320 * s + gap, areaTop + Math.floor((areaH - h) / 2), bar.w, h, true);
     } else if (bar) {
       this.left = ins.left + Math.floor((areaW - 320 * s) / 2);
-      this.top = ins.top + Math.floor((areaH - (200 * s + gap + bar.h)) / 2);
+      this.top = areaTop + Math.floor((areaH - (200 * s + gap + bar.h)) / 2);
       this.touchBar.layout(ins.left + gap, this.top + 200 * s + gap, areaW - 2 * gap, bar.h, false);
     } else {
       this.left = Math.floor((W - 320 * s) / 2);
-      this.top = Math.floor((H - 200 * s) / 2);
+      this.top = areaTop + Math.floor((areaH - 200 * s) / 2);
     }
     this.touchBar.setVisible(!!bar);
     // portrait on a phone: the game is small, and would be bigger sideways
-    const room = this.top - ins.top;
+    const room = this.top - areaTop;
     this.portraitHint.setVisible(!!bar && !bar.vertical && room > cssPx(40));
     this.portraitHint.setFontSize(16 * Math.max(1, Math.round(cssPx(16) / 16)));
     if (this.portraitHint.width > areaW * 0.9) this.portraitHint.setFontSize(Math.max(8, Math.floor((this.portraitHint.fontSize * areaW * 0.9) / this.portraitHint.width)));
-    this.portraitHint.setPosition(ins.left + areaW / 2, ins.top + room / 2);
+    this.portraitHint.setPosition(ins.left + areaW / 2, areaTop + room / 2);
     // the keys of a run: below the game where there is room, else on the bottom of the skill panel's row
     const below = H - ins.bottom - (this.top + 200 * s);
-    this.keysHint.setVisible(!bar && getApp().inRun);
     this.keysHint.setFontSize(16 * Math.max(1, Math.round(s / 2)));
     if (this.keysHint.width > 320 * s) this.keysHint.setFontSize(16);
-    this.keysHint.setPosition(this.left + 160 * s, below > this.keysHint.height + cssPx(6) ? this.top + 200 * s + below / 2 : H - ins.bottom - this.keysHint.height / 2 - 2);
+    this.keysHint.setVisible(!bar && getApp().inRun && below > this.keysHint.height + cssPx(6));
+    this.keysHint.setPosition(this.left + 160 * s, this.top + 200 * s + below / 2);
     const main = this.cameras.main;
     main.setViewport(this.left, this.top, 320 * s, 160 * s);
     main.setOrigin(0, 0);
@@ -282,8 +309,15 @@ export class PlayerScene extends Phaser.Scene {
     // the non-prioritized lemming) is a pointermove for pointer events, but a mousedown for mouse events
     listen(this, 'mousedown', (e) => {
       if (this.dialogOpen || e.target !== canvas || this.isTouchEcho()) return;
+      const point = this.controlPoint(e);
+      if (e.button === 0 && this.levelCards?.pointerDown(point.x + this.left, point.y + this.top)) return;
+      if (point.x < 0 || point.y < 0 || point.x >= 320 * this.scaleFactor || point.y >= 200 * this.scaleFactor) return;
       const { x, y } = this.virtualMouse(e);
       const area: Area = y < this.player.imgHeight ? 'img' : 'tool';
+      if (area === 'img' && e.button === 0 && this.levelCards?.selecting) {
+        this.selectLemming(x, y);
+        return;
+      }
       this.capture = area;
       if (area === 'img') this.safe(() => this.player.imgMouseDown(x, y, e.button, (e.buttons & 2) !== 0, keyMods(e)));
       else {
@@ -298,6 +332,16 @@ export class PlayerScene extends Phaser.Scene {
     });
     listen(this, 'mousemove', (e) => {
       if (this.dialogOpen || this.isTouchEcho()) return;
+      const point = this.controlPoint(e);
+      const canvasX = point.x + this.left;
+      const canvasY = point.y + this.top;
+      const outsideGame = point.x < 0 || point.y < 0 || point.x >= 320 * this.scaleFactor || point.y >= 200 * this.scaleFactor;
+      this.outsideGameMouse = !this.capture && outsideGame && this.levelCards ? { x: canvasX, y: canvasY } : null;
+      if (this.outsideGameMouse) {
+        this.player.toolBarMouseEnter();
+        return;
+      }
+      if (!this.capture && outsideGame) return;
       const { x, y } = this.virtualMouse(e);
       const area: Area = this.capture ?? (y < this.player.imgHeight ? 'img' : 'tool');
       if (area === 'tool' && this.lastArea === 'img' && !this.capture) this.player.toolBarMouseEnter();
@@ -337,6 +381,7 @@ export class PlayerScene extends Phaser.Scene {
       if (e.pointerType === 'mouse' || !e.isPrimary || this.dialogOpen || e.target !== canvas) return;
       this.lastTouchTime = performance.now();
       const p = this.controlPoint(e);
+      if (this.levelCards?.pointerDown(p.x + this.left, p.y + this.top)) { e.preventDefault(); return; }
       const s = this.scaleFactor;
       const area: Area | null = p.x < 0 || p.y < 0 || p.x >= 320 * s || p.y >= 200 * s ? null : p.y < this.player.imgHeight ? 'img' : 'tool';
       if (area !== 'tool') this.panelTaps.cancel();
@@ -391,11 +436,20 @@ export class PlayerScene extends Phaser.Scene {
         }
       } else if (!t.panning && !cancel) {
         const p = this.controlPoint(e);
-        this.safe(() => this.player.touchTap(this.clampX(p.x), this.clampY(p.y)));
+        if (this.levelCards?.selecting) this.selectLemming(this.clampX(p.x), this.clampY(p.y));
+        else this.safe(() => this.player.touchTap(this.clampX(p.x), this.clampY(p.y)));
       }
     };
     listen(this, 'pointerup', (e) => end(e, false));
     listen(this, 'pointercancel', (e) => end(e, true));
+  }
+
+  private selectLemming(x: number, y: number): void {
+    const game = this.player.game;
+    const point = { x: Math.floor((x - this.player.offsetHorz) / this.scaleFactor), y: Math.floor(y / this.scaleFactor) };
+    const l = game.prioritizedHitTest(point, false).lemming1;
+    const card = l && !l.isRemoved ? getApp().run?.cardOfLemming(l) : undefined;
+    if (card) this.levelCards?.toggleTarget(card.id);
   }
 
   /** ends the touch going on without a tap (a rotation, a resize): held panel buttons are released */
@@ -477,15 +531,40 @@ export class PlayerScene extends Phaser.Scene {
     }
 
     // cursor
-    const tex = this.cursorTextures.get(player.currentCursor) ?? this.cursorTextures.get(1)!;
+    const tex = this.cursorTextures.get(this.outsideGameMouse ? 1 : player.currentCursor) ?? this.cursorTextures.get(1)!;
     if (this.cursorImage.texture.key !== tex.key) this.cursorImage.setTexture(tex.key);
-    this.cursorImage.setPosition(this.left + player.mouseX - 7 * s, this.top + player.mouseY - 7 * s);
+    this.cursorImage.setPosition((this.outsideGameMouse?.x ?? this.left + player.mouseX) - 7 * s, (this.outsideGameMouse?.y ?? this.top + player.mouseY) - 7 * s);
     this.cursorImage.setVisible(!touch.active || (this.touchTrack?.area === 'img' && !this.touchTrack.panning));
     if (touch.active) player.syncTouchSelection();
     this.touchBar.update();
 
     this.updateMessages();
     this.updateMarkers(pos);
+    this.updateSelectionMarks(pos);
+  }
+
+  private updateSelectionMarks(pos: number): void {
+    const cards = this.levelCards;
+    const run = getApp().run;
+    if (!cards || !run) return;
+    const alive = this.player.game.lemmingList.filter((l) => !l.isRemoved);
+    cards.pruneTargets(new Set(alive.map((l) => run.cardOfLemming(l)?.id).filter((id): id is number => id !== undefined)));
+    let n = 0;
+    for (const l of alive) {
+      const id = run.cardOfLemming(l)?.id;
+      const index = id === undefined ? -1 : cards.targets.indexOf(id);
+      if (index < 0) continue;
+      let mark = this.selectionMarks[n];
+      if (!mark) {
+        mark = this.add.bitmapText(0, 0, FONT, '', 10).setOrigin(0.5, 1).setTint(0xffff00);
+        this.textCam.ignore(mark);
+        this.uiCam.ignore(mark);
+        this.selectionMarks.push(mark);
+      }
+      mark.setText(String(index + 1)).setPosition(l.xPos - pos, l.yPos - 16).setVisible(true);
+      n++;
+    }
+    for (let i = n; i < this.selectionMarks.length; i++) this.selectionMarks[i].setVisible(false);
   }
 
   /** LemmixRL: small marks above every special lemming of the squad: the colour of its card, then of its Badge */
