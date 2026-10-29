@@ -196,6 +196,8 @@ export interface BlindSetup {
 /** a line of the rescue count: the lemmings saved, then the Power Cards that add (+) or multiply (X) */
 export interface RescueLine {
   label: string;
+  /** The power card that produced this step, if any. */
+  jokerUid?: number;
   plus?: number;
   times?: number;
   /** the count after it */

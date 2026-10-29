@@ -61,6 +61,7 @@ export class PlayerScene extends Phaser.Scene {
   private portraitHint!: Phaser.GameObjects.BitmapText;
   /** LemmixRL: the keys of a run, under the game (with a mouse) */
   private keysHint!: Phaser.GameObjects.BitmapText;
+  private rescueHud!: Phaser.GameObjects.Text;
   private touchTrack: { id: number; area: Area; x0: number; y0: number; lastX: number; panning: boolean } | null = null;
   private lastTouchTime = -Infinity;
   /** the double tap of the nuke button (only two taps on the nuke itself count) */
@@ -126,6 +127,7 @@ export class PlayerScene extends Phaser.Scene {
       showMessage: (text) => dialog(() => showMessage(text)),
       hasFocus: () => document.hasFocus(),
     });
+    this.player.toolbar.forceSavedCount = app.inRun;
     this.player.build();
 
     // display objects
@@ -186,6 +188,9 @@ export class PlayerScene extends Phaser.Scene {
     this.keysHint = this.add.bitmapText(0, 0, FONT, '[F]ast      [P]ause      [R]eset      [E]nd', 16).setOrigin(0.5, 0.5).setTint(0xffffff);
     this.cameras.main.ignore(this.keysHint);
     this.textCam.ignore(this.keysHint);
+    this.rescueHud = this.add.text(0, 0, '', { fontFamily: 'monospace', fontStyle: 'bold', color: '#ffffff', backgroundColor: '#202a2dee', padding: { x: 5, y: 3 } });
+    this.cameras.main.ignore(this.rescueHud);
+    this.textCam.ignore(this.rescueHud);
     this.layout();
 
     this.scale.on('resize', this.onResize, this);
@@ -278,6 +283,8 @@ export class PlayerScene extends Phaser.Scene {
     if (this.keysHint.width > 320 * s) this.keysHint.setFontSize(16);
     this.keysHint.setVisible(!bar && getApp().inRun && below > this.keysHint.height + cssPx(6));
     this.keysHint.setPosition(this.left + 160 * s, this.top + 200 * s + below / 2);
+    this.rescueHud.setPosition(this.left + 4 * s, this.top + 4 * s).setFontSize(Math.max(12, 5 * s));
+    this.rescueHud.setVisible(!!getApp().inRun);
     const main = this.cameras.main;
     main.setViewport(this.left, this.top, 320 * s, 160 * s);
     main.setOrigin(0, 0);
@@ -529,6 +536,9 @@ export class PlayerScene extends Phaser.Scene {
       player.toolbar.dirty = false;
       this.toolTex.update(player.toolbar.bitmap);
     }
+
+    const setup = getApp().run?.state.setup;
+    if (getApp().inRun && setup) this.rescueHud.setText(`SAVED ${player.game.lemmingsSaved}  |  TARGET ${setup.rescue} RESCUES`);
 
     // cursor
     const tex = this.cursorTextures.get(this.outsideGameMouse ? 1 : player.currentCursor) ?? this.cursorTextures.get(1)!;

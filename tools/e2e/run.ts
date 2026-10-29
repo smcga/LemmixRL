@@ -195,7 +195,8 @@ try {
   s = await state();
   if (!s.outcome?.success || s.outcome.rescued !== 10) fail('unexpected outcome ' + JSON.stringify(s.outcome));
 
-  // a won level is cashed out: no going back to it
+  // The scoring sequence precedes cash out.
+  await clickSpot('score-continue');
   s = await state();
   if (s.phase !== 'cashout' || s.cashout.total !== 10) fail('unexpected cash out ' + JSON.stringify(s.cashout));
   await clickSpot('cashout');
