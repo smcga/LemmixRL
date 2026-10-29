@@ -151,6 +151,11 @@ try {
   // The cards above the level use the same pointer as the game. Select a living lemming while paused, then use a Boost.
   const cardPoint = (x: number, y: number) => ev<{ x: number; y: number }>(`(() => { const c = ${player}.levelCards.container; return { x: c.x + ${x} * c.scaleX, y: c.y + ${y} * c.scaleY }; })()`);
   const clickCardPoint = async (x: number, y: number) => { const p = await cardPoint(x, y); await page.mouse.click(p.x, p.y); await page.waitForTimeout(100); };
+  const cardCursor = await cardPoint(358, 54);
+  await page.mouse.move(cardCursor.x, cardCursor.y);
+  await page.waitForTimeout(100);
+  const cursor = await ev<{ x: number; y: number; visible: boolean; depth: number; cardDepth: number }>(`(() => { const p = ${player}; return { x: p.cursorImage.x + 7 * p.scaleFactor, y: p.cursorImage.y + 7 * p.scaleFactor, visible: p.cursorImage.visible, depth: p.cursorImage.depth, cardDepth: p.levelCards.container.depth }; })()`);
+  if (!cursor.visible || cursor.depth <= cursor.cardDepth || Math.abs(cursor.x - cardCursor.x) > 2 || Math.abs(cursor.y - cardCursor.y) > 2) fail('the cursor does not follow the mouse over the cards: ' + JSON.stringify(cursor));
   await clickCardPoint(358, 54);
   const selectedLem = await ev<{ x: number; y: number; id: number }>(`(() => { const p = ${player}; const l = globalThis.lemmix.game.lemmingList.find((v) => !v.isRemoved && globalThis.lemmix.run.cardOfLemming(v)); return { x: p.left + l.xPos * p.scaleFactor + p.player.offsetHorz, y: p.top + (l.yPos - 8) * p.scaleFactor, id: globalThis.lemmix.run.cardOfLemming(l).id }; })()`);
   await page.mouse.click(selectedLem.x, selectedLem.y);
