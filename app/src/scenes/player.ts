@@ -54,7 +54,7 @@ export class PlayerScene extends Phaser.Scene {
   /** LemmixRL: the marks above the special lemmings of a run's squad */
   private markers: Phaser.GameObjects.Rectangle[] = [];
   private levelCards: LevelCards | null = null;
-  private cardBarMouse: { x: number; y: number } | null = null;
+  private outsideGameMouse: { x: number; y: number } | null = null;
   private selectionMarks: Phaser.GameObjects.BitmapText[] = [];
   /** LemmixRL: touch screens */
   private touchBar!: TouchBar;
@@ -109,7 +109,7 @@ export class PlayerScene extends Phaser.Scene {
     this.markers = [];
     this.selectionMarks = [];
     this.levelCards = null;
-    this.cardBarMouse = null;
+    this.outsideGameMouse = null;
     this.scaleFactor = this.computeScale();
     const dialog = async <T>(p: () => Promise<T>): Promise<T> => {
       this.dialogOpen++;
@@ -335,13 +335,13 @@ export class PlayerScene extends Phaser.Scene {
       const point = this.controlPoint(e);
       const canvasX = point.x + this.left;
       const canvasY = point.y + this.top;
-      const overCards = !this.capture && !!this.levelCards?.contains(canvasX, canvasY);
-      this.cardBarMouse = overCards ? { x: canvasX, y: canvasY } : null;
-      if (overCards) {
+      const outsideGame = point.x < 0 || point.y < 0 || point.x >= 320 * this.scaleFactor || point.y >= 200 * this.scaleFactor;
+      this.outsideGameMouse = !this.capture && outsideGame && this.levelCards ? { x: canvasX, y: canvasY } : null;
+      if (this.outsideGameMouse) {
         this.player.toolBarMouseEnter();
         return;
       }
-      if (!this.capture && (point.x < 0 || point.y < 0 || point.x >= 320 * this.scaleFactor || point.y >= 200 * this.scaleFactor)) return;
+      if (!this.capture && outsideGame) return;
       const { x, y } = this.virtualMouse(e);
       const area: Area = this.capture ?? (y < this.player.imgHeight ? 'img' : 'tool');
       if (area === 'tool' && this.lastArea === 'img' && !this.capture) this.player.toolBarMouseEnter();
@@ -531,9 +531,9 @@ export class PlayerScene extends Phaser.Scene {
     }
 
     // cursor
-    const tex = this.cursorTextures.get(this.cardBarMouse ? 1 : player.currentCursor) ?? this.cursorTextures.get(1)!;
+    const tex = this.cursorTextures.get(this.outsideGameMouse ? 1 : player.currentCursor) ?? this.cursorTextures.get(1)!;
     if (this.cursorImage.texture.key !== tex.key) this.cursorImage.setTexture(tex.key);
-    this.cursorImage.setPosition((this.cardBarMouse?.x ?? this.left + player.mouseX) - 7 * s, (this.cardBarMouse?.y ?? this.top + player.mouseY) - 7 * s);
+    this.cursorImage.setPosition((this.outsideGameMouse?.x ?? this.left + player.mouseX) - 7 * s, (this.outsideGameMouse?.y ?? this.top + player.mouseY) - 7 * s);
     this.cursorImage.setVisible(!touch.active || (this.touchTrack?.area === 'img' && !this.touchTrack.panning));
     if (touch.active) player.syncTouchSelection();
     this.touchBar.update();
