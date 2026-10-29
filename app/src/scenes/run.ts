@@ -12,13 +12,14 @@ import * as Phaser from 'phaser';
 import { SoundEffect, SoundOption } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
 import { type RunLevel, levelName } from '../run/catalog.ts';
-import { BADGE_COLORS, BADGE_NAMES, BADGE_TEXTS, POWER_EDITION_NAMES, POWER_EDITION_TEXTS, type PowerEdition, EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, LEMMING_BADGE_COLORS, TRAIT_TEXTS, type Fate, isDeath, JOKERS, jokerDef, jokerText, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
+import { BADGE_COLORS, BADGE_NAMES, BADGE_TEXTS, type PowerEdition, EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, LEMMING_BADGE_COLORS, TRAIT_TEXTS, type Fate, isDeath, JOKERS, jokerDef, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
 import { normalizeSeed, randomSeed } from '../run/rng.ts';
 import { type BlindPreview, cardTitle, isSpecial, jokerSellValue, RunSession, tarotSellPrice } from '../run/session.ts';
 import { colorsText } from '../run/colors.ts';
+import { jokerLines } from '../run/joker-tooltip.ts';
 import { hazardsText, levelHazards } from '../run/hazards.ts';
 import { describeSkills, SKILL_NAMES, SKILL_PLURALS, SKILLS, type Skill, totalSkills } from '../run/skills.ts';
-import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, REDRAWS, type LemmingCard, type JokerInstance, type PackChoice, type RescueLine, type ShopOffer, START_COLONY, TAROT_SLOTS } from '../run/state.ts';
+import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, REDRAWS, type LemmingCard, type PackChoice, type RescueLine, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
 import { loadMeta, loadRun, markSeen, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
 import { ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
 import { type Art, CARD_H, CARD_W, type CardBehaviour, CardTable, CardView, type DropTarget, inRect, type Rect } from '../run/ui/cards.ts';
@@ -1695,7 +1696,7 @@ export class RunScene extends Phaser.Scene {
       }
       case 'joker': {
         const d = jokerDef(c.id);
-        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text, ...editionLines(c.edition)], art: JOKER_ART[c.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] }, edition: c.edition };
+        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: jokerLines(run, { uid: -1, id: c.id, edition: c.edition }, true), art: JOKER_ART[c.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] }, edition: c.edition };
       }
     }
     throw new Error('unknown card of a pack');
@@ -1741,7 +1742,7 @@ export class RunScene extends Phaser.Scene {
       }
       case 'joker': {
         const d = jokerDef(o.id);
-        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text, ...editionLines(o.edition)], art: JOKER_ART[d.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] }, edition: o.edition };
+        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: jokerLines(run, { uid: -1, id: o.id, edition: o.edition }, true), art: JOKER_ART[d.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] }, edition: o.edition };
       }
       case 'tarot': {
         const d = tarotDef(o.id);
@@ -2309,11 +2310,6 @@ export class RunScene extends Phaser.Scene {
   }
 }
 
-/** what the edition of a Power Card adds to its description: "Shiny: +5 Rescues" */
-function editionLines(e: PowerEdition | undefined): string[] {
-  return e ? ['', `{!}${POWER_EDITION_NAMES[e]}{}: ${POWER_EDITION_TEXTS[e]}`] : [];
-}
-
 /** the runs whose end has been recorded (the end screen can be shown again: back from the title) */
 const endedRuns = new WeakSet<RunSession>();
 
@@ -2329,135 +2325,4 @@ export function describeRun(run: RunSession): string {
   ].join('\n');
 }
 
-/** what a Power Card of the run is at now: the colour on the Checklist, the sell value it gained, the Trainings */
-/**
- * The description of a Power Card of the run, as Balatro shows a joker: its colour or its lemming in the text, and
- * what it is at now at the end, "(Currently X1.4)".
- */
-function jokerLines(run: RunSession, j: JokerInstance): string[] {
-  const d = jokerDef(j.id);
-  const s = run.state;
-  const text = jokerText(d, j, (id) => run.card(id)?.name);
-  const now = (v: string) => `{~}(Currently{} ${v}{~}){}`;
-  let current: string | null = null;
-  switch (j.id) {
-    case 'personalspace':
-      current = `{x}X${Math.max(1, run.jokerSlots() - s.jokers.length)}{}`;
-      break;
-    case 'elders':
-      current = `{x}X${+(1 + 0.2 * s.colony.filter((c) => c.edition === 'wise').length).toFixed(1)}{}`;
-      break;
-    case 'abstract':
-      current = `{+}+${3 * s.jokers.length}{}`;
-      break;
-    case 'gym':
-      current = `{x}X${+(1 + 0.1 * (j.counter ?? 0)).toFixed(1)}{}`;
-      break;
-    case 'inversecurve':
-      current = `{!}-${Math.min(100, s.stats.blindsWon)}%{}`;
-      break;
-    case 'bootstraps':
-      current = `{+}+${2 * Math.floor(Math.max(0, s.money) / 5)}{}`;
-      break;
-    case 'baseball':
-      current = `{x}X${+(1.5 ** s.jokers.filter((x) => jokerDef(x.id).rarity === 'uncommon').length).toFixed(2)}{}`;
-      break;
-    case 'flashcard':
-      current = `{+}+${j.counter ?? 0}{}`;
-      break;
-    case 'popcorn':
-      current = `{+}+${Math.max(0, 20 - 4 * (j.counter ?? 0))}{}`;
-      break;
-    case 'yorick':
-      current = `{x}X${1 + Math.floor((j.counter ?? 0) / 23)}{} (${j.counter ?? 0} lost)`;
-      break;
-    case 'longservice': {
-      const left = 5 - ((j.counter ?? 0) % 6);
-      current = left === 0 ? '{x}X3{} this level' : `${left} level${left === 1 ? '' : 's'} to go`;
-      break;
-    }
-    case 'weakestlink':
-      current = `{+}+${2 * Math.min(...SKILLS.map((sk) => run.capability()[sk]))}{}`;
-      break;
-    case 'reserves':
-    {
-      const blind = run.currentBlind;
-      const squad = s.setup?.hand.length ?? (blind ? run.squadSize(run.level(blind.levelId)) : 0);
-      current = `{+}+${Math.floor(Math.max(0, s.colony.length - squad) / 5)}{}`;
-    }
-      break;
-    case 'nothanks':
-      current = `{+}+${2 * (j.counter ?? 0)}{}`;
-      break;
-    case 'stampede':
-    case 'campout':
-    case 'fragile':
-      current = `{x}X${+(1 + 0.25 * (j.counter ?? 0)).toFixed(2)}{}`;
-      break;
-    case 'bodysnatcher':
-    case 'populationboom':
-    case 'rabbitsfoot':
-      current = `{x}X${+(1 + 0.1 * (j.counter ?? 0)).toFixed(1)}{}`;
-      break;
-    case 'jetpack':
-      current = `{$}$${1 + (j.counter ?? 0)}{}`;
-      break;
-    case 'thinranks':
-      current = `{+}+${2 * Math.max(0, START_COLONY - s.colony.length)}{}`;
-      break;
-    case 'boosterclub':
-      current = `{+}+${s.stats.boostsUsed ?? 0}{}`;
-      break;
-    case 'bullmarket':
-      current = `{+}+${Math.floor(Math.max(0, s.money) / 2)}{}`;
-      break;
-    case 'fizzypop':
-      current = `${3 - (j.counter ?? 0)} level${3 - (j.counter ?? 0) === 1 ? '' : 's'} left`;
-      break;
-    case 'treasurechest':
-      current = `{+}+${s.jokers.filter((x) => x !== j).reduce((n, x) => n + jokerSellValue(x), 0)}{}`;
-      break;
-    case 'skippingrope':
-      current = `{x}X${+(1 + 0.25 * s.stats.skipped).toFixed(2)}{}`;
-      break;
-    case 'littlehelper':
-      current = `{+}+${Math.floor((j.counter ?? 0) / 10)}{} (${j.counter ?? 0} saved)`;
-      break;
-    case 'mirrorimage':
-      current = (j.counter ?? 0) >= 2 ? 'ready' : `${j.counter ?? 0}/2 levels`;
-      break;
-    case 'supersquad':
-      current = `${s.colony.filter((c) => run.isSuper(c)).length} Super Lemmings`;
-      break;
-    case 'ohno':
-      current = `{x}X${1 + (j.counter ?? 0)}{}`;
-      break;
-    case 'roadcrew':
-      current = `{+}+${2 * (j.counter ?? 0)}{}`;
-      break;
-    case 'icelolly':
-      current = `{+}+${Math.max(0, 30 - 3 * (j.counter ?? 0))}{}`;
-      break;
-    case 'freshapproach':
-      current = `{x}X${+(1 + 0.2 * (j.counter ?? 0)).toFixed(1)}{} (${j.counter ?? 0} in a row)`;
-      break;
-    case 'greenparty':
-      current = `{+}+${j.counter ?? 0}{}`;
-      break;
-    case 'lordofthemanor':
-    case 'starpupils': {
-      const squad = new Set(s.setup?.hand ?? []);
-      const n = s.colony.filter((c) => !squad.has(c.id) && c.edition === (j.id === 'starpupils' ? 'mentor' : 'champion')).length;
-      current = j.id === 'starpupils' ? `{+}+${5 * n}{}` : `{x}X${+(1.2 ** n).toFixed(2)}{}`;
-      break;
-    }
-    case 'steadysquad':
-      current = `{+}+${5 * run.redrawsLeft()}{}`;
-      break;
-  }
-  if (d.copies) {
-    const t = run.copyOf(j.uid);
-    return [text, t ? `{~}(Copying{} {!}${jokerDef(t.id).name}{}{~}){}` : '{~}(Nothing it can copy){}', ...editionLines(j.edition)];
-  }
-  return [text, ...(current ? [now(current)] : []), ...editionLines(j.edition)];
-}
+
