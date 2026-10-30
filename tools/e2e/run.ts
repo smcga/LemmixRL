@@ -349,13 +349,47 @@ try {
   await clickSpot('nextRound');
   s = await state();
   if (s.phase !== 'blinds' || s.blinds[1].status !== 'current') fail('not at the big blind');
-  // Redraw: the plain lemmings of the squad go back for the next ones of the colony
-  const squadSize = (await state()).setup.hand.length;
-  await clickSpot('redraw', 600);
+  // Redraw opens a dedicated colony view; cancelling and inspecting reserves do not spend a Redraw.
+  const originalSquad: number[] = [...(await state()).setup.hand];
+  const chosen = originalSquad.slice(0, 2);
+  await ev(`(() => { const r = globalThis.lemmix.run; r.card(${chosen[0]}).edition = 'gold'; r.card(${chosen[1]}).badge = 'red'; ${scene}.render(); })()`);
+  const confirmVisible = () => ev<boolean>(`${scene}.overlay.some((o) => o.text?.text === 'Redraw selected lemmings' && o.visible)`);
+  await clickSpot('redraw', 300);
+  if (!(await ev<boolean>(`!!${scene}.homeView`)) || (await state()).setup.redraws || await confirmVisible()) fail('Redraw did not open an unspent, empty selection');
+  await clickSpot('back', 200);
+  if (JSON.stringify((await state()).setup.hand) !== JSON.stringify(originalSquad) || (await state()).setup.redraws) fail('cancelling spent a Redraw or changed the squad');
+  await clickSpot('redraw', 300);
+  const reserveId = (await state()).colony.find((c: any) => !originalSquad.includes(c.id)).id;
+  const status = (id: number) => ev<string>(`${scene}.homeView.opts.squadStatus(globalThis.lemmix.run.card(${id}))`);
+  if ((await status(chosen[0])) !== 'squad' || (await status(reserveId)) !== 'colony') fail('the Redraw view does not distinguish squad and colony members');
+  const browseTo = async (id: number) => {
+    for (let i = 0; i < (await state()).colony.length + 1; i++) {
+      if ((await ev<number>(`${scene}.homeView.focus`)) === id) return;
+      await clickSpot('colonyNext', 20);
+    }
+    fail('could not browse to lemming ' + id);
+  };
+  await browseTo(reserveId);
+  await page.keyboard.press('Enter');
+  if ((await ev<number[]>(`${scene}.homeView.numbered`)).length || await confirmVisible()) fail('a reserve lemming was selected for return');
+  await browseTo(chosen[0]);
+  await clickSpot('colonySelect', 100);
+  if (!(await confirmVisible())) fail('selecting a squad member did not reveal the Redraw button');
+  await clickSpot('colonySelect', 100);
+  if (await confirmVisible()) fail('deselecting every squad member did not hide the Redraw button');
+  await clickSpot('colonySelect', 100);
+  await browseTo(chosen[1]);
+  await page.keyboard.press('Enter');
+  await page.screenshot({ path: `${REPO_ROOT}/tools/e2e/redraw.png` });
+  if (JSON.stringify(await ev(`${scene}.homeView.numbered`)) !== JSON.stringify(chosen)) fail('the selected Super Lemming and Badged lemming are not both marked');
+  await clickSpot('redrawSelected', 600);
   s = await state();
   const out: number[] = s.setup.redrawnOut ?? [];
-  if (s.setup.redraws !== 1 || !out.length || out.some((id: number) => s.setup.hand.includes(id)) || s.setup.hand.length !== squadSize)
+  if (s.setup.redraws !== 1 || JSON.stringify(out) !== JSON.stringify(chosen) || out.some((id: number) => s.setup.hand.includes(id)) || s.setup.hand.length !== originalSquad.length || originalSquad.slice(2).some((id, i) => s.setup.hand[i + 2] !== id))
     fail(`the Redraw did not redraw the squad: ${JSON.stringify(s.setup.redrawnOut)}`);
+  await clickSpot('redraw', 300);
+  if ((await status(chosen[0])) !== 'returned') fail('the returned lemming is not distinguished in the Redraw view');
+  await clickSpot('back', 200);
   await clickSpot('skip'); // the big blind
   s = await state();
   if (s.blinds[1].status !== 'skipped' || s.blinds[2].status !== 'current') fail('the big blind was not skipped');

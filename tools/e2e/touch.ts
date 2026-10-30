@@ -210,6 +210,17 @@ try {
   for (const skill of ['digger', 'builder', 'basher']) await tapSpot(`ability:${skill}`, 200, 19 * 8);
   await tapSpot('done', 700);
   if ((await run<string>('state.phase')) !== 'blinds') fail('the abilities were not assigned by taps');
+  // One tap opens Redraw. A Super Lemming can be selected and returned with the same controls as a Boost.
+  await ev(`(() => { const r = globalThis.lemmix.run; r.state.blinds[0].levelId = 'Orig-1-02'; r.state.setup = null; r.ensureSetup(); ${runScene}.render(); })()`);
+  const redrawId = await run<number>('state.setup.hand[0]');
+  await ev(`globalThis.lemmix.run.card(${redrawId}).edition = 'gold'; ${runScene}.render()`);
+  await tapSpot('redraw', 400);
+  if (!(await ev<boolean>(`!!${runScene}.homeView`))) fail('Redraw did not open with one tap');
+  for (let i = 0; i < (await run<number>('state.colony.length')) && (await ev<number>(`${runScene}.homeView.focus`)) !== redrawId; i++) await tapSpot('colonyNext', 30);
+  await tapSpot('colonySelect', 100);
+  if (!(await ev<number[]>(`${runScene}.homeView.numbered`)).includes(redrawId)) fail('a Super Lemming could not be selected for Redraw by touch');
+  await tapSpot('redrawSelected', 500);
+  if ((await run<number>('state.setup.redraws')) !== 1 || (await run<number[]>('state.setup.hand')).includes(redrawId)) fail('the selected lemming was not redrawn by touch');
   // Skip Blind, as in Balatro: one tap (what the tag gives is next to it)
   await tapSpot('skip', 700);
   if ((await run<string>('state.blinds[0].status')) !== 'skipped') fail('a tap on Skip did not skip');
