@@ -8,7 +8,10 @@ import type { LemmingAnim } from '../power-cards/animations.ts';
 import type { PowerCardDesign } from '../power-cards/schema.ts';
 import { COLORS } from './widgets.ts';
 import { BADGE_COLORS, EDITION_TEXTS, type PackKind, type Rarity, type TarotDef, TRAIT_TEXTS } from '../content.ts';
-import type { LemmingCard, SpecialTrait } from '../state.ts';
+import type { BlindKind, LemmingCard, SpecialTrait } from '../state.ts';
+
+/** the colours of the three levels of a round (the blinds of Balatro) */
+export const BLIND_COLORS: Record<BlindKind, number> = { small: COLORS.blue, big: COLORS.orange, boss: COLORS.red };
 
 /** the small marks above a lemming (in a level and in the colony): its kind of Super Lemming, then its Badge */
 export function markerColors(c: LemmingCard): number[] {

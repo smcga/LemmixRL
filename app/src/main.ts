@@ -3,6 +3,7 @@
 import * as Phaser from 'phaser';
 import { BootScene } from './scenes/boot.ts';
 import { DosScene } from './scenes/dos.ts';
+import { LevelCardsScene } from './scenes/level-cards.ts';
 import { PlayerScene } from './scenes/player.ts';
 import { RunScene } from './scenes/run.ts';
 import { TitleScene } from './scenes/title.ts';
@@ -40,7 +41,7 @@ const game = new Phaser.Game({
   disableContextMenu: true,
   audio: { noAudio: true },
   banner: false,
-  scene: [BootScene, StartScene, DosScene, PlayerScene, RunScene, TitleScene, CollectionScene, RunPreviewScene],
+  scene: [BootScene, StartScene, DosScene, PlayerScene, LevelCardsScene, RunScene, TitleScene, CollectionScene, RunPreviewScene],
 });
 
 /**

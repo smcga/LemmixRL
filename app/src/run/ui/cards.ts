@@ -228,10 +228,13 @@ export class CardView extends Phaser.GameObjects.Container {
     g.fillStyle(0x000000, 0.12);
     g.fillRect(l + cw * 0.64 + 2, t + 9, 2, ch - 18);
     g.fillRect(l + 3, t + 9 + (ch - 18) * 0.55, cw - 6, 1);
-    for (let x = 0; x < cw; x += 6) {
+    const crimps = Math.max(1, Math.round(cw / 6));
+    const crimpWidth = cw / crimps;
+    for (let i = 0; i < crimps; i++) {
+      const x = i * crimpWidth;
       g.fillStyle(shade(color, 0.55), 1);
-      g.fillTriangle(l + x, t + 6, l + x + 6, t + 6, l + x + 3, t);
-      g.fillTriangle(l + x, t + ch - 6, l + x + 6, t + ch - 6, l + x + 3, t + ch);
+      g.fillTriangle(l + x, t + 6, l + x + crimpWidth, t + 6, l + x + crimpWidth / 2, t);
+      g.fillTriangle(l + x, t + ch - 6, l + x + crimpWidth, t + ch - 6, l + x + crimpWidth / 2, t + ch);
     }
     // the seals: a darker strip under each crimp
     g.fillStyle(shade(color, 0.6), 1);
@@ -460,6 +463,8 @@ export interface CardBehaviour {
   reorder?: { area: Rect; drop: (x: number) => void };
   /** a tap does this instead of selecting the card */
   tap?: () => void;
+  /** while selected, a press elsewhere does not put it back (only another card, or a tap on it) */
+  sticky?: () => boolean;
 }
 
 interface ShownTarget {
@@ -486,6 +491,8 @@ export class CardTable {
   private selectedObjs: Phaser.GameObjects.GameObject[] = [];
   private targets: ShownTarget[] = [];
   private hovered: CardView | null = null;
+  /** told whenever the selected card changes (null: none) */
+  onSelect: ((card: CardView | null) => void) | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -530,6 +537,17 @@ export class CardTable {
       else this.tip.hide();
     });
     return card;
+  }
+
+  /** a point of the world is on a button of the selected card */
+  overButton(x: number, y: number): boolean {
+    return this.selectedObjs.some((o) => o instanceof Button && o.active && x >= o.x && x < o.x + o.bw && y >= o.y && y < o.y + o.bh + 3);
+  }
+
+  /** Shows the popup again (what it says has changed): the hovered card's, else the selected one's. */
+  refreshTip(): void {
+    const card = this.hovered?.active ? this.hovered : this.selected;
+    if (card?.active) this.showTip(card);
   }
 
   /** Forgets every card (they are destroyed by whoever made them). */
@@ -577,11 +595,13 @@ export class CardTable {
       old.settle();
     }
     if (!card) {
+      this.onSelect?.(null);
       if (this.hovered?.active) this.showTip(this.hovered);
       else this.tip.hide();
       return;
     }
     this.selected = card;
+    this.onSelect?.(card);
     card.setDepth(DEPTH_SELECTED);
     card.settle(10);
     const r = card.rect;
@@ -615,6 +635,8 @@ export class CardTable {
     const sel = this.selected;
     if (!sel) return;
     if (over.some((o) => o === sel || this.selectedObjs.includes(o))) return;
+    // (another card that is pressed takes its place when the pointer comes up)
+    if (this.cards.get(sel)?.sticky?.() && !over.some((o) => o instanceof CardView && this.cards.has(o))) return;
     // (the card that is pressed now is selected when the pointer comes up)
     this.select(null);
   }

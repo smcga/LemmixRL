@@ -776,7 +776,12 @@ export class RunSession {
     };
     twice((c) => (c.badge === 'red' ? 1 : 0), 'Red Badges');
     const encores = this.activeJokers().filter((a) => a.d.encore);
-    if (encores.length) twice((c) => (isSuper(c) ? encores.length : 0), encores[0].label);
+    const encoreCount = order.filter((c) => !!c && isSuper(c)).length;
+    const beforeEncore = order.length;
+    encores.forEach((encore, i) => {
+      if (encoreCount) lines.push({ label: encore.label, jokerUid: encore.slot.uid, plus: encoreCount, total: beforeEncore + encoreCount * (i + 1) });
+    });
+    if (encores.length) order = order.flatMap((c) => c && isSuper(c) ? Array<LemmingCard>(1 + encores.length).fill(c) : [c]);
     const saved = order.length;
     let score = saved;
     // the +Rescues the saved lemmings have gained for good (the Rambler)
@@ -821,10 +826,10 @@ export class RunSession {
       wise: s.colony.filter((c) => c.edition === 'wise').length,
       ginger,
     };
-    const add = (label: string, plus: number, times: number) => {
+    const add = (label: string, plus: number, times: number, jokerUid: number) => {
       if (plus === 0 && times === 1) return;
       score = (score + plus) * times;
-      lines.push({ label, ...(plus ? { plus } : {}), ...(times !== 1 ? { times: Math.round(times * 100) / 100 } : {}), total: Math.floor(score + 1e-9) });
+      lines.push({ label, jokerUid, ...(plus ? { plus } : {}), ...(times !== 1 ? { times: Math.round(times * 100) / 100 } : {}), total: Math.floor(score + 1e-9) });
     };
     // every Power Card from left to right: its ability (or the one it copies), then its edition
     const active = new Map(this.activeJokers().map((a) => [a.slot.uid, a]));
@@ -834,11 +839,11 @@ export class RunSession {
         // (the Glitch: the same number in every attempt of the level, a different one in every level)
         const roll = new Rng(`${s.seed}/glitch/${s.ante}/${setup?.blind ?? 0}/${setup?.levelId ?? ''}/${a.slot.uid}`).next();
         const r = a.d.rescues({ ...base, counter: a.j.counter ?? 0, color: a.j.color, target: a.j.target, otherSellValue: sellValues - jokerSellValue(a.slot), roll });
-        if (r) add(a.label, r.plus ?? 0, r.times ?? 1);
+        if (r) add(a.label, r.plus ?? 0, r.times ?? 1, slot.uid);
       }
       if (slot.edition) {
         const e = POWER_EDITION_RESCUES[slot.edition];
-        add(`${jokerDef(slot.id).name} (${POWER_EDITION_NAMES[slot.edition]})`, e.plus ?? 0, e.times ?? 1);
+        add(`${jokerDef(slot.id).name} (${POWER_EDITION_NAMES[slot.edition]})`, e.plus ?? 0, e.times ?? 1, slot.uid);
       }
     }
     return { score: Math.floor(score + 1e-9), lines };
@@ -1896,7 +1901,8 @@ export class RunSession {
       const original = this.random.stream('mirror').pick(s.jokers);
       s.jokers.push({ ...structuredClone(original), uid: this.uid() });
     }
-    if (s.setup) this.refreshSetup(s.setup);
+    if (s.phase === 'playing') this.refreshLevelEffects();
+    else if (s.setup) this.refreshSetup(s.setup);
     return true;
   }
 
@@ -1911,10 +1917,10 @@ export class RunSession {
     return true;
   }
 
-  /** A tarot can be sold wherever it can be used (not while a level is played or the abilities are assigned). */
+  /** A tarot can be sold between levels or while a level is being played. */
   canSellTarot(): boolean {
     const p = this.state.phase;
-    return p === 'blinds' || p === 'cashout' || p === 'shop';
+    return p === 'blinds' || p === 'cashout' || p === 'shop' || p === 'playing';
   }
 
   sellTarot(uid: number): boolean {
@@ -1956,15 +1962,19 @@ export class RunSession {
 
   /** Uses a tarot on the selected cards (ids). Returns what happened, or null when it cannot be used. */
   useTarot(uid: number, selected: number[] = []): string[] | null {
+    return this.applyTarot(uid, selected, false);
+  }
+
+  private applyTarot(uid: number, selected: number[], inLevel: boolean): string[] | null {
     const s = this.state;
     const i = s.tarots.findIndex((t) => t.uid === uid);
-    if (i < 0 || s.phase === 'playing' || s.phase === 'result' || s.phase === 'assign' || s.phase === 'over') return null;
+    if (i < 0 || (s.phase === 'playing' && !inLevel) || s.phase === 'result' || s.phase === 'assign' || s.phase === 'over') return null;
     const t = s.tarots[i];
     const d = tarotDef(t.id);
     const cards = [...new Set(selected)].map((id) => this.card(id)).filter((c): c is LemmingCard => !!c);
     if (cards.length > d.select || (d.select > 0 && cards.length === 0) || (d.pair && cards.length !== 2)) return null;
     // the squad of a blind that has started is fixed: its lemmings cannot leave the colony
-    const squad = new Set(s.setup?.hand ?? []);
+    const squad = new Set([...(s.setup?.hand ?? []), ...(s.phase === 'playing' ? (this.play?.paratroopers ?? []) : [])]);
     if ((t.id === 'manual' || t.id === 'hermit') && cards.some((c) => squad.has(c.id))) return null;
     const rng = this.random.stream('tarot');
     const notes: string[] = [];
@@ -2208,8 +2218,35 @@ export class RunSession {
     if (d.kind === 'tribe') this.noteTribe();
     else s.stats.boostsUsed = (s.stats.boostsUsed ?? 0) + 1;
     // a changed squad card keeps its place; a removed one is gone from the colony (the setup refers to ids)
-    if (s.setup) this.refreshSetup(s.setup);
+    if (s.phase === 'playing') this.refreshLevelEffects();
+    else if (s.setup) this.refreshSetup(s.setup);
     return notes;
+  }
+
+  /** Use a Boost on living, released squad members. Selection order matters for paired Boosts. */
+  useLevelTarot(uid: number, selected: number[]): string[] | null {
+    const play = this.play;
+    const t = this.state.tarots.find((item) => item.uid === uid);
+    if (this.state.phase !== 'playing' || !play || !t || !play.game.playing || play.game.isFinished) return null;
+    // These open the assignment screen or remove the selected squad member from the level.
+    if (['bootcamp', 'rethink', 'manual', 'hermit'].includes(t.id)) return null;
+    const alive = new Map(play.game.lemmingList.filter((l) => !l.isRemoved).map((l) => [play.cardOf(l)?.id, l]));
+    if (selected.some((id) => !alive.has(id))) return null;
+    const notes = this.applyTarot(uid, selected, true);
+    if (!notes) return null;
+    for (const id of selected) {
+      const l = alive.get(id);
+      const card = this.card(id);
+      if (l && card) play.game.grantPermanentAbilities(l, card.climber, card.floater);
+    }
+    return notes;
+  }
+
+  /** Refresh dynamic hooks after a Power Card is sold or created during play. */
+  private refreshLevelEffects(): void {
+    if (!this.play) return;
+    this.play.game.extraBuilderBricks = this.jokerSum((d) => d.extraBuilderBricks);
+    this.play.attach();
   }
 
   private takePendingTag(id: string): boolean {

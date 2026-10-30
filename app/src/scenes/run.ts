@@ -12,17 +12,18 @@ import * as Phaser from 'phaser';
 import { SoundEffect, SoundOption } from '../../../engine/src/index.ts';
 import type { LemmixApp } from '../app.ts';
 import { type RunLevel, levelName } from '../run/catalog.ts';
-import { BADGE_COLORS, BADGE_NAMES, BADGE_TEXTS, POWER_EDITION_NAMES, POWER_EDITION_TEXTS, type PowerEdition, EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, LEMMING_BADGE_COLORS, TRAIT_TEXTS, type Fate, isDeath, JOKERS, jokerDef, jokerText, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
+import { BADGE_COLORS, BADGE_NAMES, BADGE_TEXTS, type PowerEdition, EDITION_NAMES, EDITION_TEXTS, FATE_TEXTS, LEMMING_BADGE_COLORS, TRAIT_TEXTS, type Fate, isDeath, JOKERS, jokerDef, PACKS, type PackKind, type Rarity, tagDef, tarotDef } from '../run/content.ts';
 import { normalizeSeed, randomSeed } from '../run/rng.ts';
 import { type BlindPreview, cardTitle, isSpecial, jokerSellValue, RunSession, tarotSellPrice } from '../run/session.ts';
 import { colorsText } from '../run/colors.ts';
+import { jokerLines } from '../run/joker-tooltip.ts';
 import { hazardsText, levelHazards } from '../run/hazards.ts';
 import { describeSkills, SKILL_NAMES, SKILL_PLURALS, SKILLS, type Skill, totalSkills } from '../run/skills.ts';
-import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, REDRAWS, type LemmingCard, type JokerInstance, type PackChoice, type RescueLine, type ShopOffer, START_COLONY, TAROT_SLOTS } from '../run/state.ts';
+import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, REDRAWS, type LemmingCard, type PackChoice, type RescueLine, type ShopOffer, TAROT_SLOTS } from '../run/state.ts';
 import { loadMeta, loadRun, markSeen, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
 import { ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
 import { type Art, CARD_H, CARD_W, type CardBehaviour, CardTable, CardView, type DropTarget, inRect, type Rect } from '../run/ui/cards.ts';
-import { consumableLook, EDITION_TINTS, JOKER_ART, markerColors, PACK_LOOKS, RARITY_COLORS, RARITY_NAMES, TAROT_ART } from '../run/ui/art.ts';
+import { BLIND_COLORS, consumableLook, EDITION_TINTS, JOKER_ART, markerColors, PACK_LOOKS, RARITY_COLORS, RARITY_NAMES, TAROT_ART } from '../run/ui/art.ts';
 import { ColonyHome, HOME_LEVEL } from '../run/home.ts';
 import { HomeView } from '../run/ui/homeview.ts';
 import { SelectionTray } from '../run/ui/tray.ts';
@@ -67,7 +68,6 @@ const ASSIGN_ROW_H = 36;
 const PACK_W = Math.round(CARD_W * 1.1);
 const PACK_H = Math.round(CARD_H * 1.1);
 
-const BLIND_COLORS: Record<BlindKind, number> = { small: COLORS.blue, big: COLORS.orange, boss: COLORS.red };
 
 const FATE_ANIMS: Partial<Record<Fate, LemmingAnim>> = {
   saved: 'exit',
@@ -87,8 +87,7 @@ type TarotUse = { uid?: number; offer?: number; pack?: number; max: number; name
 
 /** "Rescue 72/80 (90%)": the requirement of a level, of the squad you bring to it */
 function rescueText(p: BlindPreview): string {
-  const all = p.squad + p.extra;
-  return `Rescue ${p.required}/${all} (${percent(p.required, all)}%)`;
+  return `${p.required} Rescues needed`;
 }
 
 function percent(n: number, of: number): number {
@@ -155,6 +154,9 @@ export class RunScene extends Phaser.Scene {
   private shownMoney: number | null = null;
   /** the swirl behind everything, in the colours of what is going on */
   private swirl!: Swirl;
+  private scoringCards = new Map<number, CardView>();
+  private scoringToken = 0;
+  private shownOutcome: object | null = null;
 
   constructor() {
     super('run');
@@ -172,6 +174,7 @@ export class RunScene extends Phaser.Scene {
     this.spots = {};
     this.shown = '';
     this.shownMoney = null;
+    this.shownOutcome = null;
     ensureRunAssets(this, this.app);
     this.tip = new Tooltip(this);
     this.table = new CardTable(this, this.tip, (name, x, y) => this.spot(name, x, y));
@@ -301,6 +304,8 @@ export class RunScene extends Phaser.Scene {
   }
 
   private clear(): void {
+    this.scoringToken++;
+    this.scoringCards.clear();
     this.tip.hide();
     this.table.clear();
     this.tweens.killTweensOf(this.objs);
@@ -314,14 +319,11 @@ export class RunScene extends Phaser.Scene {
   private render(): void {
     this.clear();
     const run = this.run;
-    // a level that was won is cashed out: there is no going back to it (the result is shown with the cash out); one that
-    // was not won is the end of the run (a run saved at its result, before that was so, ends here too)
-    if (run && !this.choosing && run.state.phase === 'result') {
-      if (run.state.outcome?.success) this.acceptResult(run);
-      else run.giveUp();
-    }
-    if (run && !this.choosing && run.state.phase === 'over') this.noteEnd(run);
-    const phase = this.choosing || !run ? 'start' : run.state.phase === 'playing' ? 'blinds' : run.state.phase;
+    const outcome = run?.state.outcome;
+    const showingScore = !!run && !this.choosing && !!outcome && this.shownOutcome !== outcome &&
+      (run.state.phase === 'result' || (run.state.phase === 'over' && !outcome.success));
+    if (run && !this.choosing && run.state.phase === 'over' && !showingScore) this.noteEnd(run);
+    const phase = showingScore ? 'result' : this.choosing || !run ? 'start' : run.state.phase === 'playing' ? 'blinds' : run.state.phase;
     this.swirl.set(this.swirlColors(run, phase));
     if (this.choosing || !run) {
       this.renderStart();
@@ -338,6 +340,9 @@ export class RunScene extends Phaser.Scene {
         break;
       case 'blinds':
         this.renderBlinds(run);
+        break;
+      case 'result':
+        this.renderScoring(run);
         break;
       case 'cashout':
         this.renderCashout(run);
@@ -603,7 +608,7 @@ export class RunScene extends Phaser.Scene {
       o(label(this, 412, y + 24, l.title, { color: COLORS.text, maxWidth: 260 }));
       const hz = levelHazards(this.app.style, this.app.data.provider, l);
       o(label(this, 412, y + 44, hazardsText(hz), { color: hz.water || hz.fire || hz.traps ? COLORS.red : COLORS.green }));
-      o(label(this, 412, y + 58, `Rescue ${p.required} of ${p.squad + p.extra}`, { color: COLORS.dim }));
+      o(label(this, 412, y + 58, `${p.required} Rescues needed`, { color: COLORS.dim }));
       this.spot(`info:preview:${i}`, 712, y + 54);
       o(new Button(this, 680, y + 44, 64, 22, 'Preview', COLORS.blue, preview));
     });
@@ -690,7 +695,7 @@ export class RunScene extends Phaser.Scene {
     k(label(this, JOKER_AREA.x + 6, 108, `${s.jokers.length}/${run.jokerSlots()}`, { color: COLORS.text }));
     k(label(this, TAROT_AREA.x + TAROT_AREA.w - 6, 108, `${s.tarots.length}/${TAROT_SLOTS}`, { color: COLORS.text, originX: 1 }));
     const cy = JOKER_AREA.y + JOKER_AREA.h / 2;
-    const canSell = s.phase !== 'over';
+    const canSell = s.phase !== 'over' && s.phase !== 'result';
 
     const jx = this.slots(JOKER_AREA, s.jokers.length);
     s.jokers.forEach((j, i) => {
@@ -702,6 +707,7 @@ export class RunScene extends Phaser.Scene {
         this.render();
       };
       const card = k(new CardView(this, jx[i], cy, { color: RARITY_COLORS[d.rarity], art: JOKER_ART[j.id], edition: j.edition }));
+      this.scoringCards.set(j.uid, card);
       this.spot(`joker:${i}`, jx[i], cy);
       this.table.add(card, {
         tip: () => ({ title: d.name, color: RARITY_COLORS[d.rarity], lines: jokerLines(run, j), badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] } }),
@@ -1080,7 +1086,7 @@ export class RunScene extends Phaser.Scene {
       }));
       if (squadSpecials.length) k(label(this, x + 12 + 70, y + 171, `*${squadSpecials.length}`, { color: COLORS.purple }));
     }
-    row(y + 191, 'Rescue at least', `${p.required} (${percent(p.required, p.squad + p.extra)}%)`, p.tooFewLemmings ? COLORS.red : COLORS.text);
+    row(y + 191, 'Rescues needed', String(p.required), COLORS.text);
     const rescueZone = k(this.add.zone(x + 8, y + 190, w - 16, 20).setOrigin(0, 0).setInteractive());
     hoverTip(rescueZone, this.tip, () => ({
       title: 'Rescue count',
@@ -1220,6 +1226,47 @@ export class RunScene extends Phaser.Scene {
     saveMeta(meta);
     this.save();
     this.sfx(run.state.won ? SoundEffect.Yippee : SoundEffect.Explosion);
+  }
+
+  /** Replay the recorded scoring steps; the outcome was already decided by the simulation. */
+  private renderScoring(run: RunSession): void {
+    const out = run.state.outcome!;
+    const lines = out.scoring?.length ? out.scoring : [{ label: 'Lemmings saved', total: out.rescued }];
+    const x = MAIN_X + 60, y = MAIN_Y, w = MAIN_R - MAIN_X - 120;
+    this.k(panel(this, x, y, w, 440, COLORS.panel, COLORS.panelLight, 12));
+    this.k(label(this, x + w / 2, y + 32, 'RESCUE COUNT', { size: 28, color: COLORS.gold, originX: 0.5 }));
+    this.k(label(this, x + w / 2, y + 76, `TARGET ${out.required}`, { size: 24, color: COLORS.red, originX: 0.5 }));
+    const total = this.k(label(this, x + w / 2, y + 128, '0', { size: 48, color: COLORS.blue, originX: 0.5 }));
+    const detail = this.k(label(this, x + w / 2, y + 200, '', { size: 20, originX: 0.5, maxWidth: w - 40, align: 1 }));
+    const verdict = this.k(label(this, x + w / 2, y + 270, '', { size: 24, originX: 0.5 }));
+    const token = this.scoringToken;
+    const finish = () => {
+      this.shownOutcome = out;
+      if (out.success) this.acceptResult(run);
+      else if (run.state.phase !== 'over') run.giveUp();
+      this.save();
+      this.render();
+    };
+    this.btn('score-continue', x + 100, y + 360, w - 200, 48, 'Continue', COLORS.orange, finish, { big: true });
+    lines.forEach((line, i) => this.time.delayedCall(350 + i * 650, () => {
+      if (token !== this.scoringToken) return;
+      total.setText(String(line.total));
+      const effect = [line.plus ? `+${line.plus}` : '', line.times !== undefined ? `X${line.times}` : ''].filter(Boolean).join(' ');
+      detail.setText(`${line.label}${effect ? `  ${effect} RESCUES` : ''}`);
+      detail.setTint(line.times !== undefined ? COLORS.red : COLORS.blue);
+      this.tweens.add({ targets: total, scaleX: 1.2, scaleY: 1.2, duration: 120, yoyo: true });
+      const card = line.jokerUid === undefined ? undefined : this.scoringCards.get(line.jokerUid);
+      if (card) {
+        this.tweens.add({ targets: card, angle: { from: -8, to: 8 }, scaleX: 1.15, scaleY: 1.15, duration: 100, yoyo: true, repeat: 1, onComplete: () => card.setAngle(0).setScale(1) });
+        const pop = this.k(label(this, card.x, card.y + 28, effect, { size: 24, color: line.times !== undefined ? COLORS.red : COLORS.blue, originX: 0.5 }));
+        this.tweens.add({ targets: pop, y: pop.y + 50, alpha: 0, duration: 800, onComplete: () => pop.destroy() });
+      }
+      this.sfx(SoundEffect.AssignSkill);
+      if (i === lines.length - 1) {
+        verdict.setText(out.secondChance ? 'SAVED BY SECOND CHANCE!' : out.success ? 'TARGET REACHED!' : 'TARGET MISSED');
+        verdict.setTint(out.success ? COLORS.green : COLORS.red);
+      }
+    }));
   }
 
   /* -------------------------------------------------------------------------------------------- cash out */
@@ -1383,7 +1430,7 @@ export class RunScene extends Phaser.Scene {
       const name = k(label(this, x + 20, by + 70, levelName(nl), { purple: true }));
       this.wikiButton(nl, name.x + name.width + 6, by + 69, 'wiki:next');
       const np = run.preview(index);
-      k(label(this, x + 220, by + 6, `Rescue ${np.required} (${percent(np.required, np.squad + np.extra)}%)`, { color: COLORS.dim, originX: 1 }));
+      k(label(this, x + 220, by + 6, `${np.required} Rescues needed`, { color: COLORS.dim, originX: 1 }));
       k(label(this, x + 20, by + 90, nl.title, { color: COLORS.text, maxWidth: 200 }));
       const hz = levelHazards(this.app.style, this.app.data.provider, nl);
       k(label(this, x + 20, by + 110, hazardsText(hz), { color: hz.water || hz.fire || hz.traps ? COLORS.red : COLORS.green, maxWidth: 200 }));
@@ -1695,7 +1742,7 @@ export class RunScene extends Phaser.Scene {
       }
       case 'joker': {
         const d = jokerDef(c.id);
-        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text, ...editionLines(c.edition)], art: JOKER_ART[c.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] }, edition: c.edition };
+        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: jokerLines(run, { uid: -1, id: c.id, edition: c.edition }, true), art: JOKER_ART[c.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] }, edition: c.edition };
       }
     }
     throw new Error('unknown card of a pack');
@@ -1741,7 +1788,7 @@ export class RunScene extends Phaser.Scene {
       }
       case 'joker': {
         const d = jokerDef(o.id);
-        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: [d.text, ...editionLines(o.edition)], art: JOKER_ART[d.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] }, edition: o.edition };
+        return { title: d.name, color: RARITY_COLORS[d.rarity], lines: jokerLines(run, { uid: -1, id: o.id, edition: o.edition }, true), art: JOKER_ART[d.id], badge: { text: RARITY_NAMES[d.rarity], color: RARITY_COLORS[d.rarity] }, edition: o.edition };
       }
       case 'tarot': {
         const d = tarotDef(o.id);
@@ -2309,11 +2356,6 @@ export class RunScene extends Phaser.Scene {
   }
 }
 
-/** what the edition of a Power Card adds to its description: "Shiny: +5 Rescues" */
-function editionLines(e: PowerEdition | undefined): string[] {
-  return e ? ['', `{!}${POWER_EDITION_NAMES[e]}{}: ${POWER_EDITION_TEXTS[e]}`] : [];
-}
-
 /** the runs whose end has been recorded (the end screen can be shown again: back from the title) */
 const endedRuns = new WeakSet<RunSession>();
 
@@ -2329,135 +2371,3 @@ export function describeRun(run: RunSession): string {
   ].join('\n');
 }
 
-/** what a Power Card of the run is at now: the colour on the Checklist, the sell value it gained, the Trainings */
-/**
- * The description of a Power Card of the run, as Balatro shows a joker: its colour or its lemming in the text, and
- * what it is at now at the end, "(Currently X1.4)".
- */
-function jokerLines(run: RunSession, j: JokerInstance): string[] {
-  const d = jokerDef(j.id);
-  const s = run.state;
-  const text = jokerText(d, j, (id) => run.card(id)?.name);
-  const now = (v: string) => `{~}(Currently{} ${v}{~}){}`;
-  let current: string | null = null;
-  switch (j.id) {
-    case 'personalspace':
-      current = `{x}X${Math.max(1, run.jokerSlots() - s.jokers.length)}{}`;
-      break;
-    case 'elders':
-      current = `{x}X${+(1 + 0.2 * s.colony.filter((c) => c.edition === 'wise').length).toFixed(1)}{}`;
-      break;
-    case 'abstract':
-      current = `{+}+${3 * s.jokers.length}{}`;
-      break;
-    case 'gym':
-      current = `{x}X${+(1 + 0.1 * (j.counter ?? 0)).toFixed(1)}{}`;
-      break;
-    case 'inversecurve':
-      current = `{!}-${Math.min(100, s.stats.blindsWon)}%{}`;
-      break;
-    case 'bootstraps':
-      current = `{+}+${2 * Math.floor(Math.max(0, s.money) / 5)}{}`;
-      break;
-    case 'baseball':
-      current = `{x}X${+(1.5 ** s.jokers.filter((x) => jokerDef(x.id).rarity === 'uncommon').length).toFixed(2)}{}`;
-      break;
-    case 'flashcard':
-      current = `{+}+${j.counter ?? 0}{}`;
-      break;
-    case 'popcorn':
-      current = `{+}+${Math.max(0, 20 - 4 * (j.counter ?? 0))}{}`;
-      break;
-    case 'yorick':
-      current = `{x}X${1 + Math.floor((j.counter ?? 0) / 23)}{} (${j.counter ?? 0} lost)`;
-      break;
-    case 'longservice': {
-      const left = 5 - ((j.counter ?? 0) % 6);
-      current = left === 0 ? '{x}X3{} this level' : `${left} level${left === 1 ? '' : 's'} to go`;
-      break;
-    }
-    case 'weakestlink':
-      current = `{+}+${2 * Math.min(...SKILLS.map((sk) => run.capability()[sk]))}{}`;
-      break;
-    case 'reserves':
-    {
-      const blind = run.currentBlind;
-      const squad = s.setup?.hand.length ?? (blind ? run.squadSize(run.level(blind.levelId)) : 0);
-      current = `{+}+${Math.floor(Math.max(0, s.colony.length - squad) / 5)}{}`;
-    }
-      break;
-    case 'nothanks':
-      current = `{+}+${2 * (j.counter ?? 0)}{}`;
-      break;
-    case 'stampede':
-    case 'campout':
-    case 'fragile':
-      current = `{x}X${+(1 + 0.25 * (j.counter ?? 0)).toFixed(2)}{}`;
-      break;
-    case 'bodysnatcher':
-    case 'populationboom':
-    case 'rabbitsfoot':
-      current = `{x}X${+(1 + 0.1 * (j.counter ?? 0)).toFixed(1)}{}`;
-      break;
-    case 'jetpack':
-      current = `{$}$${1 + (j.counter ?? 0)}{}`;
-      break;
-    case 'thinranks':
-      current = `{+}+${2 * Math.max(0, START_COLONY - s.colony.length)}{}`;
-      break;
-    case 'boosterclub':
-      current = `{+}+${s.stats.boostsUsed ?? 0}{}`;
-      break;
-    case 'bullmarket':
-      current = `{+}+${Math.floor(Math.max(0, s.money) / 2)}{}`;
-      break;
-    case 'fizzypop':
-      current = `${3 - (j.counter ?? 0)} level${3 - (j.counter ?? 0) === 1 ? '' : 's'} left`;
-      break;
-    case 'treasurechest':
-      current = `{+}+${s.jokers.filter((x) => x !== j).reduce((n, x) => n + jokerSellValue(x), 0)}{}`;
-      break;
-    case 'skippingrope':
-      current = `{x}X${+(1 + 0.25 * s.stats.skipped).toFixed(2)}{}`;
-      break;
-    case 'littlehelper':
-      current = `{+}+${Math.floor((j.counter ?? 0) / 10)}{} (${j.counter ?? 0} saved)`;
-      break;
-    case 'mirrorimage':
-      current = (j.counter ?? 0) >= 2 ? 'ready' : `${j.counter ?? 0}/2 levels`;
-      break;
-    case 'supersquad':
-      current = `${s.colony.filter((c) => run.isSuper(c)).length} Super Lemmings`;
-      break;
-    case 'ohno':
-      current = `{x}X${1 + (j.counter ?? 0)}{}`;
-      break;
-    case 'roadcrew':
-      current = `{+}+${2 * (j.counter ?? 0)}{}`;
-      break;
-    case 'icelolly':
-      current = `{+}+${Math.max(0, 30 - 3 * (j.counter ?? 0))}{}`;
-      break;
-    case 'freshapproach':
-      current = `{x}X${+(1 + 0.2 * (j.counter ?? 0)).toFixed(1)}{} (${j.counter ?? 0} in a row)`;
-      break;
-    case 'greenparty':
-      current = `{+}+${j.counter ?? 0}{}`;
-      break;
-    case 'lordofthemanor':
-    case 'starpupils': {
-      const squad = new Set(s.setup?.hand ?? []);
-      const n = s.colony.filter((c) => !squad.has(c.id) && c.edition === (j.id === 'starpupils' ? 'mentor' : 'champion')).length;
-      current = j.id === 'starpupils' ? `{+}+${5 * n}{}` : `{x}X${+(1.2 ** n).toFixed(2)}{}`;
-      break;
-    }
-    case 'steadysquad':
-      current = `{+}+${5 * run.redrawsLeft()}{}`;
-      break;
-  }
-  if (d.copies) {
-    const t = run.copyOf(j.uid);
-    return [text, t ? `{~}(Copying{} {!}${jokerDef(t.id).name}{}{~}){}` : '{~}(Nothing it can copy){}', ...editionLines(j.edition)];
-  }
-  return [text, ...(current ? [now(current)] : []), ...editionLines(j.edition)];
-}

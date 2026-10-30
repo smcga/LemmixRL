@@ -127,7 +127,7 @@ try {
   if ((await state()).phase !== 'blinds') fail('the assignment did not end');
 
   // the small blind becomes "Just dig!"
-  await ev(`(() => { const s = globalThis.lemmix.run.state; s.blinds[0].levelId = 'Orig-1-01'; s.setup = null; globalThis.phaserGame.scene.getScene('run').render(); })()`);
+  await ev(`(() => { const s = globalThis.lemmix.run.state; s.blinds[0].levelId = 'Orig-1-01'; s.setup = null; s.jokers.push({uid: 900001, id: 'longbridge'}); s.tarots.push({uid: 900002, id: 'ember'}, {uid: 900003, id: 'umbrella'}); globalThis.phaserGame.scene.getScene('run').render(); })()`);
   await clickSpot('play', 800); // Select
   // the level before it is played: the screen of a run (a click anywhere goes on, as in Lemmings)
   const active = () => ev<string>(`globalThis.phaserGame.scene.getScenes(true).map((s) => s.sys.settings.key).join()`);
@@ -146,9 +146,37 @@ try {
   const player = `globalThis.phaserGame.scene.getScene('player')`;
   const labels = await ev<string[]>(`${player}.touchBar.buttons.map((b) => b.def.label)`);
   if (labels.some((l) => ['WALKER', 'STEP', '-1 SEC'].includes(l))) fail('a run has the touch buttons of time and the walker: ' + labels.join());
-  if (!(await ev<boolean>(`${player}.keysHint.visible`))) fail('the keys of a run are not shown under the game');
   await page.keyboard.press('p');
   if (!(await ev<boolean>('globalThis.lemmix.game.isPaused'))) fail('P did not pause the level of a run');
+  // The bar above the level (its own scene, over the game): the cards of the run screens, with their popups and buttons.
+  // Select a Boost, pick a living lemming while paused, use it; then sell a Boost and a Power Card with their buttons.
+  const bar = `globalThis.phaserGame.scene.getScene('levelcards')`;
+  const barSpot = async (name: string) => (await ev<{ x: number; y: number } | undefined>(`${bar}.spots[${JSON.stringify(name)}]`)) ?? fail(`nothing called ${name} on the bar`);
+  const clickBar = async (name: string) => { const p = await barSpot(name); await page.mouse.click(p.x, p.y); await page.waitForTimeout(150); };
+  // The bar draws the cursor (over its cards and popups): crossing the bar's edges and margins, it must stay with the mouse.
+  const tarot = await barSpot('tarot:0');
+  const place = await ev<{ x: number; y: number; scale: number }>(`${bar}.place`);
+  for (const [x, y] of [[tarot.x, tarot.y], [place.x - 2, tarot.y], [tarot.x, place.y + 108 * place.scale], [place.x + 962 * place.scale, tarot.y], [tarot.x, tarot.y]]) {
+    await page.mouse.move(x, y);
+    await page.waitForTimeout(50);
+    const cursor = await ev<{ x: number; y: number; visible: boolean }>(`(() => { const b = ${bar}; const c = b.cursor; return { x: b.place.x + c.x * b.place.scale + 7 * ${player}.scaleFactor, y: b.place.y + c.y * b.place.scale + 7 * ${player}.scaleFactor, visible: c.visible }; })()`);
+    if (!cursor.visible || Math.abs(cursor.x - x) > 2 || Math.abs(cursor.y - y) > 2) fail('the cursor jumped near the card bar: ' + JSON.stringify({ x, y, cursor }));
+  }
+  await clickBar('tarot:0');
+  if (!(await ev<boolean>(`${bar}.selecting`))) fail('the Boost was not selected');
+  const selectedLem = await ev<{ x: number; y: number; id: number }>(`(() => { const p = ${player}; const l = globalThis.lemmix.game.lemmingList.find((v) => !v.isRemoved && globalThis.lemmix.run.cardOfLemming(v)); return { x: p.left + l.xPos * p.scaleFactor + p.player.offsetHorz, y: p.top + (l.yPos - 8) * p.scaleFactor, id: globalThis.lemmix.run.cardOfLemming(l).id }; })()`);
+  await page.mouse.click(selectedLem.x, selectedLem.y);
+  await page.waitForTimeout(100);
+  if (!(await ev<number[]>(`${bar}.targets`)).includes(selectedLem.id)) fail('the living lemming was not selected');
+  await clickBar('card:USE');
+  if ((await state()).colony.find((c: any) => c.id === selectedLem.id).hair !== 'red') fail('the Boost did not change the selected lemming: ' + JSON.stringify(await ev(`({selected: ${bar}.selected, targets: ${bar}.targets, message: ${bar}.message})`)));
+  await clickBar('tarot:0');
+  await clickBar('card:SELL');
+  if ((await state()).tarots.length) fail('the consumable was not sold');
+  await clickBar('joker:0');
+  await clickBar('card:SELL');
+  if ((await state()).jokers.length) fail('the Power Card was not sold');
+  await ev('globalThis.lemmix.run.state.money = 4'); // keep the rest of this run test independent of the sales
   const it0 = await ev<number>('globalThis.lemmix.game.currentIteration');
   await page.keyboard.press('!'); // (rewind one second, in Lemmix)
   await page.keyboard.press('1'); // (skip one second)
@@ -158,8 +186,8 @@ try {
   const l = await ev<{ x: number; y: number; scroll: number }>(
     `(() => { const g = globalThis.lemmix.game; const lem = g.lemmingList.find((x) => !x.isRemoved && x.action === 1); return { x: lem.xPos, y: lem.yPos, scroll: g.level.info.screenPosition }; })()`,
   );
-  // the game is at scale 3 in 1280 x 720 (320 x 200 * 3, centered)
-  await page.mouse.move(160 + (l.x - l.scroll + 3) * 3, 60 + (l.y - 8) * 3);
+  const gamePoint = await ev<{ x: number; y: number }>(`(() => { const p = ${player}; return { x: p.left + (${l.x} + 3) * p.scaleFactor + p.player.offsetHorz, y: p.top + (${l.y} - 8) * p.scaleFactor }; })()`);
+  await page.mouse.move(gamePoint.x, gamePoint.y);
   await page.mouse.down();
   await page.mouse.up();
   await page.waitForTimeout(300);
@@ -172,7 +200,8 @@ try {
   s = await state();
   if (!s.outcome?.success || s.outcome.rescued !== 10) fail('unexpected outcome ' + JSON.stringify(s.outcome));
 
-  // a won level is cashed out: no going back to it
+  // The scoring sequence precedes cash out.
+  await clickSpot('score-continue');
   s = await state();
   if (s.phase !== 'cashout' || s.cashout.total !== 10) fail('unexpected cash out ' + JSON.stringify(s.cashout));
   await clickSpot('cashout');

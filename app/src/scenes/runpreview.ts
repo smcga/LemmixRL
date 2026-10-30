@@ -114,10 +114,9 @@ export class RunPreviewScene extends Phaser.Scene {
     label(this, W / 2, ty + 52, delphiTrim(li.title), { size: 24, color: COLORS.lilac, originX: 0.5, originY: 0.5 });
 
     // the numbers of the preview of Lemmings, as the boxes of Balatro
-    const pct = li.lemmingsCount > 0 ? Math.round((li.rescueCount * 100) / li.lemmingsCount) : 0;
     const boxes: [string, string, number][] = [
       ['Lemmings', String(li.lemmingsCount), COLORS.blue],
-      ['To be saved', `${li.rescueCount} (${pct}%)`, COLORS.red],
+      ['Rescues needed', String(run.state.setup?.rescue ?? li.rescueCount), COLORS.red],
       ['Release rate', String(li.releaseRate), COLORS.green],
       ['Time', `${li.timeLimit}:00`, COLORS.gold],
     ];

@@ -83,6 +83,7 @@ describe('Power Cards: the rescue count', () => {
     const empty = JOKER_SLOTS - 2;
     expect(score).toBe(9 * empty);
     expect(lines.map((l) => l.label)).toEqual(['Lemmings saved', 'Abstract Lemming', 'Personal Space']);
+    expect(lines.slice(1).map((l) => l.jokerUid)).toEqual(run.state.jokers.map((j) => j.uid));
 
     // the other way round: the X comes before the +
     run.state.jokers.reverse();
@@ -1001,6 +1002,7 @@ describe('Lematro Phase 3: Power Card editions', () => {
     const { score, lines } = run.rescueCount([card(run, 'red')], [], zeroSkills());
     expect(score).toBe(30);
     expect(lines.map((l) => l.label)).toEqual(['Lemmings saved', 'Lemming', 'Lemming (Rainbow)', 'Lemming', 'Lemming (Shiny)', 'Lemming', 'Lemming (Glowing)']);
+    expect(lines.slice(1).map((l) => l.jokerUid)).toEqual([a.uid, a.uid, b.uid, b.uid, c.uid, c.uid]);
     // a copy acts as the card it copies, but its edition is its own
     const copy = runOn('Orig-1-02', ['copycat', 'lemming']);
     copy.state.jokers[1].edition = 'shiny';
