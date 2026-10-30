@@ -226,6 +226,11 @@ try {
   if (!(await ev<number[]>(`${runScene}.homeView.numbered`)).includes(redrawId)) fail('a Super Lemming could not be selected for Redraw by touch');
   await tapSpot('redrawSelected', 500);
   if ((await run<number>('state.setup.redraws')) !== 1 || (await run<number[]>('state.setup.hand')).includes(redrawId)) fail('the selected lemming was not redrawn by touch');
+  // the Redraw plays out on the colony view, then a panel says who joined: one tap on Continue goes back
+  await page.waitForFunction(() => !!(globalThis as any).phaserGame.scene.getScene('run').spots.redrawContinue, null, { timeout: 8000 });
+  await page.waitForTimeout(500);
+  await tapSpot('redrawContinue', 500);
+  if (await ev<boolean>(`!!${runScene}.homeView`)) fail('a tap on Continue did not close the Redraw');
   // Skip Blind, as in Balatro: one tap (what the tag gives is next to it)
   await tapSpot('skip', 700);
   if ((await run<string>('state.blinds[0].status')) !== 'skipped') fail('a tap on Skip did not skip');

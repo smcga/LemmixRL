@@ -13,6 +13,7 @@ import type { LemmingCard } from '../state.ts';
 import { LEMMING_BADGE_COLORS } from '../content.ts';
 import { markerColors } from './art.ts';
 import { ENTRANCE, SKILL_ICONS } from './assets.ts';
+import { sparks } from './fx.ts';
 import { COLORS, label, shade } from './widgets.ts';
 
 export type HomeTool = 'pick' | Skill | 'dirt' | 'erase' | 'poof' | 'trapdoor';
@@ -35,7 +36,10 @@ export interface HomeViewOptions {
   spot?: (name: string, x: number, y: number) => void;
   /** the lemmings of the squad of the next level (an orange line under their feet) */
   inSquad?: (card: LemmingCard) => boolean;
-  /** Redraw view: distinguish squad members, replacement candidates, and lemmings already returned this level. */
+  /**
+   * Redraw view: a small tick over the squad, an X over the reserves. The lemmings returned this level are not at
+   * home (see ColonyHome.hide).
+   */
   squadStatus?: (card: LemmingCard) => 'squad' | 'colony' | 'returned';
   /** the colony, in its order (the indexes of the spots) */
   colony: () => LemmingCard[];
@@ -56,6 +60,8 @@ export class HomeView {
   numbered: number[] = [];
   /** the colour of those tags (and of their corners) */
   numberColor: number = COLORS.gold;
+  /** no marks over the lemmings (a panel is shown over the home) */
+  quiet = false;
   private readonly tags: Phaser.GameObjects.BitmapText[] = [];
   private readonly key: string;
   private readonly texture: Phaser.Textures.CanvasTexture;
@@ -99,7 +105,10 @@ export class HomeView {
     scene.events.on('update', this.update, this);
   }
 
+  private destroyed = false;
+
   destroy(): void {
+    this.destroyed = true;
     this.scene.events.off('update', this.update, this);
     if (this.scene.textures.exists(this.key)) this.scene.textures.remove(this.key);
   }
@@ -288,6 +297,12 @@ export class HomeView {
 
     const g = this.overlay;
     g.clear();
+    // (under a panel over the home: no marks, they would be drawn over the panel)
+    if (this.quiet) {
+      for (const p of this.pips) p.setVisible(false);
+      for (const t of this.tags) t.setVisible(false);
+      return;
+    }
     const lemmings = this.home.lemmings();
     let n = 0;
     let tagCount = 0;
@@ -309,27 +324,27 @@ export class HomeView {
       const order = this.numbered.indexOf(c.id);
       const status = this.opts.squadStatus?.(c);
       if (status) {
-        const color = status === 'squad' ? COLORS.orange : status === 'colony' ? COLORS.teal : COLORS.gray;
-        g.fillStyle(color, status === 'returned' ? 0.15 : 0.22);
-        g.fillRoundedRect(sx - 10, sy - 24, 22, 29, 3);
-        g.lineStyle(status === 'squad' ? 2 : 1, color, 0.9);
-        g.strokeRoundedRect(sx - 10, sy - 24, 22, 29, 3);
-        g.fillStyle(color, 1);
-        g.fillRect(sx - 8, sy + 3, 18, 3);
+        // over its head (above the marks of a special lemming): a tick for the squad, an X for the reserves; one
+        // selected to be returned has its number there instead
+        if (order < 0 && status === 'squad') tick(g, sx + 1, sy - 35);
+        else if (order < 0 && status === 'colony') cross(g, sx + 1, sy - 35);
       } else if (this.opts.inSquad?.(c)) {
         g.fillStyle(LEMMING_BADGE_COLORS.squad, 1);
         g.fillRect(sx - 6, sy + 2, 14, 2);
       }
       if (order >= 0) {
-        this.corners(g, sx, sy, c.id === this.focus, this.numberColor);
-        // its number, as in the tray
+        // (in the Redraw view only the one picked last has its corners: the numbers say the rest)
+        if (!status || c.id === this.focus) this.corners(g, sx, sy, c.id === this.focus, this.numberColor);
+        // its number, as in the tray (smaller in the Redraw view, where it takes the place of the tick)
+        const ny = status ? sy - 36 : sy - 40;
+        const r = status ? 7 : 8;
         g.fillStyle(0x000000, 1);
-        g.fillCircle(sx + 1, sy - 40, 9);
+        g.fillCircle(sx + 1, ny, r + 1);
         g.fillStyle(this.numberColor, 1);
-        g.fillCircle(sx + 1, sy - 40, 8);
+        g.fillCircle(sx + 1, ny, r);
         let tag = this.tags[tagCount];
         if (!tag) this.tags.push((tag = this.add(label(this.scene, 0, 0, '', { originX: 0.5, originY: 0.5 }))));
-        tag.setText(String(order + 1)).setPosition(sx + 1, sy - 40).setVisible(true);
+        tag.setText(String(order + 1)).setPosition(sx + 1, ny).setFontSize(status ? 12 : 16).setVisible(true);
         tagCount++;
       } else if (this.marked.has(c.id)) this.corners(g, sx, sy, c.id === this.focus);
       this.opts.spot?.(`colony:${colony.indexOf(c)}`, sx, sy - 10);
@@ -350,6 +365,56 @@ export class HomeView {
     }
   }
 
+  /* ------------------------------------------------------------------------------------------------- effects */
+
+  /** where a lemming of the home is on the screen (its feet), if it is at home */
+  where(id: number): { x: number; y: number } | null {
+    const l = this.destroyed ? undefined : this.home.lemmingOf(id);
+    return l ? { x: this.x + l.xPos * SCALE, y: this.y + l.yPos * SCALE } : null;
+  }
+
+  /** Poof: the lemming bursts into a puff of smoke and is gone from the home (it does not come back in). */
+  poof(id: number, depth = 640): boolean {
+    const at = this.where(id);
+    this.home.hide([id]);
+    if (!at) return false;
+    const cx = at.x + 1;
+    const cy = at.y - 10;
+    sparks(this.scene, cx, cy, { colors: [0xffffff, 0xd8d8e0, 0xa0a0b0, COLORS.gold], count: 18, speed: [50, 150], life: 480, scale: 1.2, depth });
+    // the puff: a few round clouds that swell and fade
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * Math.PI * 2;
+      const puff = this.scene.add.circle(cx + Math.cos(a) * 4, cy + Math.sin(a) * 4, 5, k % 2 ? 0xffffff : 0xd0d0d8, 0.95).setDepth(depth);
+      this.scene.tweens.add({
+        targets: puff,
+        x: cx + Math.cos(a) * 14,
+        y: cy + Math.sin(a) * 12 - 4,
+        scale: 2.2,
+        alpha: 0,
+        duration: 420 + k * 30,
+        ease: 'Quad.easeOut',
+        onComplete: () => puff.destroy(),
+      });
+    }
+    return true;
+  }
+
+  /** A lemming joins the squad: a ring of light and sparks around it, and its tick pops up. */
+  welcome(id: number, depth = 640): boolean {
+    const at = this.where(id);
+    if (!at) return false;
+    const cx = at.x + 1;
+    const cy = at.y - 10;
+    sparks(this.scene, cx, cy - 6, { colors: [COLORS.gold, COLORS.green, 0xffffff], count: 14, speed: [40, 120], life: 520, depth });
+    const ring = this.scene.add.circle(cx, cy, 8).setStrokeStyle(2, COLORS.gold, 1).setDepth(depth);
+    this.scene.tweens.add({ targets: ring, scale: 2.6, alpha: 0, duration: 520, ease: 'Quad.easeOut', onComplete: () => ring.destroy() });
+    const pop = this.scene.add.graphics().setDepth(depth).setPosition(cx, at.y - 35);
+    tick(pop, 0, 0);
+    pop.setScale(0.2);
+    this.scene.tweens.add({ targets: pop, scale: 1.8, duration: 220, ease: 'Back.easeOut', yoyo: true, hold: 120, onComplete: () => pop.destroy() });
+    return true;
+  }
+
   /** the corners of a box around a lemming (like the cursor of Lemmings); the one picked last bobs */
   private corners(g: Phaser.GameObjects.Graphics, sx: number, sy: number, focus: boolean, color?: number): void {
     const b = focus ? Math.round(Math.sin(this.time * 6)) : 0;
@@ -367,5 +432,26 @@ export class HomeView {
       g.lineBetween(cx, cy, cx + 6 * dx, cy);
       g.lineBetween(cx, cy, cx, cy + 6 * dy);
     }
+  }
+}
+
+/** a small tick (the squad), its middle at x, y: green with a dark edge, so it shows on the ground and in the dark */
+export function tick(g: Phaser.GameObjects.Graphics, x: number, y: number): void {
+  for (const [w, color] of [[5, 0x000000], [2.5, COLORS.green]] as const) {
+    g.lineStyle(w, color, 1);
+    g.beginPath();
+    g.moveTo(x - 4, y);
+    g.lineTo(x - 1, y + 3);
+    g.lineTo(x + 5, y - 4);
+    g.strokePath();
+  }
+}
+
+/** a small X (a reserve), its middle at x, y: dim, so a colony of reserves does not crowd the home */
+export function cross(g: Phaser.GameObjects.Graphics, x: number, y: number): void {
+  for (const [w, color, a] of [[4, 0x000000, 0.6], [2, COLORS.red, 0.75]] as const) {
+    g.lineStyle(w, color, a);
+    g.lineBetween(x - 3, y - 3, x + 3, y + 3);
+    g.lineBetween(x + 3, y - 3, x - 3, y + 3);
   }
 }

@@ -98,6 +98,8 @@ export class ColonyHome {
   private lastArrival = -99;
   /** the lemmings gone (dead, out by the exit): when they come back */
   private readonly away = new Map<Lemming, number>();
+  /** the lemmings kept out of the home for now (returned by a Redraw): where they were, for the next visit */
+  private readonly hidden = new Map<number, HomeState['lemmings'][number] | null>();
 
   constructor(
     data: DataProvider,
@@ -165,7 +167,34 @@ export class ColonyHome {
 
   /** how many lemmings live here: the ones at home, and the ones on their way back in by the trapdoor */
   population(): number {
-    return this.lemmings().length + this.away.size + this.arrivals.length;
+    return this.lemmings().length + this.away.size + this.arrivals.length + this.hidden.size;
+  }
+
+  /** the lemming of a card, if it is at home now */
+  lemmingOf(id: number): Lemming | undefined {
+    return this.lemmings().find((l) => this.cardOf.get(l) === id);
+  }
+
+  /**
+   * Takes lemmings out of the home, at once and without a hole, and keeps them out (they do not come back in by the
+   * trapdoor) for as long as this home is shown. Where they were is kept, so they are there again the next time.
+   */
+  hide(ids: Iterable<number>): void {
+    for (const id of ids) {
+      if (this.hidden.has(id)) continue;
+      const l = this.lemmingOf(id);
+      this.hidden.set(id, l && l.action !== LemmingAction.Exiting ? { id, x: l.xPos, y: l.yPos, dir: l.xDelta > 0 ? 1 : -1 } : null);
+      if (l) {
+        this.game.vanishLemming(l);
+        this.cardOf.delete(l);
+      }
+      for (const [gone, gid] of this.cardOf)
+        if (gid === id && gone.isRemoved) {
+          this.cardOf.delete(gone);
+          this.away.delete(gone);
+        }
+      this.arrivals = this.arrivals.filter((a) => a.id !== id);
+    }
   }
 
   /** One frame of the game. */
@@ -203,6 +232,8 @@ export class ColonyHome {
       seen.add(id);
       lemmings.push({ id, x: l.xPos, y: l.yPos, dir: l.xDelta > 0 ? 1 : -1, ...(l.action === LemmingAction.Blocking ? { blocker: true as const } : {}) });
     }
+    // (the ones kept out are there again next time, where they were)
+    for (const [id, at] of this.hidden) if (at && !seen.has(id)) lemmings.push(at);
     const e = this.game.entrances[0]?.obj;
     return { v: 1, terrain: this.saveTerrain(), lemmings, ...(e && (e.left !== ENTRANCE.left || e.top !== ENTRANCE.top) ? { entrance: { left: e.left, top: e.top } } : {}) };
   }
@@ -235,7 +266,7 @@ export class ColonyHome {
     game.lemmingsSaved = 0;
     game.lemmingsRemoved = 0;
     // the lemmings gone come back by the trapdoor a moment later
-    const ids = new Set(this.cards().map((c) => c.id));
+    const ids = new Set(this.cards().map((c) => c.id).filter((id) => !this.hidden.has(id)));
     for (const l of game.lemmingList) if (l.isRemoved && this.cardOf.has(l) && !this.away.has(l)) this.away.set(l, it + 34);
     for (const [l, at] of this.away)
       if (at <= it) {
