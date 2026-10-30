@@ -23,7 +23,7 @@ import { ABILITY_CAP, ANTES, BLIND_NAMES, type BlindKind, HIRE_PRICE, REDRAWS, t
 import { loadMeta, loadRun, markSeen, recordLevel, saveMeta, saveRun } from '../run/storage.ts';
 import { ensureRunAssets, type LemmingAnim, lemmingSprite, levelImage, levelThumbnail, SKILL_ICONS } from '../run/ui/assets.ts';
 import { type Art, CARD_H, CARD_W, type CardBehaviour, CardTable, CardView, type DropTarget, inRect, type Rect } from '../run/ui/cards.ts';
-import { consumableLook, EDITION_TINTS, JOKER_ART, markerColors, PACK_LOOKS, RARITY_COLORS, RARITY_NAMES, TAROT_ART } from '../run/ui/art.ts';
+import { BLIND_COLORS, consumableLook, EDITION_TINTS, JOKER_ART, markerColors, PACK_LOOKS, RARITY_COLORS, RARITY_NAMES, TAROT_ART } from '../run/ui/art.ts';
 import { ColonyHome, HOME_LEVEL } from '../run/home.ts';
 import { HomeView } from '../run/ui/homeview.ts';
 import { SelectionTray } from '../run/ui/tray.ts';
@@ -68,7 +68,6 @@ const ASSIGN_ROW_H = 36;
 const PACK_W = Math.round(CARD_W * 1.1);
 const PACK_H = Math.round(CARD_H * 1.1);
 
-const BLIND_COLORS: Record<BlindKind, number> = { small: COLORS.blue, big: COLORS.orange, boss: COLORS.red };
 
 const FATE_ANIMS: Partial<Record<Fate, LemmingAnim>> = {
   saved: 'exit',

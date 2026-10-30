@@ -148,16 +148,19 @@ try {
   if (labels.some((l) => ['WALKER', 'STEP', '-1 SEC'].includes(l))) fail('a run has the touch buttons of time and the walker: ' + labels.join());
   await page.keyboard.press('p');
   if (!(await ev<boolean>('globalThis.lemmix.game.isPaused'))) fail('P did not pause the level of a run');
-  // The cards above the level use the same pointer as the game. Select a living lemming while paused, then use a Boost.
-  const cardPoint = (x: number, y: number) => ev<{ x: number; y: number }>(`(() => { const c = ${player}.levelCards.container; return { x: c.x + ${x} * c.scaleX, y: c.y + ${y} * c.scaleY }; })()`);
-  const clickCardPoint = async (x: number, y: number) => { const p = await cardPoint(x, y); await page.mouse.click(p.x, p.y); await page.waitForTimeout(100); };
-  // Cross the card bar's edges and margins: the cursor must not jump back to its last position in the game.
-  for (const [x, y] of [[358, 54], [-2, 54], [358, 108], [962, 54], [358, 54]]) {
-    const point = await cardPoint(x, y);
-    await page.mouse.move(point.x, point.y);
+  // The bar above the level (its own scene, over the game): the cards of the run screens, with their popups and buttons.
+  // Select a Boost, pick a living lemming while paused, use it; then sell a Boost and a Power Card with their buttons.
+  const bar = `globalThis.phaserGame.scene.getScene('levelcards')`;
+  const barSpot = async (name: string) => (await ev<{ x: number; y: number } | undefined>(`${bar}.spots[${JSON.stringify(name)}]`)) ?? fail(`nothing called ${name} on the bar`);
+  const clickBar = async (name: string) => { const p = await barSpot(name); await page.mouse.click(p.x, p.y); await page.waitForTimeout(150); };
+  // The bar draws the cursor (over its cards and popups): crossing the bar's edges and margins, it must stay with the mouse.
+  const tarot = await barSpot('tarot:0');
+  const place = await ev<{ x: number; y: number; scale: number }>(`${bar}.place`);
+  for (const [x, y] of [[tarot.x, tarot.y], [place.x - 2, tarot.y], [tarot.x, place.y + 108 * place.scale], [place.x + 962 * place.scale, tarot.y], [tarot.x, tarot.y]]) {
+    await page.mouse.move(x, y);
     await page.waitForTimeout(50);
-    const cursor = await ev<{ x: number; y: number; visible: boolean; depth: number; cardDepth: number }>(`(() => { const p = ${player}; return { x: p.cursorImage.x + 7 * p.scaleFactor, y: p.cursorImage.y + 7 * p.scaleFactor, visible: p.cursorImage.visible, depth: p.cursorImage.depth, cardDepth: p.levelCards.container.depth }; })()`);
-    if (!cursor.visible || cursor.depth <= cursor.cardDepth || Math.abs(cursor.x - point.x) > 2 || Math.abs(cursor.y - point.y) > 2) fail('the cursor jumped near the card bar: ' + JSON.stringify({ point, cursor }));
+    const cursor = await ev<{ x: number; y: number; visible: boolean }>(`(() => { const b = ${bar}; const c = b.cursor; return { x: b.place.x + c.x * b.place.scale + 7 * ${player}.scaleFactor, y: b.place.y + c.y * b.place.scale + 7 * ${player}.scaleFactor, visible: c.visible }; })()`);
+    if (!cursor.visible || Math.abs(cursor.x - x) > 2 || Math.abs(cursor.y - y) > 2) fail('the cursor jumped near the card bar: ' + JSON.stringify({ x, y, cursor }));
   }
   // The visible side margins still act like the level's edges; entering the card bar stops mouse scrolling.
   const geom = await ev<{ left: number; top: number; scale: number; offset: number }>(`(() => { const p = ${player}; return { left: p.left, top: p.top, scale: p.scaleFactor, offset: p.player.offsetHorz }; })()`);
@@ -170,23 +173,24 @@ try {
   await page.waitForTimeout(250);
   const afterLeft = await ev<number>(`${player}.player.offsetHorz`);
   if (afterLeft <= afterRight) fail('the left edge did not scroll the level');
-  const bar = await cardPoint(358, 54);
-  await page.mouse.move(bar.x, bar.y);
+  await page.mouse.move(tarot.x, tarot.y);
   const stopped = await ev<number>(`${player}.player.offsetHorz`);
   await page.waitForTimeout(250);
   if ((await ev<number>(`${player}.player.offsetHorz`)) !== stopped) fail('the level kept scrolling over the card bar');
   await ev(`${player}.player.offsetHorz = ${geom.offset}`);
-  await clickCardPoint(358, 54);
+  await clickBar('tarot:0');
+  if (!(await ev<boolean>(`${bar}.selecting`))) fail('the Boost was not selected');
   const selectedLem = await ev<{ x: number; y: number; id: number }>(`(() => { const p = ${player}; const l = globalThis.lemmix.game.lemmingList.find((v) => !v.isRemoved && globalThis.lemmix.run.cardOfLemming(v)); return { x: p.left + l.xPos * p.scaleFactor + p.player.offsetHorz, y: p.top + (l.yPos - 8) * p.scaleFactor, id: globalThis.lemmix.run.cardOfLemming(l).id }; })()`);
   await page.mouse.click(selectedLem.x, selectedLem.y);
-  if (!(await ev<number[]>(`${player}.levelCards.targets`)).includes(selectedLem.id)) fail('the living lemming was not selected');
-  await clickCardPoint(854, 27);
-  if ((await state()).colony.find((c: any) => c.id === selectedLem.id).hair !== 'red') fail('the Boost did not change the selected lemming: ' + JSON.stringify(await ev(`({selected: ${player}.levelCards.selected, targets: ${player}.levelCards.targets, message: ${player}.levelCards.message})`)));
-  await clickCardPoint(358, 54);
-  await clickCardPoint(921, 27);
+  await page.waitForTimeout(100);
+  if (!(await ev<number[]>(`${bar}.targets`)).includes(selectedLem.id)) fail('the living lemming was not selected');
+  await clickBar('card:USE');
+  if ((await state()).colony.find((c: any) => c.id === selectedLem.id).hair !== 'red') fail('the Boost did not change the selected lemming: ' + JSON.stringify(await ev(`({selected: ${bar}.selected, targets: ${bar}.targets, message: ${bar}.message})`)));
+  await clickBar('tarot:0');
+  await clickBar('card:SELL');
   if ((await state()).tarots.length) fail('the consumable was not sold');
-  await clickCardPoint(32, 54);
-  await clickCardPoint(921, 27);
+  await clickBar('joker:0');
+  await clickBar('card:SELL');
   if ((await state()).jokers.length) fail('the Power Card was not sold');
   await ev('globalThis.lemmix.run.state.money = 4'); // keep the rest of this run test independent of the sales
   const it0 = await ev<number>('globalThis.lemmix.game.currentIteration');

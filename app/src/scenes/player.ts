@@ -17,7 +17,7 @@ import { keepScreenOn } from '../wakelock.ts';
 import { download, selectFile, showMessage, showText } from '../ui.ts';
 import { getApp, gotoScreen, isGameKey, keyMods, listen } from './shared.ts';
 import { TouchBar } from './touchbar.ts';
-import { LevelCards } from './level-cards.ts';
+import { type LevelCardsScene, STRIP_H, STRIP_W } from './level-cards.ts';
 
 const DOUBLE_CLICK_MS = 500;
 /** a finger that moves more than this (CSS pixels) scrolls instead of tapping */
@@ -53,7 +53,8 @@ export class PlayerScene extends Phaser.Scene {
   private dialogOpen = 0;
   /** LemmixRL: the marks above the special lemmings of a run's squad */
   private markers: Phaser.GameObjects.Rectangle[] = [];
-  private levelCards: LevelCards | null = null;
+  /** LemmixRL: the bar of a run's cards above the level (a scene of its own, over this one) */
+  private levelCards: LevelCardsScene | null = null;
   private outsideGameMouse: { x: number; y: number } | null = null;
   private selectionMarks: Phaser.GameObjects.BitmapText[] = [];
   /** LemmixRL: touch screens */
@@ -61,7 +62,6 @@ export class PlayerScene extends Phaser.Scene {
   private portraitHint!: Phaser.GameObjects.BitmapText;
   /** LemmixRL: the keys of a run, under the game (with a mouse) */
   private keysHint!: Phaser.GameObjects.BitmapText;
-  private rescueHud!: Phaser.GameObjects.Text;
   private touchTrack: { id: number; area: Area; x0: number; y0: number; lastX: number; panning: boolean } | null = null;
   private lastTouchTime = -Infinity;
   /** the double tap of the nuke button (only two taps on the nuke itself count) */
@@ -95,11 +95,11 @@ export class PlayerScene extends Phaser.Scene {
 
   private cardStripScale(): number {
     const ins = safeAreaInsets();
-    return Math.min((this.scale.width - ins.left - ins.right) / 960, cssPx(1.2));
+    return Math.min((this.scale.width - ins.left - ins.right) / STRIP_W, cssPx(1.1));
   }
 
   private cardStripHeight(): number {
-    return getApp().inRun ? Math.ceil(110 * this.cardStripScale()) : 0;
+    return getApp().inRun ? Math.ceil(STRIP_H * this.cardStripScale()) : 0;
   }
 
   create(): void {
@@ -156,9 +156,8 @@ export class PlayerScene extends Phaser.Scene {
     this.panelTaps = new DoubleTap<SkillPanelButton>(DOUBLE_CLICK_MS, cssPx(TOUCH_SLOP));
     ensureRunAssets(this, app);
     if (app.inRun && app.run) {
-      this.levelCards = new LevelCards(this, app.run);
-      this.cameras.main.ignore(this.levelCards.container);
-      this.textCam.ignore(this.levelCards.container);
+      this.scene.launch('levelcards');
+      this.levelCards = this.scene.get('levelcards') as LevelCardsScene;
     }
     const p = this.player;
     // (a run has no walker selection, frame steps or rewinding: the level is played as it goes)
@@ -188,9 +187,6 @@ export class PlayerScene extends Phaser.Scene {
     this.keysHint = this.add.bitmapText(0, 0, FONT, '[F]ast      [P]ause      [R]eset      [E]nd', 16).setOrigin(0.5, 0.5).setTint(0xffffff);
     this.cameras.main.ignore(this.keysHint);
     this.textCam.ignore(this.keysHint);
-    this.rescueHud = this.add.text(0, 0, '', { fontFamily: 'monospace', fontStyle: 'bold', color: '#ffffff', backgroundColor: '#202a2dee', padding: { x: 5, y: 3 } });
-    this.cameras.main.ignore(this.rescueHud);
-    this.textCam.ignore(this.rescueHud);
     this.layout();
 
     this.scale.on('resize', this.onResize, this);
@@ -205,6 +201,8 @@ export class PlayerScene extends Phaser.Scene {
       this.scale.off('resize', this.onResize, this);
       offTouch();
       keepScreenOn(false);
+      if (this.levelCards) this.scene.stop('levelcards');
+      this.levelCards = null;
       this.game.canvas.style.cursor = '';
       this.gameTex.destroy();
       this.toolTex.destroy();
@@ -255,7 +253,7 @@ export class PlayerScene extends Phaser.Scene {
     const areaH = H - areaTop - ins.bottom;
     if (this.levelCards) {
       const cardScale = this.cardStripScale();
-      this.levelCards.layout(ins.left + (areaW - 960 * cardScale) / 2, ins.top, cardScale);
+      this.levelCards.layout(ins.left + (areaW - STRIP_W * cardScale) / 2, ins.top, cardScale);
     }
     if (bar?.vertical) {
       this.left = ins.left + Math.floor((areaW - (320 * s + gap + bar.w)) / 2);
@@ -283,8 +281,6 @@ export class PlayerScene extends Phaser.Scene {
     if (this.keysHint.width > 320 * s) this.keysHint.setFontSize(16);
     this.keysHint.setVisible(!bar && getApp().inRun && below > this.keysHint.height + cssPx(6));
     this.keysHint.setPosition(this.left + 160 * s, this.top + 200 * s + below / 2);
-    this.rescueHud.setPosition(this.left + 4 * s, this.top + 4 * s).setFontSize(Math.max(12, 5 * s));
-    this.rescueHud.setVisible(!!getApp().inRun);
     const main = this.cameras.main;
     main.setViewport(this.left, this.top, 320 * s, 160 * s);
     main.setOrigin(0, 0);
@@ -317,7 +313,7 @@ export class PlayerScene extends Phaser.Scene {
     listen(this, 'mousedown', (e) => {
       if (this.dialogOpen || e.target !== canvas || this.isTouchEcho()) return;
       const point = this.controlPoint(e);
-      if (e.button === 0 && this.levelCards?.pointerDown(point.x + this.left, point.y + this.top)) return;
+      if (this.levelCards?.blocks(point.x + this.left, point.y + this.top)) return;
       if (point.x < 0 || point.y < 0 || point.x >= 320 * this.scaleFactor || point.y >= 200 * this.scaleFactor) return;
       const { x, y } = this.virtualMouse(e);
       const area: Area = y < this.player.imgHeight ? 'img' : 'tool';
@@ -342,12 +338,13 @@ export class PlayerScene extends Phaser.Scene {
       const point = this.controlPoint(e);
       const canvasX = point.x + this.left;
       const canvasY = point.y + this.top;
-      const outsideGame = point.x < 0 || point.y < 0 || point.x >= 320 * this.scaleFactor || point.y >= 200 * this.scaleFactor;
+      const onBar = !!this.levelCards?.blocks(canvasX, canvasY);
+      const outsideGame = point.x < 0 || point.y < 0 || point.x >= 320 * this.scaleFactor || point.y >= 200 * this.scaleFactor || onBar;
       this.outsideGameMouse = !this.capture && outsideGame && this.levelCards ? { x: canvasX, y: canvasY } : null;
       if (!this.capture && outsideGame) {
         // The margins beside the level continue its left and right edge, as in the original mouse controls.
         // The card bar and the space above/below the level must not scroll it.
-        if (point.y >= 0 && point.y < this.player.imgHeight && (point.x < 0 || point.x >= this.player.imgWidth)) {
+        if (!onBar && point.y >= 0 && point.y < this.player.imgHeight && (point.x < 0 || point.x >= this.player.imgWidth)) {
           this.lastArea = 'img';
           this.safe(() => this.player.imgMouseMove(this.clampX(point.x), point.y, (e.buttons & 2) !== 0));
         } else this.player.toolBarMouseEnter();
@@ -392,7 +389,7 @@ export class PlayerScene extends Phaser.Scene {
       if (e.pointerType === 'mouse' || !e.isPrimary || this.dialogOpen || e.target !== canvas) return;
       this.lastTouchTime = performance.now();
       const p = this.controlPoint(e);
-      if (this.levelCards?.pointerDown(p.x + this.left, p.y + this.top)) { e.preventDefault(); return; }
+      if (this.levelCards?.blocks(p.x + this.left, p.y + this.top)) return;
       const s = this.scaleFactor;
       const area: Area | null = p.x < 0 || p.y < 0 || p.x >= 320 * s || p.y >= 200 * s ? null : p.y < this.player.imgHeight ? 'img' : 'tool';
       if (area !== 'tool') this.panelTaps.cancel();
@@ -541,14 +538,16 @@ export class PlayerScene extends Phaser.Scene {
       this.toolTex.update(player.toolbar.bitmap);
     }
 
-    const setup = getApp().run?.state.setup;
-    if (getApp().inRun && setup) this.rescueHud.setText(`SAVED ${player.game.lemmingsSaved}  |  TARGET ${setup.rescue} RESCUES`);
+    this.levelCards?.setSaved(player.game.lemmingsSaved);
 
     // cursor
     const tex = this.cursorTextures.get(this.outsideGameMouse ? 1 : player.currentCursor) ?? this.cursorTextures.get(1)!;
     if (this.cursorImage.texture.key !== tex.key) this.cursorImage.setTexture(tex.key);
     this.cursorImage.setPosition((this.outsideGameMouse?.x ?? this.left + player.mouseX) - 7 * s, (this.outsideGameMouse?.y ?? this.top + player.mouseY) - 7 * s);
-    this.cursorImage.setVisible(!touch.active || (this.touchTrack?.area === 'img' && !this.touchTrack.panning));
+    const cursorVisible = !touch.active || (this.touchTrack?.area === 'img' && !this.touchTrack.panning);
+    // (in a run the bar draws the cursor, over its cards and popups)
+    this.cursorImage.setVisible(cursorVisible && !this.levelCards);
+    this.levelCards?.setCursor(tex.key, this.cursorImage.x, this.cursorImage.y, s, cursorVisible);
     if (touch.active) player.syncTouchSelection();
     this.touchBar.update();
 
