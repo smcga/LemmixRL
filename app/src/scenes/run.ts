@@ -1105,7 +1105,7 @@ export class RunScene extends Phaser.Scene {
     // (the tooltip of a skill says which number is which; the colour of the second says how it compares)
     SKILLS.forEach((sk, i) => {
       const cx = x + 12 + (i % 4) * 48;
-      const cy = y + 220 + Math.floor(i / 4) * 40;
+      const cy = y + 220 + Math.floor(i / 4) * 36;
       const alloc = p.allocation[sk] + p.aboveMax[sk];
       const u = p.usable[sk];
       const icon = k(this.add.image(cx, cy + 4, SKILL_ICONS, sk).setOrigin(0, 0));
@@ -1138,7 +1138,7 @@ export class RunScene extends Phaser.Scene {
         });
       }
     });
-    if (current && setup && !setup.begun) this.squadStrip(run, x + 8, y + 298, w - 16);
+    if (current && setup && !setup.begun) this.squadStrip(run, x + 8, y + 294, w - 16);
     const meta = loadMeta().levels[l.id];
     if (meta?.fewest) k(label(this, x + 12, y + 414, `Your best: ${meta.best}%, ${totalSkills(meta.fewest)} skills`, { color: COLORS.teal, maxWidth: w - 24 }));
 
@@ -1902,7 +1902,7 @@ export class RunScene extends Phaser.Scene {
     this.redrawnIn = null;
 
     // the strip: a dark well, the lemmings standing in it (the ones that stay drawn last, on top)
-    const h = 28;
+    const h = 24;
     this.well(x, y, w, h);
     const step = row.length > 1 ? Math.min(16, (w - 20) / (row.length - 1)) : 0;
     const order = [...row].reverse();
@@ -1932,15 +1932,21 @@ export class RunScene extends Phaser.Scene {
     // Balatro's discards: an explicit count beside the action that opens the selection.
     const left = run.redrawsLeft();
     const can = run.redrawLimit() > 0;
+    const reserves = run.state.colony.filter((c) => !setup.hand.includes(c.id));
+    const unavailable = left === 0
+      ? 'No redraws left for this level.'
+      : reserves.length === 0
+        ? 'All your colony lemmings are already in this squad. Recruit more lemmings to redraw.'
+        : 'The remaining colony lemmings were already returned this level. They can join a squad again next level.';
     const by = y + h + 4;
-    const button = this.btn('redraw', x, by, w - 78, 32, 'Redraw', COLORS.red, () => this.showColony(null, true), { enabled: can, size: 14 });
-    this.well(x + w - 72, by, 72, 32);
-    k(label(this, x + w - 36, by + 8, 'Redraws', { size: 12, color: COLORS.dim, originX: 0.5, originY: 0.5 }));
-    k(label(this, x + w - 36, by + 23, `${left}/${REDRAWS}`, { size: 18, color: COLORS.red, originX: 0.5, originY: 0.5 }));
+    const button = this.btn('redraw', x, by, w - 78, 26, can ? 'Redraw' : left === 0 ? 'No redraws' : 'No reserves', COLORS.red, () => this.showColony(null, true), { enabled: can, size: 14 });
+    this.well(x + w - 72, by, 72, 26);
+    k(label(this, x + w - 36, by + 6, 'Redraws', { size: 10, color: COLORS.dim, originX: 0.5, originY: 0.5 }));
+    k(label(this, x + w - 36, by + 19, `${left}/${REDRAWS}`, { size: 14, color: COLORS.red, originX: 0.5, originY: 0.5 }));
     hoverTip(button, this.tip, () => ({
       title: 'Redraw',
       color: COLORS.red,
-      lines: ['swap some lemmings in the squad for others from the colony'],
+      lines: ['swap some lemmings in the squad for others from the colony', ...(!can ? ['', unavailable] : [])],
       x: x + w + 12,
       y: y - 30,
     }));

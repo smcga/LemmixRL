@@ -214,6 +214,11 @@ try {
   await ev(`(() => { const r = globalThis.lemmix.run; r.state.blinds[0].levelId = 'Orig-1-02'; r.state.setup = null; r.ensureSetup(); ${runScene}.render(); })()`);
   const redrawId = await run<number>('state.setup.hand[0]');
   await ev(`globalThis.lemmix.run.card(${redrawId}).edition = 'gold'; ${runScene}.render()`);
+  await ev(`globalThis.lemmix.run.state.setup.redraws = 2; ${runScene}.render()`);
+  await tapSpot('redraw', 100);
+  const disabledRedrawTip = await ev<string>(`${runScene}.tip.container?.list.filter((o) => typeof o.text === 'string').map((o) => o.text).join(' ') ?? ''`);
+  if (!disabledRedrawTip.includes('No redraws left for this level')) fail('tapping unavailable Redraw did not explain why');
+  await ev(`globalThis.lemmix.run.state.setup.redraws = 0; ${runScene}.render()`);
   await tapSpot('redraw', 400);
   if (!(await ev<boolean>(`!!${runScene}.homeView`))) fail('Redraw did not open with one tap');
   for (let i = 0; i < (await run<number>('state.colony.length')) && (await ev<number>(`${runScene}.homeView.focus`)) !== redrawId; i++) await tapSpot('colonyNext', 30);

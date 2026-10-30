@@ -349,6 +349,29 @@ try {
   await clickSpot('nextRound');
   s = await state();
   if (s.phase !== 'blinds' || s.blinds[1].status !== 'current') fail('not at the big blind');
+  // An unavailable redraw explains why, and the taller redraw controls leave room for the card footer.
+  const colonyBeforeRedraw = s.colony;
+  const returnedBeforeRedraw = s.setup.redrawnOut ?? [];
+  const usedRedrawsBefore = s.setup.redraws ?? 0;
+  const hoverRedraw = async () => {
+    const p = await spot('redraw');
+    await page.mouse.move(vx(480), vy(120));
+    await page.mouse.move(vx(p.x), vy(p.y));
+    await page.waitForTimeout(100);
+    return ev<string>(`${scene}.tip.container?.list.filter((o) => typeof o.text === 'string').map((o) => o.text).join(' ') ?? ''`);
+  };
+  await ev(`(() => { const r = globalThis.lemmix.run; r.state.colony = r.state.colony.filter((c) => r.state.setup.hand.includes(c.id)); ${scene}.render(); })()`);
+  if (!(await hoverRedraw()).includes('All your colony lemmings are already in this squad')) fail('Redraw does not explain the lack of reserve lemmings');
+  const footer = await ev<{ controls: number; reward: number; rewardBottom: number; skip: number; skipBottom: number; screenBottom: number }>(`(() => { const sc = ${scene}; const b = sc.objs.find((o) => o.text?.text === 'No reserves'); const r = sc.objs.find((o) => o.text === 'Reward:' && o.x >= b.x && o.x <= b.x + 202); return { controls: b.y + b.bh + 3, reward: r.y, rewardBottom: r.y + r.height, skip: sc.spots.skip.y - 13, skipBottom: sc.spots.skip.y + 16, screenBottom: sc.cameras.main.worldView.bottom }; })()`);
+  if (footer.controls >= footer.reward || footer.rewardBottom >= footer.skip || footer.skipBottom > footer.screenBottom) fail('the redraw, reward and skip controls overlap or leave the screen: ' + JSON.stringify(footer));
+  await page.mouse.move(vx(480), vy(120));
+  await ev(`${scene}.toastObj.forEach((o) => o.setVisible(false))`);
+  await page.screenshot({ path: `${REPO_ROOT}/tools/e2e/redraw-unavailable.png` });
+  await ev(`(() => { const r = globalThis.lemmix.run; r.state.colony = ${JSON.stringify(colonyBeforeRedraw)}; r.state.setup.redraws = 2; ${scene}.render(); })()`);
+  if (!(await hoverRedraw()).includes('No redraws left for this level')) fail('Redraw does not explain an exhausted count');
+  await ev(`(() => { const r = globalThis.lemmix.run; r.state.setup.redraws = ${usedRedrawsBefore}; r.state.setup.redrawnOut = r.state.colony.filter((c) => !r.state.setup.hand.includes(c.id)).map((c) => c.id); ${scene}.render(); })()`);
+  if (!(await hoverRedraw()).includes('already returned this level')) fail('Redraw does not explain an exhausted replacement pool');
+  await ev(`globalThis.lemmix.run.state.setup.redrawnOut = ${JSON.stringify(returnedBeforeRedraw)}; ${scene}.render()`);
   // Redraw opens a dedicated colony view; cancelling and inspecting reserves do not spend a Redraw.
   const originalSquad: number[] = [...(await state()).setup.hand];
   const chosen = originalSquad.slice(0, 2);
