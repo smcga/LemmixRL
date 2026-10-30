@@ -409,13 +409,26 @@ try {
   await page.keyboard.press('Enter');
   await page.screenshot({ path: `${REPO_ROOT}/tools/e2e/redraw.png` });
   if (JSON.stringify(await ev(`${scene}.homeView.numbered`)) !== JSON.stringify(chosen)) fail('the selected Super Lemming and Badged lemming are not both marked');
-  await clickSpot('redrawSelected', 600);
+  await clickSpot('redrawSelected', 300);
+  // The Redraw view stays open: the returned lemmings go up in smoke (and stay gone), then a panel says who joined.
+  if (!(await ev<boolean>(`!!${scene}.homeView`))) fail('the Redraw closed the colony view at once');
+  await page.waitForFunction((ids) => ids.every((id: number) => !(globalThis as any).phaserGame.scene.getScene('run').homeView?.home.lemmingOf(id)), chosen, { timeout: 5000 });
+  await page.waitForFunction(() => !!(globalThis as any).phaserGame.scene.getScene('run').spots.redrawContinue, null, { timeout: 8000 });
+  await page.waitForTimeout(700);
   s = await state();
+  const joined = s.setup.hand.filter((id: number) => !originalSquad.includes(id));
+  const shownNames = await ev<string[]>(`${scene}.overlay.flatMap((o) => o.list ? o.list.map((c) => c.text) : []).filter(Boolean)`);
+  if (!joined.every((id: number) => shownNames.includes(s.colony.find((c: any) => c.id === id).name))) fail('the Redraw panel does not name the new squad members: ' + JSON.stringify(shownNames));
+  await page.screenshot({ path: `${REPO_ROOT}/tools/e2e/redraw-joined.png` });
+  await clickSpot('redrawContinue', 600);
+  if (await ev<boolean>(`!!${scene}.homeView`)) fail('Continue did not go back to the level screen');
   const out: number[] = s.setup.redrawnOut ?? [];
   if (s.setup.redraws !== 1 || JSON.stringify(out) !== JSON.stringify(chosen) || out.some((id: number) => s.setup.hand.includes(id)) || s.setup.hand.length !== originalSquad.length || originalSquad.slice(2).some((id, i) => s.setup.hand[i + 2] !== id))
     fail(`the Redraw did not redraw the squad: ${JSON.stringify(s.setup.redrawnOut)}`);
   await clickSpot('redraw', 300);
   if ((await status(chosen[0])) !== 'returned') fail('the returned lemming is not distinguished in the Redraw view');
+  await page.waitForTimeout(300);
+  if (await ev<boolean>(`!!${scene}.homeView.home.lemmingOf(${chosen[0]})`)) fail('a returned lemming came back into the Redraw view');
   await clickSpot('back', 200);
   await clickSpot('skip'); // the big blind
   s = await state();
