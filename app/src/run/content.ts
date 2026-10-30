@@ -77,7 +77,7 @@ export const KEYWORDS: { match: RegExp; title: string; text: string }[] = [
   { match: /\bGlowing\b/, title: 'Glowing', text: 'A Power Card edition: +10 Rescues.' },
   { match: /\bRainbow\b/, title: 'Rainbow', text: 'A Power Card edition: X1.5 Rescues.' },
   { match: /Badge/, title: 'Badge', text: 'A mark on a lemming: Red counts twice when saved, Gold earns $3 when saved, Blue makes a Tribe card when saved last, Purple a Boost when lost.' },
-  { match: /Redraw/, title: 'Redraw', text: 'Before a level begins: the plain lemmings of the squad go back to the colony and the next ones come in. Super Lemmings and lemmings with a Badge stay.' },
+  { match: /Redraw/, title: 'Redraw', text: 'Swap some lemmings in the squad for others from the colony. Select any squad members, then draw random replacements. Returned lemmings are available again next level.' },
   { match: /Super Lemming/, title: 'Super Lemming', text: 'A special lemming: Gold, Lucky, Mentor, Champion or Wise, a Climber, a Floater or Insured.' },
 ];
 

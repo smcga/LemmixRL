@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { getStyle, LemmingAction, StyleDef } from '../../engine/src/index.ts';
 import { repoDataProvider } from '../../engine/src/node/repoData.ts';
 import { LevelCatalog } from '../src/run/catalog.ts';
-import { isSuperLemming } from '../src/run/content.ts';
 import { ColonyHome, HOME_BOTTOM, HOME_PENS, HOME_W } from '../src/run/home.ts';
 import { RunSession } from '../src/run/session.ts';
 import { SKILLS, type SkillCounts } from '../src/run/skills.ts';
@@ -137,34 +136,80 @@ describe('Poof and the trapdoor', () => {
 
 describe('Redraws', () => {
   const SPREAD: SkillCounts = { climber: 6, floater: 6, bomber: 6, blocker: 6, builder: 12, basher: 8, miner: 8, digger: 8 };
-  it('send the plain lemmings of the squad back for the next ones and keep the Super Lemmings, 2 a level, before it begins', () => {
-    const run = RunSession.newRun(catalog, 'REDRAWS');
+  function ready(seed = 'REDRAWS'): RunSession {
+    const run = RunSession.newRun(catalog, seed);
     for (const sk of SKILLS) run.setAbility(sk, SPREAD[sk]);
     expect(run.finishAssignment()).toBe(true);
-    // a level of 10 lemmings out of the colony of 80
     run.state.blinds[0].levelId = 'Orig-1-02';
+    return run;
+  }
+
+  it('redraws exactly the chosen lemmings, including Super Lemmings and Badges, twice before a level', () => {
+    const run = ready();
     const setup = run.ensureSetup();
     const gold = run.card(setup.hand[0])!;
     gold.edition = 'gold';
+    run.card(setup.hand[1])!.badge = 'red';
     const before = [...setup.hand];
-    const plain = before.filter((id) => !isSuperLemming(run.card(id)!));
+    const colony = structuredClone(run.state.colony);
+    const selected = before.slice(0, 2);
     expect(run.redrawsLeft()).toBe(2);
-    expect(run.redrawable()).toEqual(plain);
-    const r = run.redraw()!;
+    expect(run.redrawable()).toEqual(before);
+    const r = run.redraw([...selected, selected[0]])!;
     const after = run.state.setup!.hand;
     expect(after).toHaveLength(10);
-    expect(after).toContain(gold.id);
-    for (const id of plain) expect(after).not.toContain(id);
-    expect(r.came).toHaveLength(plain.length);
+    expect(after.slice(2)).toEqual(before.slice(2));
+    for (const id of selected) expect(after).not.toContain(id);
+    expect(r.came).toHaveLength(2);
+    expect(new Set(after).size).toBe(after.length);
+    expect(run.state.colony).toEqual(colony);
+    expect(run.ensureSetup().hand).toEqual(after);
+    const reloaded = new RunSession(catalog, structuredClone(run.state));
+    expect(reloaded.ensureSetup().hand).toEqual(after);
     expect(run.redrawsLeft()).toBe(1);
-    run.redraw();
+    run.redraw([after[0]]);
+    for (const id of selected) expect(setup.hand).not.toContain(id);
     expect(run.redrawsLeft()).toBe(0);
-    expect(run.redraw()).toBeNull();
+    expect(run.redraw([setup.hand[0]])).toBeNull();
     // the squad stays as it is when it is drawn again, and once the level has begun no Redraw is left; the unused are counted
     const hand = [...run.state.setup!.hand];
     expect(run.ensureSetup().hand).toEqual(hand);
     run.startBlind();
     expect(run.redrawsLeft()).toBe(0);
     expect(run.state.stats.redrawsUnused).toBe(0);
+  });
+
+  it('rejects empty selections, non-squad members and selections without enough replacements without spending a Redraw', () => {
+    const run = ready();
+    const setup = run.ensureSetup();
+    const reserve = run.state.colony.find((c) => !setup.hand.includes(c.id))!;
+    run.state.colony = run.state.colony.filter((c) => setup.hand.includes(c.id) || c === reserve);
+    const before = structuredClone(run.state);
+    expect(run.redrawLimit()).toBe(1);
+    expect(run.redrawable()).toEqual(setup.hand);
+    expect(run.redraw([])).toBeNull();
+    expect(run.redraw([reserve.id])).toBeNull();
+    expect(run.redraw([999999])).toBeNull();
+    expect(run.redraw(setup.hand.slice(0, 2))).toBeNull();
+    expect(run.state).toEqual(before);
+    const returned = setup.hand[0];
+    expect(run.redraw([returned])!.came).toEqual([reserve.id]);
+    expect(run.redrawLimit()).toBe(0);
+    expect(run.redrawable()).toEqual([]);
+    expect(run.redraw([setup.hand[0]])).toBeNull();
+    expect(run.redrawsLeft()).toBe(1);
+    expect(run.card(returned)).toBeDefined();
+  });
+
+  it('draws random replacements reproducibly from the run seed and disallows redraws once play begins', () => {
+    const a = ready('REDRAW-RANDOM');
+    const b = ready('REDRAW-RANDOM');
+    const sa = a.ensureSetup();
+    const sb = b.ensureSetup();
+    expect(a.redraw(sa.hand.slice(0, 4))!.came).toEqual(b.redraw(sb.hand.slice(0, 4))!.came);
+    expect(a.state.setup!.hand).toEqual(b.state.setup!.hand);
+    a.startBlind();
+    expect(a.redrawLimit()).toBe(0);
+    expect(a.redraw([sa.hand[0]])).toBeNull();
   });
 });

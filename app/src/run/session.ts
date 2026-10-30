@@ -596,40 +596,44 @@ export class RunSession {
     return this.state.colony.filter((c) => !squad.has(c.id) && !out.has(c.id)).length;
   }
 
-  /** the lemmings a Redraw would send back now: the plain ones of the squad, without a Badge (as many as can be replaced) */
+  /** Squad members available for a player-selected Redraw, including Super Lemmings and Badges. */
   redrawable(): number[] {
     const setup = this.state.setup;
-    if (!setup || this.redrawsLeft() === 0) return [];
-    // (the ones with a mark over their heads stay: Super Lemmings, and lemmings with a Badge)
-    const plain = setup.hand.filter((id) => {
-      const c = this.card(id);
-      return !!c && !isSuperLemming(c) && !c.badge;
-    });
-    return plain.slice(0, this.spareLemmings(setup));
+    if (!setup || this.redrawsLeft() === 0 || this.spareLemmings(setup) === 0) return [];
+    return setup.hand.filter((id) => !!this.card(id));
   }
 
-  /**
-   * A Redraw, before the level begins: the plain lemmings of the squad go back to the colony and the next ones come in;
-   * the Super Lemmings and the lemmings with a Badge stay. Returns what happened (and the lemmings that came in), or null when nothing could go.
-   */
-  redraw(): { notes: string[]; came: number[] } | null {
+  /** Maximum selection that can be replaced without leaving the squad short. */
+  redrawLimit(): number {
+    const setup = this.state.setup;
+    return setup && this.redrawsLeft() > 0 ? Math.min(setup.hand.length, this.spareLemmings(setup)) : 0;
+  }
+
+  /** Return selected squad members and fill their places from a random draw of available colony members. */
+  redraw(selected: readonly number[]): { notes: string[]; came: number[] } | null {
     const s = this.state;
     const setup = s.setup;
-    const gone = this.redrawable();
-    if (!setup || !gone.length) return null;
+    const gone = [...new Set(selected)];
+    if (!setup || !gone.length || gone.length > this.redrawLimit() || gone.some((id) => !setup.hand.includes(id) || !this.card(id))) return null;
     const first = !setup.redraws;
     const before = new Set(setup.hand);
+    const out = new Set([...(setup.redrawnOut ?? []), ...(setup.swappedOut ?? [])]);
+    const rng = this.random.stream('redraw');
+    const came = rng.shuffle(s.colony.filter((c) => !before.has(c.id) && !out.has(c.id)).map((c) => c.id)).slice(0, gone.length);
+    const returning = new Set(gone);
+    let next = 0;
+    setup.hand = setup.hand.map((id) => returning.has(id) ? came[next++] : id);
+    // Future setup refreshes and save/reload preserve both the kept lemmings and the random replacements.
+    const drawn = new Set(setup.hand);
+    setup.order = [...setup.hand, ...(setup.order ?? []).filter((id) => !drawn.has(id))];
     setup.redraws = (setup.redraws ?? 0) + 1;
     setup.redrawnOut = [...(setup.redrawnOut ?? []), ...gone];
-    this.redrawSquad(setup);
-    const came = setup.hand.filter((id) => !before.has(id));
     const supers = came.map((id) => this.card(id)).filter((c): c is LemmingCard => !!c && isSuperLemming(c));
     const notes = [
       supers.length
         ? `Redraw: ${supers.length} Super Lemming${supers.length === 1 ? '' : 's'} came in (${supers.map((c) => cardTitle(c)).join(', ')}).`
         : `Redraw: ${came.length} new lemmings, no Super Lemmings this time.`,
     ];
-    const rng = this.random.stream('redraw');
     for (const a of this.activeJokers()) {
       const own = a.slot === a.j;
       switch (a.d.onRedraw) {

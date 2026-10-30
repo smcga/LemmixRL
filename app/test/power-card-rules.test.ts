@@ -882,11 +882,11 @@ describe('Lematro Phase 2: Redraws and the Power Cards that read them', () => {
     const run = runOn('Orig-1-02', ['steadysquad', 'cleansweep', 'greenparty']);
     run.state.jokers[2].counter = 3;
     run.ensureSetup();
-    run.redraw();
+    run.redraw(run.redrawable());
     expect(run.state.jokers[2].counter).toBe(2);
     // 1 saved, +5 (1 Redraw left), Green Party +2
     expect(run.rescueCount([card(run, 'red')], [], zeroSkills()).score).toBe(8);
-    run.redraw();
+    run.redraw(run.redrawable());
     // 1 saved, Clean Sweep +8, Green Party +1
     expect(run.rescueCount([card(run, 'red')], [], zeroSkills()).score).toBe(1 + 8 + 1);
     run.startBlind();
@@ -902,12 +902,12 @@ describe('Lematro Phase 2: Redraws and the Power Cards that read them', () => {
     setup.hand.forEach((id, i) => plain(run, id, i < 2 ? 'purple' : 'red'));
     const money = run.state.money;
     const miner = run.state.capacity.miner;
-    run.redraw();
+    run.redraw(run.redrawable());
     expect(run.state.money).toBe(money + 2);
     expect(run.state.capacity.miner).toBe(miner + 1);
     // every lemming of the squad purple: still $5 at most
     for (const id of run.state.setup!.hand) plain(run, id, 'purple');
-    run.redraw();
+    run.redraw(run.redrawable());
     expect(run.state.money).toBe(money + 2 + 5);
     expect(run.state.capacity.miner).toBe(miner + 1);
     winWith(run, {});
@@ -918,7 +918,7 @@ describe('Lematro Phase 2: Redraws and the Power Cards that read them', () => {
     const run = runOn('Orig-1-02');
     run.state.blinds[1].levelId = 'Orig-1-02';
     run.ensureSetup();
-    run.redraw();
+    run.redraw(run.redrawable());
     winWith(run, {});
     run.cashOut();
     run.nextRound();

@@ -1105,7 +1105,7 @@ export class RunScene extends Phaser.Scene {
     // (the tooltip of a skill says which number is which; the colour of the second says how it compares)
     SKILLS.forEach((sk, i) => {
       const cx = x + 12 + (i % 4) * 48;
-      const cy = y + 220 + Math.floor(i / 4) * 40;
+      const cy = y + 220 + Math.floor(i / 4) * 36;
       const alloc = p.allocation[sk] + p.aboveMax[sk];
       const u = p.usable[sk];
       const icon = k(this.add.image(cx, cy + 4, SKILL_ICONS, sk).setOrigin(0, 0));
@@ -1138,7 +1138,7 @@ export class RunScene extends Phaser.Scene {
         });
       }
     });
-    if (current && setup && !setup.begun) this.squadStrip(run, x + 8, y + 298, w - 16);
+    if (current && setup && !setup.begun) this.squadStrip(run, x + 8, y + 294, w - 16);
     const meta = loadMeta().levels[l.id];
     if (meta?.fewest) k(label(this, x + 12, y + 414, `Your best: ${meta.best}%, ${totalSkills(meta.fewest)} skills`, { color: COLORS.teal, maxWidth: w - 24 }));
 
@@ -1890,8 +1890,7 @@ export class RunScene extends Phaser.Scene {
 
   /**
    * The squad of the next level, before it begins: its lemmings in a row, in their colours, the ones with a mark over
-   * their heads (Super Lemmings, Badges) in front; and under it Redraw, with a pip for each Redraw left. Over Redraw, the
-   * lemmings it would send back fade; after it, the new ones drop in.
+   * their heads (Super Lemmings, Badges) in front; under it, Redraw opens the squad selection and shows the count left.
    */
   private squadStrip(run: RunSession, x: number, y: number, w: number): void {
     const k = this.k.bind(this);
@@ -1899,21 +1898,18 @@ export class RunScene extends Phaser.Scene {
     const cards = setup.hand.map((id) => run.card(id)).filter((c): c is LemmingCard => !!c);
     const stays = (c: LemmingCard) => markerColors(c).length > 0;
     const row = [...cards.filter(stays), ...cards.filter((c) => !stays(c))];
-    const going = new Set(run.redrawable());
     const came = this.redrawnIn;
     this.redrawnIn = null;
 
     // the strip: a dark well, the lemmings standing in it (the ones that stay drawn last, on top)
-    const h = 28;
+    const h = 24;
     this.well(x, y, w, h);
     const step = row.length > 1 ? Math.min(16, (w - 20) / (row.length - 1)) : 0;
-    const sprites = new Map<number, Phaser.GameObjects.Sprite>();
     const order = [...row].reverse();
     order.forEach((c) => {
       const i = row.indexOf(c);
       const sx = x + 10 + i * step;
       const sp = k(lemmingSprite(this, sx, y + h - 2, 'walk', 2, c)).setOrigin(0.5, 1);
-      sprites.set(c.id, sp);
       // its marks over its head, as in a level
       markerColors(c).forEach((color, m, all) => k(this.add.rectangle(sx + 1 + (m - (all.length - 1) / 2) * 5, y + 4, 4, 4, color).setStrokeStyle(1, 0x000000)));
       // a lemming the last Redraw brought in: it drops in (a Super Lemming with a pop)
@@ -1933,59 +1929,27 @@ export class RunScene extends Phaser.Scene {
       y: y + h + 4,
     }));
 
-    // Redraw, with its pips (one for each Redraw of the level, lit while it is left)
+    // Balatro's discards: an explicit count beside the action that opens the selection.
     const left = run.redrawsLeft();
-    const can = going.size > 0;
+    const can = run.redrawLimit() > 0;
+    const reserves = run.state.colony.filter((c) => !setup.hand.includes(c.id));
+    const unavailable = left === 0
+      ? 'No redraws left for this level.'
+      : reserves.length === 0
+        ? 'All your colony lemmings are already in this squad. Recruit more lemmings to redraw.'
+        : 'The remaining colony lemmings were already returned this level. They can join a squad again next level.';
     const by = y + h + 4;
-    const caption = can ? 'Redraw' : left === 0 ? 'No Redraws left' : 'Nothing to redraw';
-    const button = this.btn('redraw', x, by, w, 26, caption, COLORS.red, () => doRedraw(), { enabled: can });
-    const pips = k(this.add.graphics());
-    for (let i = 0; i < REDRAWS; i++) {
-      const px = x + w - 14 - (REDRAWS - 1 - i) * 13;
-      pips.fillStyle(0x000000, 0.45);
-      pips.fillCircle(px, by + 13, 5);
-      if (i < left) {
-        pips.fillStyle(COLORS.text, 1);
-        pips.fillCircle(px, by + 12, 4);
-      }
-    }
-    // (the pips go up and down with the button)
-    pips.setDepth(1);
-    const waiting = run.state.colony.filter((c) => !setup.hand.includes(c.id) && stays(c) && !(setup.redrawnOut ?? []).includes(c.id)).length;
-    const redrawTip = (): TipContent => ({
+    const button = this.btn('redraw', x, by, w - 78, 26, can ? 'Redraw' : left === 0 ? 'No redraws' : 'No reserves', COLORS.red, () => this.showColony(null, true), { enabled: can, size: 14 });
+    this.well(x + w - 72, by, 72, 26);
+    k(label(this, x + w - 36, by + 6, 'Redraws', { size: 10, color: COLORS.dim, originX: 0.5, originY: 0.5 }));
+    k(label(this, x + w - 36, by + 19, `${left}/${REDRAWS}`, { size: 14, color: COLORS.red, originX: 0.5, originY: 0.5 }));
+    hoverTip(button, this.tip, () => ({
       title: 'Redraw',
       color: COLORS.red,
-      lines: [`{!}${going.size}{} plain lemmings go back, {!}${keepers.length}{} stay.`, ...(waiting ? [`{!}${waiting}{} Super Lemming${waiting === 1 ? '' : 's'} waiting in the colony.`] : [])],
-      // (beside the panel: the strip stays in sight, its lemmings fading)
+      lines: ['swap some lemmings in the squad for others from the colony', ...(!can ? ['', unavailable] : [])],
       x: x + w + 12,
       y: y - 30,
-    });
-    // over the button: the lemmings that would go fade
-    const fade = (on: boolean) => {
-      for (const id of going) sprites.get(id)?.setAlpha(on ? 0.25 : 1);
-    };
-    button.on('pointerover', () => {
-      if (touch.active || !can) return;
-      fade(true);
-      showTip(this.tip, redrawTip());
-    });
-    button.on('pointerout', () => {
-      fade(false);
-      if (!touch.active) this.tip.hide();
-    });
-    const doRedraw = () => {
-      if (touch.active) {
-        fade(true);
-        if (!this.confirmTap(button, redrawTip(), 'Tap again to redraw.')) return;
-      }
-      const r = run.redraw();
-      if (!r) return;
-      this.redrawnIn = new Set(r.came);
-      this.sfx(SoundEffect.AssignSkill);
-      this.save();
-      this.render();
-      this.toast(r.notes.join('\n'));
-    };
+    }));
   }
 
   /**
@@ -1995,22 +1959,34 @@ export class RunScene extends Phaser.Scene {
    * under the home, a numbered slot each (the same number over their heads), and a click on one of them again, or its
    * x in the tray, puts it back.
    */
-  private showColony(tarot: TarotUse | null): void {
+  private showColony(tarot: TarotUse | null, redraw = false): void {
     const run = this.run;
     if (!run) return;
     const o = this.openOverlay(0.6);
     const s = run.state;
     const colony = () => s.colony;
     // the order of Previous and Next: the special lemmings first
-    const order = () => [...colony().filter(isSpecial), ...colony().filter((c) => !isSpecial(c))];
+    const order = () => redraw ? [...colony().filter(inSquad), ...colony().filter((c) => !inSquad(c))] : [...colony().filter(isSpecial), ...colony().filter((c) => !isSpecial(c))];
     const inSquad = (c: LemmingCard) => (s.setup?.hand ?? []).includes(c.id);
     /** with a boost, the lemmings it is used on go into the tray; at home, no tray */
-    const mode: 'boost' | 'home' = tarot ? 'boost' : 'home';
-    const trayColor = COLORS.purple;
-    const slots = () => tarot?.max ?? 0;
-    o(panel(this, 40, 20, 880, 500, COLORS.panel, COLORS.purple, 12));
-    const title = tarot ? `${tarot.name}: select ${tarot.max === 1 ? 'a lemming' : `up to ${tarot.max} lemmings`}` : `Your colony: ${colony().length} lemmings`;
-    o(label(this, 64, 34, title, { size: 32, color: COLORS.gold, maxWidth: 820 }));
+    const mode: 'boost' | 'home' | 'redraw' = redraw ? 'redraw' : tarot ? 'boost' : 'home';
+    const trayColor = redraw ? COLORS.red : COLORS.purple;
+    const slots = () => redraw ? run.redrawLimit() : tarot?.max ?? 0;
+    const returned = new Set([...(s.setup?.redrawnOut ?? []), ...(s.setup?.swappedOut ?? [])]);
+    const status = (c: LemmingCard) => inSquad(c) ? 'squad' as const : returned.has(c.id) ? 'returned' as const : 'colony' as const;
+    o(panel(this, 40, 20, 880, 500, COLORS.panel, trayColor, 12));
+    const title = redraw ? 'Redraw squad' : tarot ? `${tarot.name}: select ${tarot.max === 1 ? 'a lemming' : `up to ${tarot.max} lemmings`}` : `Your colony: ${colony().length} lemmings`;
+    o(label(this, 64, 34, title, { size: 32, color: COLORS.gold, maxWidth: redraw ? 610 : 820 }));
+    if (redraw) {
+      o(panel(this, 736, 30, 168, 54, COLORS.dark, COLORS.red, 8));
+      o(label(this, 750, 42, 'Redraws', { size: 16 }));
+      o(label(this, 890, 58, `${run.redrawsLeft()}/${REDRAWS}`, { size: 32, color: COLORS.red, originX: 1, originY: 0.5 }));
+      const counts = { squad: colony().filter(inSquad).length, colony: colony().filter((c) => status(c) === 'colony').length, returned: colony().filter((c) => status(c) === 'returned').length };
+      for (const [i, [name, color]] of (Object.entries({ squad: COLORS.orange, colony: COLORS.teal, returned: COLORS.gray }) as [keyof typeof counts, number][]).entries()) {
+        o(this.add.rectangle(70 + i * 200, 79, 10, 10, color));
+        o(label(this, 82 + i * 200, 79, `${name === 'squad' ? 'Squad' : name === 'colony' ? 'Reserves' : 'Returned'}: ${counts[name]}`, { color, size: 14, originY: 0.5 }));
+      }
+    }
     const sub = o(label(this, 64, 72, '', { color: COLORS.dim, maxWidth: 620 }));
     /** the lemmings picked: at home one, or a group (a box); with a boost, the ones in the tray, in order */
     let selection: number[] = [];
@@ -2018,7 +1994,8 @@ export class RunScene extends Phaser.Scene {
     let changed = false;
     let resetting = false;
     const updateSub = () => {
-      if (mode === 'boost')
+      if (mode === 'redraw') sub.setVisible(false);
+      else if (mode === 'boost')
         sub.setText(tarot!.pair ? 'Lemming 1 becomes like lemming 2. Click a lemming again to put it back.' : 'Click lemmings to put them in the tray below. Click again to put one back.');
       else {
         const specials = this.specialCounts(colony());
@@ -2046,11 +2023,12 @@ export class RunScene extends Phaser.Scene {
       },
       spot: (name, x, y) => this.spot(name, x, y),
       inSquad: (c) => mode !== 'boost' && !!s.setup && !s.setup.begun && inSquad(c),
+      squadStatus: redraw ? status : undefined,
     });
     view.numberColor = trayColor;
     // at home the tools; with a boost, the tray in their place
     const tray =
-      mode === 'home'
+      mode !== 'boost'
         ? null
         : new SelectionTray(this, 56, 424, 600, 48, {
             slots,
@@ -2064,7 +2042,7 @@ export class RunScene extends Phaser.Scene {
             depth: 600,
           });
     if (tray) this.overlayCleanup.push(() => tray.destroy());
-    else view.toolbar(56, 424);
+    else if (mode === 'home') view.toolbar(56, 424);
     this.homeView = view;
     this.overlayCleanup.push(() => {
       if (!resetting) s.home = home.save();
@@ -2081,7 +2059,9 @@ export class RunScene extends Phaser.Scene {
       const at = { x: 690, y: 96, width: 214, keywords: [] as { title: string; text: string }[] };
       const group = mode === 'home' ? selection.map((id) => run.card(id)).filter((c): c is LemmingCard => !!c) : [];
       if (picked && (mode !== 'home' || group.length <= 1)) {
-        info.show({ ...this.cardTip(picked, inSquad(picked)), ...at });
+        const tip = this.cardTip(picked, inSquad(picked));
+        if (redraw && !inSquad(picked)) tip.badges?.push({ text: status(picked) === 'returned' ? 'Returned this level' : 'In colony', color: status(picked) === 'returned' ? COLORS.gray : COLORS.teal });
+        info.show({ ...tip, ...at });
       } else if (group.length > 1) {
         const names = group.slice(0, 6).map((c) => c.name).join(', ') + (group.length > 6 ? ` and ${group.length - 6} more` : '');
         const specials = this.specialCounts(group);
@@ -2094,6 +2074,8 @@ export class RunScene extends Phaser.Scene {
         });
       } else if (mode === 'boost')
         info.show({ title: tarot!.name, color: COLORS.purple, lines: [...(tarot!.text ? [tarot!.text, ''] : []), 'Click the lemmings, or drag a box around them.'], ...at });
+      else if (mode === 'redraw')
+        info.show({ title: 'Redraw squad', color: COLORS.red, lines: ['Select squad members to return to the colony.', '', 'Replacements are drawn at random. Returned lemmings can join a squad again next level.'], ...at });
       else
         info.show({
           title: 'Your colony',
@@ -2131,11 +2113,12 @@ export class RunScene extends Phaser.Scene {
       showInfo();
       if (cards.length) this.sfx(SoundEffect.SkillButtonSelect);
     };
-    const full = () => this.toast(`${tarot!.name} takes ${tarot!.max === 1 ? 'one lemming' : `${tarot!.max} lemmings`}: put one back first.`);
+    const full = () => this.toast(redraw ? `Only ${slots()} replacement${slots() === 1 ? '' : 's'} available in the colony.` : `${tarot!.name} takes ${tarot!.max === 1 ? 'one lemming' : `${tarot!.max} lemmings`}: put one back first.`);
     // a click: into the tray, or out of it
     const toggle = (c: LemmingCard) => {
       if (mode === 'home') return;
       picked = c;
+      if (redraw && !inSquad(c)) { mark(); showInfo(); return; }
       const i = selection.indexOf(c.id);
       if (i >= 0) selection.splice(i, 1);
       else if (selection.length < slots()) selection.push(c.id);
@@ -2146,7 +2129,7 @@ export class RunScene extends Phaser.Scene {
     };
     // a box: the lemmings in it go into the tray, or come out of it if they are all in it
     const boxIntoTray = (cards: LemmingCard[]) => {
-      const ok = cards;
+      const ok = redraw ? cards.filter(inSquad) : cards;
       if (!ok.length) return;
       if (ok.every((c) => selection.includes(c.id))) selection = selection.filter((id) => !ok.some((c) => c.id === id));
       else {
@@ -2190,13 +2173,17 @@ export class RunScene extends Phaser.Scene {
       const list = order();
       position.setText(picked && list.includes(picked) ? `${list.indexOf(picked) + 1} / ${list.length}` : `${list.length} lemmings`);
       if (selectButton) {
-        selectButton.setVisible(!!picked);
-        selectButton.setCaption(picked && selection.includes(picked.id) ? 'Put back' : 'Add to tray');
+        selectButton.setVisible(!!picked && (!redraw || inSquad(picked)));
+        selectButton.setCaption(redraw ? picked && selection.includes(picked.id) ? 'Deselect' : 'Select' : picked && selection.includes(picked.id) ? 'Put back' : 'Add to tray');
       }
+      redrawButton?.setVisible(selection.length > 0);
+      redrawSummary?.setText(`${selection.length}/${slots()} selected`);
     };
-    if (mode === 'boost') {
+    let redrawButton: Button | null = null;
+    let redrawSummary: Phaser.GameObjects.BitmapText | null = null;
+    if (mode !== 'home') {
       this.spot('colonySelect', 797, 410);
-      selectButton = o(new Button(this, 690, 396, 214, 28, 'Add to tray', COLORS.purple, () => picked && toggle(picked)));
+      selectButton = o(new Button(this, 690, 396, 214, 28, redraw ? 'Select' : 'Add to tray', trayColor, () => picked && toggle(picked)));
     }
     this.overlayKey = (key) => {
       if (key === 'ArrowLeft' || key === 'ArrowRight') browse(key === 'ArrowLeft' ? -1 : 1);
@@ -2245,8 +2232,25 @@ export class RunScene extends Phaser.Scene {
       };
       o(new Button(this, 600, 478, 130, 32, 'Use', COLORS.red, use));
     }
+    if (redraw) {
+      o(panel(this, 56, 424, 600, 48, COLORS.dark, COLORS.red, 8));
+      redrawSummary = o(label(this, 72, 448, '', { color: COLORS.red, originY: 0.5 }));
+      this.spot('redrawClear', 613, 448);
+      o(new Button(this, 580, 434, 66, 28, 'Clear', COLORS.gray, () => putBack([...selection])));
+      this.spot('redrawSelected', 420, 494);
+      redrawButton = o(new Button(this, 260, 478, 320, 32, 'Redraw selected lemmings', COLORS.red, () => {
+        const result = run.redraw(selection);
+        if (!result) { this.toast('That selection cannot be replaced.'); return; }
+        this.redrawnIn = new Set(result.came);
+        this.sfx(SoundEffect.AssignSkill);
+        this.closeOverlay();
+        this.save();
+        this.render();
+        this.toast(result.notes.join('\n'));
+      }));
+    }
     this.spot('back', 820, 494);
-    o(new Button(this, 750, 478, 140, 32, tarot ? 'Cancel' : 'Back', COLORS.orange, () => this.closeOverlay()));
+    o(new Button(this, 750, 478, 140, 32, mode !== 'home' ? 'Cancel' : 'Back', COLORS.orange, () => this.closeOverlay()));
     mark();
     showInfo();
   }
