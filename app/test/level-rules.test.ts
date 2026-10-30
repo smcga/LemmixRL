@@ -46,6 +46,55 @@ function finish(game: LemmingGame): void {
 }
 
 describe('Power Cards in the level', () => {
+  it('uses Boosts on live lemmings, immediately applying their colours and abilities', () => {
+    const run = runOn('Orig-1-01', ['redhair']);
+    const game = startGame(run);
+    runTo(game, 160);
+    const [a, b] = game.lemmingList.filter((l) => !l.isRemoved && !!run.cardOfLemming(l));
+    const ca = run.cardOfLemming(a)!;
+    const cb = run.cardOfLemming(b)!;
+    ca.hair = 'green';
+    cb.hair = 'blue';
+    const used = Object.fromEntries(SKILLS.map((skill) => [skill, 0])) as SkillCounts;
+    const before = run.rescueCount([ca], [ca], used).score;
+    run.state.tarots.push({ uid: 8001, id: 'ember' }, { uid: 8002, id: 'barber' }, { uid: 8003, id: 'umbrella' });
+    expect(run.useTarot(8001, [ca.id])).toBeNull();
+    expect(run.useLevelTarot(8001, [ca.id])).not.toBeNull();
+    expect(ca.hair).toBe('red');
+    expect(run.rescueCount([ca], [ca], used).score).toBe(before + 1);
+    expect(run.useLevelTarot(8002, [cb.id, ca.id])).not.toBeNull();
+    expect(cb.hair).toBe('red');
+    expect(run.useLevelTarot(8003, [ca.id, cb.id])).not.toBeNull();
+    expect(a.isFloater && b.isFloater).toBe(true);
+  });
+
+  it('rejects missing, removed and incompatible targets without spending a Boost', () => {
+    const run = runOn('Orig-1-01');
+    const game = startGame(run);
+    runTo(game, 160);
+    const a = game.lemmingList.find((l) => !l.isRemoved && !!run.cardOfLemming(l))!;
+    const id = run.cardOfLemming(a)!.id;
+    run.state.tarots.push({ uid: 8001, id: 'ember' }, { uid: 8002, id: 'manual' }, { uid: 8003, id: 'bootcamp' });
+    expect(run.useLevelTarot(8001, [])).toBeNull();
+    expect(run.useLevelTarot(8001, [999999])).toBeNull();
+    expect(run.useLevelTarot(8002, [id])).toBeNull();
+    expect(run.useLevelTarot(8003, [])).toBeNull();
+    a.isRemoved = true;
+    expect(run.useLevelTarot(8001, [id])).toBeNull();
+    expect(run.state.tarots).toHaveLength(3);
+  });
+
+  it('sells cards during play and updates dynamic Power Card effects', () => {
+    const run = runOn('Orig-1-01', ['longbridge']);
+    const game = startGame(run);
+    run.state.tarots.push({ uid: 8001, id: 'ember' });
+    const before = run.state.money;
+    expect(game.extraBuilderBricks).toBeGreaterThan(0);
+    expect(run.sellJoker(900)).toBe(true);
+    expect(game.extraBuilderBricks).toBe(0);
+    expect(run.sellTarot(8001)).toBe(true);
+    expect(run.state.money).toBeGreaterThan(before);
+  });
   it('Long Bridge gives every Builder 4 extra bridge blocks', () => {
     const bricks = (jokers: string[]) => {
       const game = startGame(runOn('Orig-1-01', jokers));

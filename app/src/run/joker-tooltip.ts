@@ -136,3 +136,4 @@ export function jokerLines(run: RunSession, j: JokerInstance, preview = false): 
   }
   return [text, ...(current ? [now(current)] : []), ...powerEditionLines(j.edition)];
 }
+

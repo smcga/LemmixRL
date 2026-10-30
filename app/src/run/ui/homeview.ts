@@ -35,6 +35,8 @@ export interface HomeViewOptions {
   spot?: (name: string, x: number, y: number) => void;
   /** the lemmings of the squad of the next level (an orange line under their feet) */
   inSquad?: (card: LemmingCard) => boolean;
+  /** Redraw view: distinguish squad members, replacement candidates, and lemmings already returned this level. */
+  squadStatus?: (card: LemmingCard) => 'squad' | 'colony' | 'returned';
   /** the colony, in its order (the indexes of the spots) */
   colony: () => LemmingCard[];
 }
@@ -305,7 +307,16 @@ export class HomeView {
       });
       // in the squad of the next level: an orange line under its feet
       const order = this.numbered.indexOf(c.id);
-      if (this.opts.inSquad?.(c)) {
+      const status = this.opts.squadStatus?.(c);
+      if (status) {
+        const color = status === 'squad' ? COLORS.orange : status === 'colony' ? COLORS.teal : COLORS.gray;
+        g.fillStyle(color, status === 'returned' ? 0.15 : 0.22);
+        g.fillRoundedRect(sx - 10, sy - 24, 22, 29, 3);
+        g.lineStyle(status === 'squad' ? 2 : 1, color, 0.9);
+        g.strokeRoundedRect(sx - 10, sy - 24, 22, 29, 3);
+        g.fillStyle(color, 1);
+        g.fillRect(sx - 8, sy + 3, 18, 3);
+      } else if (this.opts.inSquad?.(c)) {
         g.fillStyle(LEMMING_BADGE_COLORS.squad, 1);
         g.fillRect(sx - 6, sy + 2, 14, 2);
       }

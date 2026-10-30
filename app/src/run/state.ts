@@ -8,7 +8,7 @@ export const RUN_VERSION = 1;
 export const ANTES = 8;
 export const JOKER_SLOTS = 5;
 export const TAROT_SLOTS = 2;
-/** Redraws before a level begins: the plain lemmings of the squad go back for the next ones of the colony, the Super Lemmings stay (Balatro's discards) */
+/** Player-selected Redraws before a level begins (Balatro's discards). */
 export const REDRAWS = 2;
 /** attempts per blind that pay $1 each when they are not used */
 export const ATTEMPTS = 3;
@@ -175,7 +175,7 @@ export interface BlindSetup {
   attempts: number;
   /** lemmings that drop in besides the squad (Power Cards), after the squad */
   extra?: number;
-  /** the colony in the shuffled order the squad was drawn from (preferences draw it again from it) */
+  /** Draw order with the current squad first; setup refreshes preserve the player's selections and replacements. */
   order?: number[];
   /** the level has begun (the Power Cards that act when a level begins have acted) */
   begun?: boolean;

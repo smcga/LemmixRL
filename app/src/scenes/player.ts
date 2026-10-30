@@ -338,13 +338,18 @@ export class PlayerScene extends Phaser.Scene {
       const point = this.controlPoint(e);
       const canvasX = point.x + this.left;
       const canvasY = point.y + this.top;
-      const outsideGame = point.x < 0 || point.y < 0 || point.x >= 320 * this.scaleFactor || point.y >= 200 * this.scaleFactor || !!this.levelCards?.blocks(canvasX, canvasY);
+      const onBar = !!this.levelCards?.blocks(canvasX, canvasY);
+      const outsideGame = point.x < 0 || point.y < 0 || point.x >= 320 * this.scaleFactor || point.y >= 200 * this.scaleFactor || onBar;
       this.outsideGameMouse = !this.capture && outsideGame && this.levelCards ? { x: canvasX, y: canvasY } : null;
-      if (this.outsideGameMouse) {
-        this.player.toolBarMouseEnter();
+      if (!this.capture && outsideGame) {
+        // The margins beside the level continue its left and right edge, as in the original mouse controls.
+        // The card bar and the space above/below the level must not scroll it.
+        if (!onBar && point.y >= 0 && point.y < this.player.imgHeight && (point.x < 0 || point.x >= this.player.imgWidth)) {
+          this.lastArea = 'img';
+          this.safe(() => this.player.imgMouseMove(this.clampX(point.x), point.y, (e.buttons & 2) !== 0));
+        } else this.player.toolBarMouseEnter();
         return;
       }
-      if (!this.capture && outsideGame) return;
       const { x, y } = this.virtualMouse(e);
       const area: Area = this.capture ?? (y < this.player.imgHeight ? 'img' : 'tool');
       if (area === 'tool' && this.lastArea === 'img' && !this.capture) this.player.toolBarMouseEnter();

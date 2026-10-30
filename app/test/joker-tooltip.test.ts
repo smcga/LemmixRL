@@ -34,3 +34,4 @@ describe('Power Card tooltips', () => {
     expect(jokerLines(run, { uid: 3, id: 'steadysquad' })).toHaveLength(1);
   });
 });
+
